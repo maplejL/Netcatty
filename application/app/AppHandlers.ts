@@ -756,7 +756,11 @@ export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string
   }
 }
 
-export function handleCreateLocalTerminalImpl(getCtx: AppContextGetter, shell?: { command: string; args?: string[]; name?: string; icon?: string }) {
+export function handleCreateLocalTerminalImpl(
+  getCtx: AppContextGetter,
+  shell?: { command: string; args?: string[]; name?: string; icon?: string },
+  options?: { localStartDir?: string },
+) {
   const { addConnectionLog, classifyLocalShellType, createLocalTerminal, discoveredShells, resolveShellSetting, systemInfoRef, terminalSettings } = getCtx();
 {
     const { username, hostname } = systemInfoRef.current;
@@ -771,6 +775,7 @@ export function handleCreateLocalTerminalImpl(getCtx: AppContextGetter, shell?: 
       shellArgs: resolved?.args,
       shellName,
       shellIcon,
+      localStartDir: options?.localStartDir,
     });
     addConnectionLog({
       sessionId,
