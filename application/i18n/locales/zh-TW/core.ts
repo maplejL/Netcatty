@@ -498,6 +498,7 @@ export const zhTWCoreMessages: Messages = {
   'vault.import.desc': '從常見工具遷移連線資訊。選擇一種格式開始匯入。',
   'vault.import.chooseFormat': '選擇檔案格式',
   'vault.import.csv.tip': '批次匯入：可使用 CSV 模板填寫後匯入。',
+  'vault.import.finalshell.tip': 'FinalShell：可多選 conn/*_connect_config.json，並一併選擇 config.json 以匯入私鑰。',
   'vault.import.csv.downloadTemplate': '下載 CSV 模板',
   'vault.import.toast.start': '正在從 {format} 匯入...',
   'vault.import.toast.completedTitle': '匯入完成',

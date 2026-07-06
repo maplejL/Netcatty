@@ -498,6 +498,7 @@ export const zhCNCoreMessages: Messages = {
   'vault.import.desc': '从常见工具迁移连接信息。选择一种格式开始导入。',
   'vault.import.chooseFormat': '选择文件格式',
   'vault.import.csv.tip': '批量导入：可使用 CSV 模板填写后导入。',
+  'vault.import.finalshell.tip': 'FinalShell：可多选 conn/*_connect_config.json，并一并选择 config.json 以导入私钥。',
   'vault.import.csv.downloadTemplate': '下载 CSV 模板',
   'vault.import.toast.start': '正在从 {format} 导入...',
   'vault.import.toast.completedTitle': '导入完成',

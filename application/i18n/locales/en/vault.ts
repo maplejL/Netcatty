@@ -41,6 +41,7 @@ export const enVaultMessages: Messages = {
     'Transfer your connections from popular clients. Select a file format to start the migration.',
   'vault.import.chooseFormat': 'Select a file format',
   'vault.import.csv.tip': 'Bulk import: use the CSV template.',
+  'vault.import.finalshell.tip': 'FinalShell: select conn/*_connect_config.json files and include config.json for private keys.',
   'vault.import.csv.downloadTemplate': 'Download CSV template',
   'vault.import.toast.start': 'Importing from {format}...',
   'vault.import.toast.completedTitle': 'Import completed',

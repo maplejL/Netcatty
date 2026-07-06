@@ -223,6 +223,7 @@ function createBridgeRegistrar(context) {
     aiBridge.registerHandlers(ipcMain);
     crashLogBridge.registerHandlers(ipcMain);
     vaultBackupBridge.registerHandlers(ipcMain, electronModule);
+    require("../bridges/finalshellCryptoBridge.cjs").registerHandlers(ipcMain);
   
     // ZMODEM cancel handler
     ipcMain.on("netcatty:zmodem:cancel", (event, payload) => {

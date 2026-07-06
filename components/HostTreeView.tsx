@@ -37,6 +37,7 @@ const hasDragType = (dataTransfer: DataTransfer, type: string) =>
 interface HostTreeViewProps {
   groupTree: GroupNode[];
   hosts: Host[];
+  ungroupedHosts?: Host[];
   sortMode?: 'manual' | 'az' | 'za' | 'newest' | 'oldest' | 'group';
   expandedPaths?: Set<string>;
   onTogglePath?: (path: string) => void;
@@ -510,6 +511,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
 export const HostTreeView: React.FC<HostTreeViewProps> = ({
   groupTree,
   hosts,
+  ungroupedHosts: ungroupedHostsOverride,
   sortMode = 'az',
   expandedPaths: externalExpandedPaths,
   onTogglePath: externalOnTogglePath,
@@ -604,7 +606,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
 
   // Get ungrouped hosts (hosts without a group or with empty group) and sort them
   const ungroupedHosts = useMemo(() => {
-    const hosts_without_group = hosts.filter(host => !host.group || host.group === '');
+    const hosts_without_group = (ungroupedHostsOverride ?? hosts.filter(host => !host.group || host.group === ''));
     const sorted = hosts_without_group.sort((a, b) => {
       switch (sortMode) {
         case 'az':
@@ -623,7 +625,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
     });
     if (sortMode === 'manual') return sortByVaultOrder(sorted);
     return sorted;
-  }, [hosts, sortMode]);
+  }, [hosts, sortMode, ungroupedHostsOverride]);
 
   // Sort group tree based on sort mode
   const sortedGroupTree = useMemo(() => {

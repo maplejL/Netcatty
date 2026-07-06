@@ -76,6 +76,7 @@ export const ruVaultMessages: Messages = {
     'Перенесите свои подключения из популярных клиентов. Выберите формат файла, чтобы начать миграцию.',
   'vault.import.chooseFormat': 'Выберите формат файла',
   'vault.import.csv.tip': 'Массовый импорт: используйте шаблон CSV.',
+  'vault.import.finalshell.tip': 'FinalShell: выберите conn/*_connect_config.json и config.json для импорта ключей.',
   'vault.import.csv.downloadTemplate': 'Скачать шаблон CSV',
   'vault.import.toast.start': 'Импорт из {format}...',
   'vault.import.toast.completedTitle': 'Импорт завершён',
