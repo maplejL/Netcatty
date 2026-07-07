@@ -1477,7 +1477,19 @@ function showAndFocusMainWindow(win) {
       // ignore
     }
   }
-  return restoreWindowInputFocus(win, { show: true });
+  const restored = restoreWindowInputFocus(win, { show: true });
+  if (restored) notifyWindowFocusRequested(win);
+  return restored;
+}
+
+/**
+ * Renderer input-focus recovery is only valid after an explicit foreground
+ * request (hotkey, tray, Dock, deep link). Plain BrowserWindow "show" events
+ * can also come from OS window/space transitions and must not steal focus.
+ */
+function notifyWindowFocusRequested(win) {
+  if (!win || win.isDestroyed?.()) return;
+  safeSend(win.webContents, "netcatty:window:focus-requested");
 }
 
 /**
@@ -1511,6 +1523,7 @@ module.exports = {
   registerWindowHandlers,
   restoreWindowInputFocus,
   showAndFocusMainWindow,
+  notifyWindowFocusRequested,
   notifyWindowWillHide,
   requestWindowCommandClose,
   shouldCloseWindowFromInput,

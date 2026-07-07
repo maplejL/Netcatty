@@ -36,6 +36,7 @@ const telnetEchoModeListeners = new Map();
 const languageChangeListeners = new Set();
 const fullscreenChangeListeners = new Set();
 const windowShownListeners = new Set();
+const windowFocusRequestedListeners = new Set();
 const windowWillHideListeners = new Set();
 const keyboardInteractiveListeners = new Set();
 const hostKeyVerificationListeners = new Set();
@@ -379,6 +380,16 @@ ipcRenderer.on("netcatty:window:shown", () => {
       cb();
     } catch (err) {
       console.error("Window shown callback failed", err);
+    }
+  });
+});
+
+ipcRenderer.on("netcatty:window:focus-requested", () => {
+  windowFocusRequestedListeners.forEach((cb) => {
+    try {
+      cb();
+    } catch (err) {
+      console.error("Window focus-requested callback failed", err);
     }
   });
 });
@@ -792,6 +803,7 @@ const api = createPreloadApi({
   languageChangeListeners,
   fullscreenChangeListeners,
   windowShownListeners,
+  windowFocusRequestedListeners,
   windowWillHideListeners,
   keyboardInteractiveListeners,
   hostKeyVerificationListeners,
