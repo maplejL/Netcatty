@@ -61,8 +61,7 @@ test('short unchanged tab reveals still flush pending hidden-output scroll', () 
   const recoverIndex = source.indexOf('const recoverTerminalAfterBecomeVisible = () => {');
   const fastPathIndex = source.indexOf('getHiddenDurationMs() < CSS_ONLY_TAB_REVEAL_MAX_HIDDEN_MS', recoverIndex);
   const webglRecoveryIndex = source.indexOf('xtermRuntimeRef.current?.ensureWebglRenderer();', recoverIndex);
-  const delayedSkipIndex = source.indexOf('lastWebglRecoveryLayoutKeyRef.current === paneLayoutKey', webglRecoveryIndex);
-  const delayedTimerIndex = source.indexOf('const timer = setTimeout', delayedSkipIndex);
+  const splitFocusSkipIndex = source.indexOf('Multi-split workspace panes stay visible', webglRecoveryIndex);
 
   assert.match(
     source,
@@ -73,7 +72,7 @@ test('short unchanged tab reveals still flush pending hidden-output scroll', () 
     /flushPendingOutputScroll\(\);[\s\S]*commitVisibleLayout\(\);[\s\S]*return;/,
   );
   assert.match(
-    source.slice(delayedSkipIndex, delayedTimerIndex),
+    source.slice(splitFocusSkipIndex, splitFocusSkipIndex + 600),
     /flushPendingOutputScroll\(\);\s*return;/,
   );
 });
@@ -86,5 +85,21 @@ test('immediate tab recovery marks webgl recovery to skip the delayed duplicate 
   assert.match(
     source,
     /lastWebglRecoveryLayoutKeyRef\.current === paneLayoutKey\s*&& hiddenMs < CSS_ONLY_TAB_REVEAL_MAX_HIDDEN_MS/,
+  );
+  assert.match(
+    source,
+    /useLayoutEffect\(\(\) => \{[\s\S]*shouldRecoverWebglOnShow\(\)[\s\S]*clearTextureAtlas\(\);[\s\S]*runImmediateRefit\(\{ force: true, repeatOnNextFrame: false \}\)/,
+  );
+});
+
+test('split workspace panes defer PTY resize until SSH handshake finishes', () => {
+  assert.match(source, /shouldDeferWorkspaceHandshakeRefit/);
+  assert.match(
+    source,
+    /if \(statusRef\.current === 'connecting'\) return;/,
+  );
+  assert.match(
+    source,
+    /status !== 'connected' \|\| !isVisible \|\| !inWorkspace \|\| isFocusMode \|\| isFocused/,
   );
 });

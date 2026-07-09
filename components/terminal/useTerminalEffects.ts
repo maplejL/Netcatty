@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
 import { useRef } from 'react';
 import { resolveFontWeightBold } from '../../lib/fontWeightAvailability';
+import {
+  shouldCreateWebglOnMount,
+  shouldSuspendWebglOnWorkspaceBlur,
+} from './runtime/webglRendererPolicy';
 import { bundledFamiliesInStack } from '../../lib/fontAvailability';
 import { resolveXTermScrollback } from '../../infrastructure/config/xtermPerformance';
 import { shouldInterceptMouseTrackingContextMenu } from './runtime/middleClickBehavior';
@@ -367,9 +371,14 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
           onAutocompleteInput: (data: string) => autocompleteInputRef.current?.(data),
           terminalContextActionsRef,
           isRestoringSelectionRef,
-          // Defer WebGL context creation for panes that mount hidden (e.g. the
-          // background tabs of a batch connect) until they first become visible.
-          initiallyVisible: isVisible,
+          // Defer WebGL for hidden tabs and for unfocused workspace split panes
+          // so broadcast / batch output does not spin up N GPU contexts at once.
+          initiallyVisible: shouldCreateWebglOnMount({
+            isVisible,
+            inWorkspace,
+            isFocusMode,
+            isFocused,
+          }),
         });
 
         if (disposed) {
@@ -387,6 +396,7 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
         // fitAddon and will not re-attach until isVisible/isResizing changes.
         setTimeout(() => {
           if (disposed) return;
+          if (inWorkspace && !isFocusMode && !isFocused) return;
           safeFit({ force: true, requireVisible: true });
         }, 0);
 
@@ -722,10 +732,17 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
     }
   };
 
+  const shouldDeferWorkspaceHandshakeRefit = () => (
+    inWorkspace && !isFocusMode && !isFocused && statusRef.current === 'connecting'
+  );
+
   const syncPtySizeAfterLayout = () => {
     const term = termRef.current;
     const id = sessionRef.current;
     if (!term || !id) return;
+    // Resizing the remote PTY while the SSH login banner is still streaming
+    // can interleave MOTD and prompt on one line in split workspaces.
+    if (statusRef.current === 'connecting') return;
 
     try {
       if (isTerminalAlternateScreenActive(term)) {
@@ -773,6 +790,7 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
       const timerId = setTimeout(() => {
         layoutRecoveryTimersRef.current = layoutRecoveryTimersRef.current.filter((id) => id !== timerId);
         if (!isVisibleRef.current) return;
+        if (shouldDeferWorkspaceHandshakeRefit()) return;
         runImmediateRefit({ force: true, repeatOnNextFrame: false });
         finishLayoutRecoveryAfterFit();
       }, delayMs);
@@ -892,6 +910,8 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
     if (becameVisible) {
       if (shouldRefitImmediatelyOnShow()) {
         recoverTerminalAfterBecomeVisible();
+      } else if (shouldDeferWorkspaceHandshakeRefit()) {
+        lastCommittedVisibleLayoutKeyRef.current = null;
       } else {
         lastCommittedVisibleLayoutKeyRef.current = null;
         scheduleLayoutRecoveryRefit([120, 350]);
@@ -914,11 +934,13 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
   // Defer refit for non-focused split panes that became visible on a tab switch.
   useEffect(() => {
     if (!isVisible || isResizing || shouldRefitImmediatelyOnShow()) return;
+    if (shouldDeferWorkspaceHandshakeRefit()) return;
     if (layoutAlreadyCommitted()) return;
 
     let cancelled = false;
     const runDeferred = () => {
       if (cancelled || !isVisibleRef.current) return;
+      if (shouldDeferWorkspaceHandshakeRefit()) return;
       if (lastCommittedVisibleLayoutKeyRef.current === paneLayoutKey) return;
       runImmediateRefit({ force: true, repeatOnNextFrame: false });
       finishLayoutRecoveryAfterFit();
@@ -949,11 +971,12 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
     }
   }, [isVisible]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isVisible || !shouldRecoverWebglOnShow()) return;
 
-    const hiddenMs = hiddenAtRef.current
-      ? Date.now() - hiddenAtRef.current
+    const wasHidden = hiddenAtRef.current !== null;
+    const hiddenMs = wasHidden
+      ? Date.now() - hiddenAtRef.current!
       : Number.POSITIVE_INFINITY;
     hiddenAtRef.current = null;
 
@@ -965,27 +988,46 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      lastWebglRecoveryLayoutKeyRef.current = paneLayoutKey;
-      // A pane that mounted hidden deferred its WebGL renderer; create it now
-      // that it's visible (no-op if already active or WebGL is disabled).
-      xtermRuntimeRef.current?.ensureWebglRenderer();
-      // Recover the WebGL renderer now that this tab is visible again. Hidden
-      // panes stay mounted off-screen (visibility:hidden) so each keeps a live
-      // WebGL context; creating another terminal's context — or the GPU dropping
-      // a non-composited off-screen canvas — can leave this terminal's drawing
-      // buffer corrupted ("花屏", issue #1063). Because a hidden pane keeps its
-      // dimensions, becoming visible triggers no resize and therefore no redraw,
-      // so the corruption persists until the user resizes the window. Force the
-      // same recovery a resize performs: clear the texture atlas (no-op on the
-      // DOM renderer) and synchronously repaint every row.
-      xtermRuntimeRef.current?.clearTextureAtlas();
-      runImmediateRefit({ force: true });
-      finishLayoutRecoveryAfterFit();
+    // Multi-split workspace panes stay visible; focus changes alone should not
+    // replay atlas clearing — that briefly wipes glyphs and flashes garbled
+    // frames before repaint (issue #1063).
+    if (
+      inWorkspace
+      && !isFocusMode
+      && !wasHidden
+      && lastWebglRecoveryLayoutKeyRef.current === paneLayoutKey
+    ) {
       flushPendingOutputScroll();
-    }, 50);
-    return () => clearTimeout(timer);
+      return;
+    }
+
+    lastWebglRecoveryLayoutKeyRef.current = paneLayoutKey;
+    // A pane that mounted hidden deferred its WebGL renderer; create it now
+    // that it's visible (no-op if already active or WebGL is disabled).
+    xtermRuntimeRef.current?.ensureWebglRenderer();
+    // Recover the WebGL renderer now that this tab is visible again. Hidden
+    // panes stay mounted off-screen (visibility:hidden) so each keeps a live
+    // WebGL context; creating another terminal's context — or the GPU dropping
+    // a non-composited off-screen canvas — can leave this terminal's drawing
+    // buffer corrupted ("花屏", issue #1063). Because a hidden pane keeps its
+    // dimensions, becoming visible triggers no resize and therefore no redraw,
+    // so the corruption persists until the user resizes the window. Force the
+    // same recovery a resize performs: clear the texture atlas (no-op on the
+    // DOM renderer) and synchronously repaint every row. Run in layout effect
+    // so recovery completes before the browser paints the corrupted frame.
+    xtermRuntimeRef.current?.clearTextureAtlas();
+    runImmediateRefit({ force: true, repeatOnNextFrame: false });
+    finishLayoutRecoveryAfterFit();
+    flushPendingOutputScroll();
   }, [isVisible, paneLayoutKey, inWorkspace, isFocusMode, isFocused]);
+
+  // Workspace split: keep at most one live WebGL context — background panes use DOM.
+  useLayoutEffect(() => {
+    if (!isVisible || !hasRuntimeRef.current) return;
+    if (!shouldSuspendWebglOnWorkspaceBlur({ inWorkspace, isFocusMode, isFocused })) return;
+    lastWebglRecoveryLayoutKeyRef.current = null;
+    xtermRuntimeRef.current?.suspendWebglRenderer();
+  }, [isVisible, inWorkspace, isFocusMode, isFocused]);
 
 
   useEffect(() => {
@@ -1172,19 +1214,38 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
 
   useEffect(() => {
     if (!isVisible || !fitAddonRef.current) return;
+    if (shouldDeferWorkspaceHandshakeRefit()) return;
     // Fit twice: once after initial layout (100ms) and again after layout settles
     // (350ms) to handle race conditions during split operations where the container
     // dimensions may not be final on the first pass.
     const timer1 = setTimeout(() => {
+      if (shouldDeferWorkspaceHandshakeRefit()) return;
       safeFit({ requireVisible: true });
       finishLayoutRecoveryAfterFit();
     }, 100);
     const timer2 = setTimeout(() => {
+      if (shouldDeferWorkspaceHandshakeRefit()) return;
       safeFit({ force: true, requireVisible: true });
       finishLayoutRecoveryAfterFit();
     }, 350);
     return () => { clearTimeout(timer1); clearTimeout(timer2); };
-  }, [inWorkspace, isVisible]);
+  }, [inWorkspace, isVisible, isFocusMode, isFocused, status]);
+
+  // Non-focused workspace panes defer layout refit until SSH handshake finishes.
+  useEffect(() => {
+    if (status !== 'connected' || !isVisible || !inWorkspace || isFocusMode || isFocused) return;
+    if (!fitAddonRef.current) return;
+
+    if (layoutAlreadyCommitted()) {
+      safeFit({ requireVisible: true });
+      syncPtySizeAfterLayout();
+      return;
+    }
+
+    runImmediateRefit({ force: true, repeatOnNextFrame: false });
+    finishLayoutRecoveryAfterFit();
+    commitVisibleLayout();
+  }, [status, isVisible, inWorkspace, isFocusMode, isFocused, paneLayoutKey]);
 
 
   // When search bar opens/closes, re-fit terminal and maintain scroll position
