@@ -60,10 +60,13 @@ import {
   shouldResetSftpSidePanelSourceSession,
   shouldSkipSftpSidePanelAutoConnect,
 } from "./sftp/sftpSidePanelAutoConnect";
+import { listSftpConnectedHosts } from "../domain/sftpConnectedHosts";
+import type { TerminalSession } from "../domain/models";
 
 interface SftpSidePanelProps {
   hosts: Host[];
   writableHosts?: Host[];
+  sessions?: TerminalSession[];
   keys: SSHKey[];
   identities: Identity[];
   knownHosts?: KnownHost[];
@@ -118,6 +121,7 @@ interface SftpSidePanelProps {
 const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   hosts,
   writableHosts,
+  sessions = [],
   keys,
   identities,
   knownHosts = [],
@@ -156,6 +160,12 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
 }) => {
   const { t } = useI18n();
   const hostWriteSource = writableHosts ?? hosts;
+  const connectedHosts = useMemo(() => {
+    const hostsById = new Map<string, Host>(
+      hosts.map((host) => [host.id, host]),
+    );
+    return listSftpConnectedHosts(sessions, hostsById);
+  }, [hosts, sessions]);
 
   const fileWatchHandlers = useMemo(() => ({
     onFileWatchSynced: (payload: { remotePath: string }) => {
@@ -691,6 +701,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
       <SftpSidePanelInteractiveBody
         hosts={hosts}
         hostWriteSource={hostWriteSource}
+        connectedHosts={connectedHosts}
         updateHosts={updateHosts}
         sftp={sftp}
         sftpRef={sftpRef}
@@ -736,6 +747,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
 type SftpSidePanelInteractiveBodyProps = {
   hosts: Host[];
   hostWriteSource: Host[];
+  connectedHosts: import("../domain/sftpConnectedHosts").SftpConnectedHostEntry[];
   updateHosts: (hosts: Host[]) => void;
   sftp: ReturnType<typeof useSftpState>;
   sftpRef: MutableRefObject<ReturnType<typeof useSftpState>>;
@@ -782,6 +794,7 @@ type SftpSidePanelInteractiveBodyProps = {
 const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> = ({
   hosts,
   hostWriteSource,
+  connectedHosts,
   updateHosts,
   sftp,
   sftpRef,
@@ -1329,6 +1342,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
   return (
     <SftpContextProvider
       hosts={hosts}
+      connectedHosts={connectedHosts}
       writableHosts={hostWriteSource}
       updateHosts={updateHosts}
       draggedFiles={draggedFiles}
@@ -1417,6 +1431,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
       {renderOverlays && (
         <SftpOverlays
           hosts={hosts}
+          connectedHosts={connectedHosts}
           sftp={sftp}
           visibleTransfers={visibleTransfers}
           showTransferQueue={false}
@@ -1465,6 +1480,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
 const sidePanelAreEqual = (prev: SftpSidePanelProps, next: SftpSidePanelProps): boolean =>
   prev.hosts === next.hosts &&
   prev.writableHosts === next.writableHosts &&
+  prev.sessions === next.sessions &&
   prev.keys === next.keys &&
   prev.identities === next.identities &&
   prev.knownHosts === next.knownHosts &&
