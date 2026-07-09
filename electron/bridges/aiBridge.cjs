@@ -16,7 +16,9 @@ const { existsSync } = fs;
 const { appendVaultAgentGuidance } = require("../shared/vaultAgentGuidance.cjs");
 
 const mcpServerBridge = require("./mcpServerBridge.cjs");
+const { createExternalMcpController } = require("./externalMcpController.cjs");
 const { getCliLauncherPath, TOOL_CLI_DISCOVERY_ENV_VAR } = require("../cli/discoveryPath.cjs");
+const { getExternalMcpDiscoveryFilePath } = require("../cli/externalMcpDiscoveryPath.cjs");
 const {
   scanUserSkills,
   buildUserSkillsContext,
@@ -222,6 +224,8 @@ function buildExternalAgentContextualPrompt({ mode, prompt, chatSessionId, defau
 
 const { execViaPty } = require("./ai/ptyExec.cjs");
 
+let externalMcpController = null;
+let userDataDir = null;
 let sessions = null;
 let sftpClients = null;
 let electronModule = null;
@@ -374,6 +378,7 @@ function init(deps) {
   electronModule = deps.electronModule;
   terminalWorkerManager = deps.terminalWorkerManager || null;
   cliDiscoveryFilePath = deps.cliDiscoveryFilePath || null;
+  userDataDir = deps.userDataDir || null;
   mcpServerBridge.init({ sessions, sftpClients, electronModule, cliDiscoveryFilePath, terminalWorkerManager });
 
   // Wire up main window getter for MCP approval IPC
@@ -398,6 +403,21 @@ function init(deps) {
     // windowManager may not be available yet; will be set lazily
   }
 
+  if (!externalMcpController) {
+    externalMcpController = createExternalMcpController({
+      mcpServerBridge,
+    });
+  }
+  externalMcpController.init({
+    mcpServerBridge,
+    discoveryFilePath: getExternalMcpDiscoveryFilePath(
+      userDataDir ? { userDataDir } : {},
+    ),
+  });
+  externalMcpController.setSessionSyncHandler(async () => {
+    mcpServerBridge.syncLiveSessionsToExternalScope();
+  });
+  mcpServerBridge.setExternalMcpHooks(externalMcpController);
 }
 
 function withCliDiscoveryEnv(env) {
@@ -656,6 +676,7 @@ function createHandlerContext(ipcMain) {
     fs,
     existsSync,
     mcpServerBridge,
+    getExternalMcpController: () => externalMcpController,
     getCliLauncherPath,
     TOOL_CLI_DISCOVERY_ENV_VAR,
     scanUserSkills,
@@ -778,6 +799,10 @@ function registerHandlers(ipcMain) {
   registerAgentDiscoveryHandlers(context);
   registerAgentProcessHandlers(context);
   registerSdkStreamHandlers(context);
+
+  if (externalMcpController) {
+    externalMcpController.registerHandlers(ipcMain, validateSenderOrSettings);
+  }
 }
 
 // Abort active streams and child processes on shutdown
@@ -804,6 +829,12 @@ function cleanup() {
   }
   codexLoginSessions.clear();
   invalidateCodexValidationCache();
+  try {
+    externalMcpController?.cleanup?.();
+  } catch {
+    // Ignore external MCP cleanup failures during shutdown.
+  }
+  mcpServerBridge.setExternalMcpHooks(null);
   mcpServerBridge.cleanup();
 }
 
@@ -813,4 +844,5 @@ module.exports = {
   cleanup,
   buildExternalAgentSystemContext,
   buildExternalAgentContextualPrompt,
+  getExternalMcpController: () => externalMcpController,
 };
