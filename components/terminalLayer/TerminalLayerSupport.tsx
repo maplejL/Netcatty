@@ -1,4 +1,4 @@
-﻿import React, { createContext, lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { activeTabStore } from '../../application/state/activeTabStore';
 import { useTerminalLayoutSuppressActive } from '../../application/state/terminalLayoutSuppressStore';
@@ -28,18 +28,9 @@ import {
 } from '../terminalPaneVisibility';
 import type { ResolvedAppearance, TerminalAppearanceHostScope } from '../../domain/terminalAppearanceRuntime';
 import type { TerminalSidePanelAutoOpenTab } from '../../domain/terminalSidePanelAutoOpen';
+import { AIChatSidePanel } from '../AIChatSidePanel';
 
 export type SidePanelTab = 'sftp' | 'scripts' | 'history' | 'theme' | 'ai' | 'system' | 'notes';
-
-const LazyAIChatSidePanel = lazy(() =>
-  import('../AIChatSidePanel').then((module) => ({ default: module.AIChatSidePanel })),
-);
-
-const AIChatSidePanelFallback = memo(function AIChatSidePanelFallback() {
-  return (
-    <div className="netcatty-lazy-fade-in h-full min-h-0 bg-background" aria-hidden="true" />
-  );
-});
 
 export type WorkspaceRect = { x: number; y: number; w: number; h: number };
 
@@ -327,7 +318,7 @@ export const buildAITerminalSessionInfo = (
     username: host?.username || session?.username,
     protocol,
     shellType: session?.shellType && session.shellType !== 'unknown' ? session.shellType : undefined,
-    // Suppress deviceType for Mosh / ET sessions 鈥?both require a shell-backed
+    // Suppress deviceType for Mosh / ET sessions — both require a shell-backed
     // PTY and cannot connect to vendor CLIs, so network device mode doesn't apply.
     deviceType: (session?.moshEnabled || host?.moshEnabled || session?.etEnabled || host?.etEnabled) ? undefined : host?.deviceType,
     connected: session?.status === 'connected',
@@ -518,8 +509,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
             className={cn("absolute inset-0 z-10", !isVisible && "hidden")}
           >
             <LazyLoadBoundary name="AI side panel" resetKey={tabId}>
-              <Suspense fallback={<AIChatSidePanelFallback />}>
-                <LazyAIChatSidePanel
+              <AIChatSidePanel
                     sessions={aiState.sessions}
                     activeSessionIdMap={aiState.activeSessionIdMap}
                     draftsByScope={aiState.draftsByScope}
@@ -573,7 +563,6 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
                     onOpenVaultSection={onOpenVaultSectionFromChat}
                     onOpenVaultSnippet={onOpenVaultSnippetFromChat}
                   />
-              </Suspense>
             </LazyLoadBoundary>
           </div>
         );
@@ -979,7 +968,7 @@ const TerminalPane: React.FC<TerminalPaneProps> = memo(({
   const lastVisiblePaneSizeRef = useRef<TerminalPaneHiddenSize | null>(null);
 
   // Publish visibility to the per-session store so TerminalServerStats /
-  // TerminalAutocomplete can self-subscribe 鈥?keeping isVisible out of the
+  // TerminalAutocomplete can self-subscribe — keeping isVisible out of the
   // TerminalView ctx so visibility toggles don't re-render TerminalView.
   useEffect(() => {
     setPaneVisible(session.id, isVisible);
