@@ -29,6 +29,7 @@
     "start": "node electron/launch.cjs",
     "pack": "npm run build && cross-env NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --publish=never",
     "pack:dir": "npm run build && cross-env NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --dir --publish=never",
+    "pack:asar": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1",
     "pack:win": "npm run build && cross-env npm_config_arch=x64 NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --win --x64 --publish=never && cross-env npm_config_arch=arm64 NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --win --arm64 --publish=never",
     "pack:win-x64": "npm run build && cross-env npm_config_arch=x64 NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --win --x64 --publish=never",
     "pack:mac": "npm run build && cross-env NODE_OPTIONS=--disable-warning=DEP0190 electron-builder --config electron-builder.config.cjs --mac --publish=never",

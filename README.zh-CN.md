@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  基于 <a href="https://github.com/binaricat/Netcatty">binaricat/Netcatty</a> 定制，在保留原版能力的基础上增强 Vault 导入与主机组织方式。
+  基于 <a href="https://github.com/binaricat/Netcatty">binaricat/Netcatty</a> 定制：完整继承上游 SSH 工作台能力，并针对日常运维增强 Vault 导入、IP 分组与批量操作。
 </p>
 
 <p align="center">
@@ -37,11 +37,60 @@
 | **协议** | GPL-3.0（继承上游，修改部分同样开源） |
 | **发行方式** | 本仓库**不跟随上游自动发版**；请自行克隆、构建或打包（见下文） |
 
-上游 Netcatty 是功能完整的 SSH 工作台。本维护版在同步上游能力的同时，针对日常运维场景增加了以下能力。
+上游 Netcatty 是功能完整的 SSH 工作台（官网 [netcatty.app](https://netcatty.app)）。**本仓库不删减上游能力**，仅在下方「本 fork 增强」一节叠加运维向功能。
+
+| | 上游 Netcatty | 本 fork |
+|---|---------------|---------|
+| SSH / SFTP / 分屏 / AI | ✅ 完整继承 | ✅ |
+| FinalShell 导入、IPv4 树分组 | — | ✅ |
+| Vault 多选开工作区、批量命令汇总 | — | ✅ |
 
 ---
 
-## 本版增强功能
+## 上游核心能力
+
+以下能力来自 [binaricat/Netcatty](https://github.com/binaricat/Netcatty)，本维护版同步保留。需要官方预编译安装包请前往 [上游 Releases](https://github.com/binaricat/Netcatty/releases)。
+
+### Vault 与主机管理
+
+- 网格 / 列表 / 树形三种视图，分组、标签、搜索与拖拽整理
+- 组级默认（认证、端口、跳转等可继承到组内主机）
+- 批量导入：PuTTY、MobaXterm、CSV、SecureCRT、`ssh_config` 等
+- 密钥链（Keychain）、片段（Snippets）、已知主机（Known Hosts）管理
+- 凭证经系统 `safeStorage` 加密落盘
+
+### 终端与工作区
+
+- 多标签 + **Workspace**：分屏终端（水平 / 垂直拆分）、Focus 模式侧栏
+- **广播（Broadcast）**：同一工作区内，键盘输入可同步到其余窗格
+- 底部 Compose 栏：向焦点窗或广播范围内的会话发送命令
+- 支持 SSH、本地 Shell、Telnet、Mosh、串口等（视环境与配置而定）
+- 跳板链（`hostChain`）、受管 `ssh_config`、连接复用
+- 端口转发（本地 / 远程 / 动态）、连接日志与脚本录制
+
+### SFTP 与编辑器
+
+- 双窗格 SFTP 浏览、拖拽传输、传输队列
+- 内置 Monaco 编辑器，可在外部编辑远程文件
+
+### AI（Catty Agent）
+
+- 侧边栏对话式 AI，理解当前终端会话与主机上下文
+- **Capability 工具目录**：终端、SFTP、Vault、端口转发等可通过工具调用
+- 外部 Agent 集成：MCP stdio 服务、CLI / RPC 能力面（见 `AGENTS.md`）
+- 写操作（SFTP 写入、端口转发启动等）支持确认模式审批
+
+### 体验与其它
+
+- 主题 / 终端配色 / 字体 / 高亮规则自定义
+- 可选 GitHub Gist 同步配置
+- 跨平台：macOS、Windows、Linux（Electron）
+
+---
+
+## 本 fork 增强功能
+
+在继承上述能力之外，本仓库针对**从 FinalShell 迁移**与**多机批量运维**做了以下增量（上游暂无或未默认提供）。
 
 ### FinalShell 主机导入
 
@@ -60,41 +109,36 @@
 - **无分组**且主机名为 IPv4 的条目，按前三段（如 `10.0.88`）归入虚拟文件夹
 - 非 IP 名称的主机（如「腾讯云轻量」）仍显示在未分组区域
 
+### 批量运维
+
+面向「一次操作多台机器」的轻量能力（非 Ansible 级编排）：
+
+| 能力 | 入口 | 说明 |
+|------|------|------|
+| **运维首页** | Vault 视图 → **首页**（新用户默认） | 继续会话、置顶/最近、按网段一键工作区或批量命令 |
+| **工作区打开** | Vault 多选 → **工作区** | 将选中主机收入同一 Workspace 标签；默认开启广播 |
+| **四宫格布局** | 一次选 4 台主机开工作区 | 自动 2×2 分屏；更多窗格可继续拆分 |
+| **批量命令** | Vault 多选 → **批量命令**；或工作区 Compose 栏终端图标 | 并行 `execCommand`，按主机汇总 stdout / 退出码 |
+| **错峰连接** | 多选连接 / 开工作区 | 终端挂载错峰，减轻多 WebGL 窗格同时启动的压力 |
+
+**批量命令 v1 限制：** 仅 SSH 直连主机；暂不支持跳板链（`hostChain`）。
+
 ### 其他导入格式（继承上游）
 
-PuTTY、MobaXterm、CSV、SecureCRT、`ssh_config` 等格式与上游一致。
+PuTTY、MobaXterm、CSV、SecureCRT、`ssh_config` 等与上游一致。
 
 ---
 
-## Netcatty 是什么
+## 快速了解 Netcatty
 
 **Netcatty** 是一款跨平台 SSH 客户端和终端管理器，适合需要同时维护多台服务器的开发者与运维人员。
 
 - 现代化替代 PuTTY、Termius、SecureCRT 等工具
 - 双窗格 SFTP、内置编辑器、拖拽传输
-- 分屏终端、多标签工作区、Vault 多视图（网格 / 列表 / 树形）
-- 内置 Catty AI Agent（继承上游）
-- 支持 SSH、本地终端、Telnet、Mosh、串口等（视环境而定）
+- 分屏终端、多标签工作区、Vault 多视图
+- 内置 Catty AI Agent 与外部 MCP / CLI 集成
 
----
-
-## 功能概览
-
-### Vault
-
-- 网格 / 列表 / 树形三种视图
-- 分组、标签、搜索、拖拽整理
-- 多格式批量导入（含 FinalShell）
-
-### 终端与 SFTP
-
-- 水平 / 垂直分屏
-- SFTP 双窗格浏览与传输
-- 主题与终端高亮自定义
-
-### AI（Catty Agent）
-
-继承上游内置 AI 助手，可通过对话执行运维任务、跨主机编排操作。界面与能力以当前分支代码为准。
+更完整的能力列表见上文 **[上游核心能力](#上游核心能力)**。
 
 ---
 
@@ -152,6 +196,14 @@ npx electron-builder --config electron-builder.config.cjs --config.npmRebuild=fa
 - 网络不稳定时可设 `ELECTRON_BUILDER_OFFLINE=true` 使用已缓存的 Electron
 - `node-pty` 重编译失败时可加 `--config.npmRebuild=false`，使用预编译二进制
 - Node 22 下部分脚本解密测试需 `NODE_OPTIONS=--openssl-legacy-provider`；Electron 运行时一般不需要
+
+### Vault 多选与批量运维
+
+1. 在 **Vault** 中多选主机
+2. 底部操作栏可选：
+   - **连接**：每台主机独立标签页
+   - **工作区**：同一 Workspace 分屏（4 台时 2×2），默认开启广播
+   - **批量命令**：输入一条命令，查看各机输出与退出码
 
 ### FinalShell 导入步骤
 
