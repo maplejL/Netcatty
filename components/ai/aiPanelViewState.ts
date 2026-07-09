@@ -33,15 +33,28 @@ interface DraftEntrySelectionActions {
   preserveSessionView?: boolean;
 }
 
+function toKnownSessionIds(knownSessions: AISession[] | ReadonlySet<string>): ReadonlySet<string> {
+  return knownSessions instanceof Set
+    ? knownSessions
+    : new Set(knownSessions.map((session) => session.id));
+}
+
 export function resolveDisplayedPanelView(
   panelView: AIPanelView | undefined,
   hasDraft: boolean,
   sessions: AISession[],
   persistedSessionId?: string | null,
   scopeType: "terminal" | "workspace" = "workspace",
+  /**
+   * Optional broader session id set used only for "does this session still exist?"
+   * checks. Scoped history may lag (deferred value / rank filter) while the
+   * session is still live in the global store — do not demote to draft then.
+   */
+  knownSessions: AISession[] | ReadonlySet<string> = sessions,
 ): AIPanelView {
+  const knownSessionIds = toKnownSessionIds(knownSessions);
   if (panelView) {
-    return normalizePanelView(panelView, sessions);
+    return normalizePanelView(panelView, knownSessionIds);
   }
 
   if (hasDraft) {
@@ -56,7 +69,7 @@ export function resolveDisplayedPanelView(
 
   // Honour the persisted active-session selection (survives cold mount)
   // before falling back to the newest history entry.
-  if (persistedSessionId && sessions.some((s) => s.id === persistedSessionId)) {
+  if (persistedSessionId && knownSessionIds.has(persistedSessionId)) {
     return { mode: "session", sessionId: persistedSessionId };
   }
 
@@ -69,13 +82,14 @@ export function resolveDisplayedPanelView(
 
 export function normalizePanelView(
   panelView: AIPanelView,
-  sessions: AISession[],
+  knownSessions: AISession[] | ReadonlySet<string>,
 ): AIPanelView {
   if (panelView.mode !== "session") {
     return panelView;
   }
 
-  return sessions.some((session) => session.id === panelView.sessionId)
+  const knownSessionIds = toKnownSessionIds(knownSessions);
+  return knownSessionIds.has(panelView.sessionId)
     ? panelView
     : DEFAULT_PANEL_VIEW;
 }
@@ -83,12 +97,21 @@ export function normalizePanelView(
 export function resolveDisplayedSession(
   panelView: AIPanelView,
   sessions: AISession[],
+  /**
+   * Fallback lookup when the preferred (scoped/history) list does not contain
+   * the active session id — e.g. deferred history lag during agent rebind.
+   */
+  fallbackSessions: AISession[] = sessions,
 ): AISession | null {
   if (panelView.mode !== "session") {
     return null;
   }
 
-  return sessions.find((session) => session.id === panelView.sessionId) ?? null;
+  return (
+    sessions.find((session) => session.id === panelView.sessionId)
+    ?? fallbackSessions.find((session) => session.id === panelView.sessionId)
+    ?? null
+  );
 }
 
 export function applyHistorySessionSelection(

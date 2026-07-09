@@ -33,6 +33,7 @@ import type {
   AISessionScope,
   WebSearchConfig,
 } from '../../infrastructure/ai/types';
+import { rebindSessionAgent } from '../../infrastructure/ai/sessionAgentRebind';
 import {
   DEFAULT_COMMAND_BLOCKLIST,
   DEFAULT_COMMAND_TIMEOUT_SECONDS,
@@ -710,6 +711,24 @@ export function useAIState() {
     });
   }, [debouncedPersistSessions]);
 
+  /** Rebind an existing chat session to another agent; keeps messages, clears externalSessionId. */
+  const updateSessionAgentId = useCallback((sessionId: string, agentId: string) => {
+    setSessionsRaw(prev => {
+      let changed = false;
+      const next = prev.map((s) => {
+        if (s.id !== sessionId) return s;
+        const rebound = rebindSessionAgent(s, agentId);
+        if (rebound === s) return s;
+        changed = true;
+        return rebound;
+      });
+      if (!changed) return prev;
+      setLatestAISessionsSnapshot(next);
+      debouncedPersistSessions();
+      return next;
+    });
+  }, [debouncedPersistSessions]);
+
   // Maximum messages per session to prevent unbounded memory growth
   const MAX_MESSAGES_PER_SESSION = 500;
 
@@ -1055,6 +1074,7 @@ export function useAIState() {
     deleteSessionsByTarget,
     updateSessionTitle,
     updateSessionExternalSessionId,
+    updateSessionAgentId,
     addMessageToSession,
     updateLastMessage,
     updateMessageById,
@@ -1112,6 +1132,7 @@ export function useAIState() {
     deleteSessionsByTarget,
     updateSessionTitle,
     updateSessionExternalSessionId,
+    updateSessionAgentId,
     addMessageToSession,
     updateLastMessage,
     updateMessageById,

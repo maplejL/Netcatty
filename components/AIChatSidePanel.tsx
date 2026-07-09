@@ -14,7 +14,7 @@ import type {
 } from '../infrastructure/ai/types';
 import type { ExecutorContext } from '../infrastructure/ai/cattyAgent/executor';
 import { getAgentModelPresets } from '../infrastructure/ai/types';
-import { getExternalAgentSdkBackend, getManualAgentCommand, matchesManagedAgentConfig } from '../infrastructure/ai/managedAgents';
+import { getExternalAgentSdkBackend, getManualAgentCommand, getSdkAgentCommand, matchesManagedAgentConfig } from '../infrastructure/ai/managedAgents';
 import { useAgentDiscovery } from '../application/state/useAgentDiscovery';
 import {
   getReadyUserSkillOptions,
@@ -38,6 +38,7 @@ import {
   buildPromptWithTerminalSelectionAttachments,
   isTerminalSelectionAttachment,
 } from '../application/state/terminalSelectionAttachment';
+import { shouldRebindActiveSessionOnAgentChange } from '../infrastructure/ai/sessionAgentRebind';
 import type { CodexIntegrationStatus } from './settings/tabs/ai/types';
 import {
   useAIChatStreaming,
@@ -246,6 +247,7 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   deleteSession,
   updateSessionTitle,
   updateSessionExternalSessionId,
+  updateSessionAgentId,
   addMessageToSession,
   updateLastMessage,
   updateMessageById,
@@ -343,13 +345,30 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   const explicitPanelView = panelViewByScope[scopeKey];
   const currentDraft = draftsByScope[scopeKey] ?? null;
   const persistedSessionId = activeSessionIdMap[scopeKey] ?? null;
+  const sessionIdsKey = sessions.map((session) => session.id).join("|");
+  const knownSessionIds = useMemo(
+    () => new Set(sessions.map((session) => session.id)),
+    // Only recompute when sessions are added/removed — not on every message edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionIdsKey],
+  );
+  // Existence checks must use the live sessions store, not deferred/scoped history.
+  // Otherwise agent rebind (or a brief history lag) can demote session → draft and
+  // make the message list look empty even though the chat still exists.
   const normalizedPanelView = useMemo<AIPanelView>(
-    () => resolveDisplayedPanelView(explicitPanelView, currentDraft != null, historySessions, persistedSessionId, scopeType),
-    [explicitPanelView, currentDraft, historySessions, persistedSessionId, scopeType],
+    () => resolveDisplayedPanelView(
+      explicitPanelView,
+      currentDraft != null,
+      historySessions,
+      persistedSessionId,
+      scopeType,
+      knownSessionIds,
+    ),
+    [explicitPanelView, currentDraft, historySessions, persistedSessionId, scopeType, knownSessionIds],
   );
   const activeSession = useMemo(
-    () => resolveDisplayedSession(normalizedPanelView, historySessions),
-    [normalizedPanelView, historySessions],
+    () => resolveDisplayedSession(normalizedPanelView, historySessions, sessions),
+    [normalizedPanelView, historySessions, sessions],
   );
   const activeSessionId = normalizedPanelView.mode === 'session' ? normalizedPanelView.sessionId : null;
   const isStreaming = activeSessionId ? streamingSessionIds.has(activeSessionId) : false;
@@ -403,7 +422,9 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
 
   useEffect(() => {
     if (!isVisible) return;
-    if (!explicitPanelView || panelViewsEqual(normalizedPanelView, explicitPanelView)) return;
+    if (explicitPanelView?.mode !== "session") return;
+    if (normalizedPanelView.mode !== "draft") return;
+    if (panelViewsEqual(normalizedPanelView, explicitPanelView)) return;
     showDraftView(scopeKey);
   }, [isVisible, normalizedPanelView, explicitPanelView, scopeKey, showDraftView]);
 
@@ -677,7 +698,7 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
       cacheKey: buildSdkRuntimeModelCacheKey(agent),
       sdkBackend,
       agentEnv: agent.env,
-      agentCommand: getManualAgentCommand(agent),
+      agentCommand: getSdkAgentCommand(agent),
     };
   }, []);
 
@@ -777,15 +798,28 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
     }
 
     let cancelled = false;
-    void loadSdkRuntimeModelCatalog(target, {
-      force: target.sdkBackend === 'opencode',
-    }).then((catalog) => {
-      if (cancelled || !catalog) return;
-      applySdkRuntimeModelCatalog(target.agentId, catalog, { adoptCurrentModel: true });
-    });
+    const run = () => {
+      if (cancelled) return;
+      void loadSdkRuntimeModelCatalog(target, {
+        force: target.sdkBackend === 'opencode',
+      }).then((catalog) => {
+        if (cancelled || !catalog) return;
+        applySdkRuntimeModelCatalog(target.agentId, catalog, { adoptCurrentModel: true });
+      });
+    };
 
+    if (typeof requestIdleCallback === 'function') {
+      const idleId = requestIdleCallback(run, { timeout: 3000 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(idleId);
+      };
+    }
+
+    const timeoutId = window.setTimeout(run, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
   }, [
     isVisible,
@@ -1216,17 +1250,69 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   );
 
   const handleAgentChange = useCallback((agentId: string) => {
+    // Prefer the rendered session, then panel/persisted ids against the full store.
+    // activeSessionRef can be null during deferred history lag even when a chat
+    // is open — falling through to draft would wipe the visible message list.
+    const panelSessionId =
+      explicitPanelView?.mode === 'session' ? explicitPanelView.sessionId : null;
+    const candidateId =
+      activeSessionRef.current?.id
+      ?? panelSessionId
+      ?? persistedSessionId
+      ?? null;
+    const active =
+      activeSessionRef.current
+      ?? (candidateId ? sessions.find((session) => session.id === candidateId) ?? null : null);
+
+    // Same-scope chat: rebind the open session so messages stay shared across agents.
+    // Clears externalSessionId via updateSessionAgentId so the next turn cannot resume
+    // the previous agent's CLI/SDK session (history is replayed from Netcatty messages).
+    if (shouldRebindActiveSessionOnAgentChange(active, agentId) && active) {
+      const streaming =
+        streamingSessionIds.has(active.id)
+        || abortControllersRef.current.has(active.id);
+      // Do not rebind (or jump to draft) while a turn is in flight.
+      if (streaming) {
+        setShowHistory(false);
+        return;
+      }
+      updateSessionAgentId(active.id, agentId);
+      // Drop in-memory SDK session keys for this chat so the new agent cannot
+      // resume the previous backend's process session.
+      void getNetcattyBridge()?.aiSdkAgentCleanup?.(active.id).catch(() => {});
+      showScopeSessionView(active.id);
+      setActiveSessionId(active.id);
+      // Keep composer agent in sync, but never switch the panel into draft mode.
+      updateScopeDraft(agentId, (draft) => ({
+        ...selectDraftForAgentSwitch(draft, agentId, false),
+      }));
+      setShowHistory(false);
+      return;
+    }
+
     showScopeDraftView();
     ensureScopeDraft(agentId);
     updateScopeDraft(agentId, (draft) => ({
       ...selectDraftForAgentSwitch(
         draft,
         agentId,
-        Boolean(activeSessionRef.current?.messages.length),
+        Boolean(active?.messages.length),
       ),
     }));
     setShowHistory(false);
-  }, [ensureScopeDraft, showScopeDraftView, updateScopeDraft]);
+  }, [
+    abortControllersRef,
+    ensureScopeDraft,
+    explicitPanelView,
+    persistedSessionId,
+    sessions,
+    setActiveSessionId,
+    showScopeDraftView,
+    showScopeSessionView,
+    streamingSessionIds,
+    updateScopeDraft,
+    updateSessionAgentId,
+  ]);
 
 
   return (
@@ -1310,6 +1396,7 @@ const AI_CHAT_SIDE_PANEL_AI_STATE_KEYS = [
   'deleteSession',
   'updateSessionTitle',
   'updateSessionExternalSessionId',
+  'updateSessionAgentId',
   'addMessageToSession',
   'updateLastMessage',
   'updateMessageById',

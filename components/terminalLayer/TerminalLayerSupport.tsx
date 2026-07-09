@@ -1,4 +1,4 @@
-import React, { createContext, lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+﻿import React, { createContext, lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { activeTabStore } from '../../application/state/activeTabStore';
 import { useTerminalLayoutSuppressActive } from '../../application/state/terminalLayoutSuppressStore';
@@ -327,7 +327,7 @@ export const buildAITerminalSessionInfo = (
     username: host?.username || session?.username,
     protocol,
     shellType: session?.shellType && session.shellType !== 'unknown' ? session.shellType : undefined,
-    // Suppress deviceType for Mosh / ET sessions — both require a shell-backed
+    // Suppress deviceType for Mosh / ET sessions 鈥?both require a shell-backed
     // PTY and cannot connect to vendor CLIs, so network device mode doesn't apply.
     deviceType: (session?.moshEnabled || host?.moshEnabled || session?.etEnabled || host?.etEnabled) ? undefined : host?.deviceType,
     connected: session?.status === 'connected',
@@ -536,6 +536,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
                     deleteSession={aiState.deleteSession}
                     updateSessionTitle={aiState.updateSessionTitle}
                     updateSessionExternalSessionId={aiState.updateSessionExternalSessionId}
+                    updateSessionAgentId={aiState.updateSessionAgentId}
                     addMessageToSession={aiState.addMessageToSession}
                     updateLastMessage={aiState.updateLastMessage}
                     updateMessageById={aiState.updateMessageById}
@@ -978,7 +979,7 @@ const TerminalPane: React.FC<TerminalPaneProps> = memo(({
   const lastVisiblePaneSizeRef = useRef<TerminalPaneHiddenSize | null>(null);
 
   // Publish visibility to the per-session store so TerminalServerStats /
-  // TerminalAutocomplete can self-subscribe — keeping isVisible out of the
+  // TerminalAutocomplete can self-subscribe 鈥?keeping isVisible out of the
   // TerminalView ctx so visibility toggles don't re-render TerminalView.
   useEffect(() => {
     setPaneVisible(session.id, isVisible);
