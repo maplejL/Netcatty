@@ -207,6 +207,8 @@ const DIST_MIME_TYPES = {
   ".mjs": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".map": "application/json",
+  ".txt": "text/plain",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -223,6 +225,19 @@ const DIST_MIME_TYPES = {
   ".webm": "video/webm",
   ".wasm": "application/wasm",
 };
+
+// Textual MIME types served over app:// must declare UTF-8. Without charset,
+// Chromium can decode tray/settings secondary windows with a system default
+// (e.g. GBK on Chinese Windows) and render i18n strings as mojibake.
+const DIST_TEXTUAL_MIME_TYPES = new Set([
+  "text/html",
+  "text/javascript",
+  "text/css",
+  "text/plain",
+  "application/json",
+  "application/javascript",
+  "image/svg+xml",
+]);
 
 const APP_PROTOCOL_LONG_CACHE_EXTENSIONS = new Set([
   ".js",
@@ -248,7 +263,11 @@ const APP_PROTOCOL_LONG_CACHE_EXTENSIONS = new Set([
 
 function resolveContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  return DIST_MIME_TYPES[ext] || "application/octet-stream";
+  const mime = DIST_MIME_TYPES[ext] || "application/octet-stream";
+  if (DIST_TEXTUAL_MIME_TYPES.has(mime)) {
+    return `${mime}; charset=utf-8`;
+  }
+  return mime;
 }
 
 function resolveAppProtocolCacheControl(filePath, distPath) {
@@ -280,7 +299,7 @@ function registerAppProtocol() {
       const notFound = () =>
         new Response("Not Found", {
           status: 404,
-          headers: { ...APP_PROTOCOL_HEADERS, "Content-Type": "text/plain" },
+          headers: { ...APP_PROTOCOL_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
         });
 
       try {
@@ -301,7 +320,7 @@ function registerAppProtocol() {
         if (!isPathInside(distPath, fullPath)) {
           return new Response("Forbidden", {
             status: 403,
-            headers: { ...APP_PROTOCOL_HEADERS, "Content-Type": "text/plain" },
+            headers: { ...APP_PROTOCOL_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
           });
         }
 
