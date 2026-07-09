@@ -8,6 +8,7 @@ appendPaneToWorkspaceRoot,
 collectSessionIds,
 createWorkspaceFromSessions as createWorkspaceEntity,
 createWorkspaceFromSessionIds,
+  type WorkspacePaneLayout,
 FocusDirection,
 getNextFocusSessionId,
 insertPaneIntoWorkspace,
@@ -551,8 +552,16 @@ export const useSessionState = ({
     setWorkspaceRenameValue('');
   }, []);
 
-  const createWorkspaceWithHosts = useCallback((name: string, hosts: Host[]) => {
-    if (hosts.length === 0) return;
+  const createWorkspaceWithHosts = useCallback((
+    name: string,
+    hosts: Host[],
+    options?: {
+      layout?: WorkspacePaneLayout;
+      enableBroadcast?: boolean;
+      viewMode?: WorkspaceViewMode;
+    },
+  ): string | null => {
+    if (hosts.length === 0) return null;
 
     // Create sessions for each host
     const newSessions: TerminalSession[] = hosts.map(host => {
@@ -603,7 +612,8 @@ export const useSessionState = ({
     // Create workspace
     const workspace = createWorkspaceFromSessionIds(sessionIds, {
       title: name,
-      viewMode: 'split',
+      viewMode: options?.viewMode ?? 'split',
+      layout: options?.layout ?? 'auto',
     });
 
     // Assign workspaceId to sessions
@@ -612,9 +622,28 @@ export const useSessionState = ({
       workspaceId: workspace.id
     }));
 
-    setSessions(prev => [...prev, ...sessionsWithWorkspace]);
+    const WORKSPACE_SESSION_MOUNT_STAGGER_MS = 90;
+    const [firstSession, ...restSessions] = sessionsWithWorkspace;
+
+    setSessions(prev => [...prev, firstSession]);
     setWorkspaces(prev => [...prev, workspace]);
     setActiveTabId(workspace.id);
+
+    restSessions.forEach((session, index) => {
+      window.setTimeout(() => {
+        setSessions(prev => [...prev, session]);
+      }, (index + 1) * WORKSPACE_SESSION_MOUNT_STAGGER_MS);
+    });
+
+    if (options?.enableBroadcast) {
+      setBroadcastWorkspaceIds(prev => {
+        const next = new Set(prev);
+        next.add(workspace.id);
+        return next;
+      });
+    }
+
+    return workspace.id;
   }, [setActiveTabId]);
 
   // Like createWorkspaceWithHosts but supports mixed targets — each
