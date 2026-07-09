@@ -576,6 +576,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
                 setQuickSearch('');
               }}
               keyBindings={keyBindings}
+              terminalSettings={terminalSettings}
             />
           </Suspense>
         </LazyLoadBoundary>
