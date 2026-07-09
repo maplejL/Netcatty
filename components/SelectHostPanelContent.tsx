@@ -30,6 +30,8 @@ export interface SelectHostPanelContentProps {
   customGroups?: string[];
   selectedHostIds: string[];
   multiSelect?: boolean;
+  /** When set with multiSelect, caps how many hosts can be selected. */
+  maxSelection?: number;
   onSelect: (host: Host) => void;
   onConfirm: () => void;
   onNewHost?: () => void;
@@ -49,6 +51,7 @@ export const SelectHostPanelContent: React.FC<SelectHostPanelContentProps> = ({
   customGroups = [],
   selectedHostIds,
   multiSelect = false,
+  maxSelection,
   onSelect,
   onConfirm,
   onNewHost,
@@ -297,16 +300,28 @@ export const SelectHostPanelContent: React.FC<SelectHostPanelContentProps> = ({
                 <div className="space-y-1">
                   {filteredHosts.map((host) => {
                     const isSelected = selectedHostIdSet.has(host.id);
+                    const atSelectionLimit = Boolean(
+                      multiSelect
+                      && maxSelection != null
+                      && !isSelected
+                      && selectedHostIds.length >= maxSelection,
+                    );
                     const connectionStr = `${host.username}@${host.hostname}:${host.port || 22}`;
 
                     return (
                       <div
                         key={host.id}
                         className={cn(
-                          'flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors',
-                          isSelected ? 'bg-muted' : 'hover:bg-muted/70',
+                          'flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors',
+                          atSelectionLimit
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'cursor-pointer',
+                          isSelected ? 'bg-muted' : !atSelectionLimit && 'hover:bg-muted/70',
                         )}
-                        onClick={() => onSelect(host)}
+                        onClick={() => {
+                          if (atSelectionLimit) return;
+                          onSelect(host);
+                        }}
                       >
                         <DistroAvatar
                           host={host}
@@ -347,7 +362,12 @@ export const SelectHostPanelContent: React.FC<SelectHostPanelContentProps> = ({
           </div>
         </ScrollArea>
 
-        <div className="px-4 py-3 border-t border-border/60 shrink-0">
+        <div className="px-4 py-3 border-t border-border/60 shrink-0 space-y-2">
+          {multiSelect && maxSelection != null ? (
+            <p className="text-[11px] text-muted-foreground text-center">
+              {t('selectHost.maxSelectionHint', { max: maxSelection, count: selectedHostIds.length })}
+            </p>
+          ) : null}
           <Button
             className="w-full"
             disabled={selectedHostIds.length === 0}

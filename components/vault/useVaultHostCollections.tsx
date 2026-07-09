@@ -22,7 +22,7 @@ interface UseVaultHostCollectionsOptions {
   showOnlyUngroupedHostsInRoot: boolean;
   showRecentHosts: boolean;
   sortMode: SortMode;
-  viewMode: "grid" | "list" | "tree";
+  viewMode: "home" | "grid" | "list" | "tree";
 }
 
 export function useVaultHostCollections({

@@ -430,7 +430,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
           label={host.label}
           depth={depth}
           selected={Boolean(isSelected)}
-          className="h-10 rounded-md py-1 pr-2 text-[13px]"
+          className="min-h-14 h-auto rounded-md py-1.5 pr-2 text-[13px]"
           data-section="host-tree-row"
           data-row-type="host"
           data-host-id={host.id}
@@ -647,7 +647,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
   }, [groupTree, sortMode]);
 
   return (
-    <div className="space-y-1" onPointerDownCapture={handleTreePointerDownCapture}>
+    <div className="w-full min-w-0 space-y-1" onPointerDownCapture={handleTreePointerDownCapture}>
       {/* Expand/Collapse controls */}
       {groupTree.length > 0 && (
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/30">

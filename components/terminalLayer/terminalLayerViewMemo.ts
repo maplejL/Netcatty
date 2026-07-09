@@ -356,6 +356,7 @@ const WORKSPACE_CTX_KEYS = [
   'findSplitNode',
   'focusedSessionId',
   'handleComposeSend',
+  'handleOpenWorkspaceBatchExec',
   'handleSnippetFromPanel',
   'refocusTerminalSession',
   'setIsComposeBarOpen',
@@ -398,6 +399,7 @@ export function terminalLayerViewCtxEqual(prev: Ctx, next: Ctx): boolean {
   if (!activeWorkspaceEqual(prev.activeWorkspace, next.activeWorkspace)) return false;
   if (prev.focusedSessionId !== next.focusedSessionId) return false;
   if (prev.handleComposeSend !== next.handleComposeSend) return false;
+  if (prev.handleOpenWorkspaceBatchExec !== next.handleOpenWorkspaceBatchExec) return false;
   if (prev.refocusTerminalSession !== next.refocusTerminalSession) return false;
   if (prev.setIsComposeBarOpen !== next.setIsComposeBarOpen) return false;
   if (prev.isBroadcastEnabled !== next.isBroadcastEnabled) return false;

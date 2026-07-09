@@ -204,6 +204,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   onCreateLocalTerminal,
   isBroadcastEnabled,
   onToggleBroadcast,
+  onOpenBatchExec,
   updateHosts,
   updateSnippets,
   updateSnippetPackages,
@@ -1548,6 +1549,17 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     }
   }, [isBroadcastEnabled, terminalBackend]);
 
+  const handleOpenWorkspaceBatchExec = useCallback(() => {
+    const activeWorkspace = activeWorkspaceRef.current;
+    if (!activeWorkspace || !onOpenBatchExec) return;
+    const workspaceHosts = sessionsRef.current
+      .filter((session) => session.workspaceId === activeWorkspace.id)
+      .map((session) => sessionHostsMapRef.current.get(session.id))
+      .filter((host): host is Host => Boolean(host));
+    if (workspaceHosts.length === 0) return;
+    onOpenBatchExec(workspaceHosts);
+  }, [onOpenBatchExec]);
+
   const sessionLogConfig = useMemo(
     () =>
       sessionLogsEnabled && sessionLogsDir
@@ -1602,6 +1614,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     handleCommandExecuted,
     handleCommandSubmitted,
     handleComposeSend,
+    handleOpenWorkspaceBatchExec,
     handleHistoryPaste,
     handleHistoryRun,
     handleOpenHistory,
@@ -1688,6 +1701,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onSplitSession,
     onSplitSessionRef,
     onToggleBroadcastRef,
+    onOpenBatchExec,
     onToggleWorkspaceViewMode,
     onToggleWorkspaceViewModeRef,
     onUpdateHost,

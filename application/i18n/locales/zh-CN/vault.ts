@@ -41,6 +41,7 @@ export const zhCNVaultMessages: Messages = {
   'selectHost.newHost': '新建主机',
   'selectHost.continue': '继续',
   'selectHost.continueWithCount': '继续（已选 {count} 个）',
+  'selectHost.maxSelectionHint': '最多 {max} 台，已选 {count} 台',
 
   // Quick Connect
   'quickConnect.knownHost.title': '确认要连接吗？',

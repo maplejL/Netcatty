@@ -2,6 +2,7 @@
 import React from "react";
 import { HostNotesIndicator } from "../host/HostNotesIndicator";
 import { VaultEntityIcon, vaultPrimaryIconClass } from "./VaultEntityIcon";
+import { VaultOpsHome } from "./VaultOpsHome";
 import {
   clearVaultDropIndicator,
   getVaultDropIntent,
@@ -25,7 +26,7 @@ const isRelatedTargetInside = (
 };
 
 export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext }) {
-  const { Badge, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ClipboardCopy, Clock, cn, commitInlineGroupRename, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, displayedGroups, displayedHosts, DistroAvatar, Edit2, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, groupConfigs, groupedDisplayHosts, handleCopyCredentials, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleHostConnect, handleUnmanageGroup, hasHostsSidePanel, hostListScrollRef, HostTreeView, isHostsSectionActive, isMultiSelectMode, lastPinnedId, LayoutGrid, managedGroupPaths, moveGroup, moveHostToGroup, onDeleteHost, Pin, pinnedHosts, pinnedRecentIds, Plug, recentHosts, reorderGroup, reorderHost, sanitizeHost, selectedGroupPath, selectedHostIds, sessionCount, setDeleteTargetPath, setDragOverDropTarget, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsNewFolderOpen, setLastPinnedId, setNewFolderName, setSelectedGroupPath, setTargetParentPath, shouldHideEmptyRootHostsSection, showRecentHosts, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, t, toggleHostPinned, toggleHostSelection, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, treeViewUngroupedHosts, viewMode, visibleDisplayedHosts } = ctx;
+  const { Badge, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ClipboardCopy, Clock, cn, commitInlineGroupRename, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, displayedGroups, displayedHosts, DistroAvatar, Edit2, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, groupConfigs, groupedDisplayHosts, handleCopyCredentials, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleHostConnect, handleUnmanageGroup, hasHostsSidePanel, hostListScrollRef, HostTreeView, isHostsSectionActive, isMultiSelectMode, lastPinnedId, LayoutGrid, managedGroupPaths, moveGroup, moveHostToGroup, onActivateTab, onCreateWorkspaceWithHosts, onDeleteHost, onOpenBatchExec, Pin, pinnedHosts, pinnedRecentIds, Plug, recentHosts, reorderGroup, reorderHost, sanitizeHost, selectedGroupPath, selectedHostIds, sessionCount, sessions, setDeleteTargetPath, setDragOverDropTarget, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsNewFolderOpen, setLastPinnedId, setNewFolderName, setSelectedGroupPath, setTargetParentPath, setViewMode, shouldHideEmptyRootHostsSection, showRecentHosts, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, t, toggleHostPinned, toggleHostSelection, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, treeViewUngroupedHosts, viewMode, visibleDisplayedHosts, workspaces } = ctx;
   const [draggingHostId, setDraggingHostId] = React.useState<string | null>(null);
   const draggingHostIdRef = React.useRef<string | null>(null);
   const lastPreviewReorderRef = React.useRef<string | null>(null);
@@ -46,15 +47,18 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
     setDragOverDropTarget(null);
   }, [setDragOverDropTarget]);
 
-  return <div
-          ref={hostListScrollRef}
-          className={cn(
-            "flex-1 overflow-auto px-4 pb-4 space-y-3",
-            viewMode === "tree" ? "pt-1.5" : "pt-0",
-            !isHostsSectionActive && "hidden",
-          )}
-          data-section="vault-host-list"
-          onDragOverCapture={(e) => {
+  const listScrollClassName = cn(
+    "flex-1 min-w-0 w-full overflow-auto px-4 pb-4 space-y-3",
+    viewMode === "home" ? "pt-2" : viewMode === "tree" ? "pt-1.5" : "pt-0",
+    !isHostsSectionActive && "hidden",
+  );
+
+  return (
+    <div
+      ref={hostListScrollRef}
+      className={listScrollClassName}
+      data-section="vault-host-list"
+      onDragOverCapture={viewMode === "home" ? undefined : (e) => {
             const target = (e.target as Element | null)?.closest("[data-host-id], [data-group-path]");
             if (target) e.preventDefault();
             if (!(target instanceof HTMLElement)) return;
@@ -140,6 +144,21 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
             resetHostDragState();
           }}
         >
+      {viewMode === "home" ? (
+        <VaultOpsHome
+          hosts={treeViewHosts}
+          sessions={sessions ?? []}
+          workspaces={workspaces ?? []}
+          onHostConnect={handleHostConnect}
+          onActivateTab={onActivateTab ?? (() => {})}
+          onCreateWorkspaceWithHosts={onCreateWorkspaceWithHosts}
+          onOpenBatchExec={onOpenBatchExec}
+          onSwitchToTreeView={() => setViewMode("tree")}
+          getEffectiveHostDistro={getEffectiveHostDistro}
+          t={t}
+        />
+      ) : (
+        <>
                 {viewMode !== "tree" && (
                   <section className="space-y-2 pt-2">
                     <div className="flex items-center gap-2 text-sm font-semibold">
@@ -603,6 +622,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                   </div>
 
                   {viewMode === "tree" ? (
+                    <div className="w-full min-w-0" data-section="vault-host-tree">
                     <HostTreeView
                       groupTree={treeViewGroupTree}
                       hosts={treeViewHosts} // Use filtered and sorted hosts for tree view
@@ -637,6 +657,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
 	                      setDragOverDropTarget={setGroupDragOverDropTarget}
 	                      groupConfigs={groupConfigs}
 	                    />
+                    </div>
                   ) : sortMode === "group" && groupedDisplayHosts ? (
                     <div className="space-y-6">
                         {groupedDisplayHosts.map((group) => (
@@ -947,5 +968,8 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                   )}
                 </section>
                 )}
-        </div>;
+        </>
+      )}
+    </div>
+  );
 }
