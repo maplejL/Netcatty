@@ -80,6 +80,7 @@ import { Host, HostProtocol, KnownHost, SerialConfig, Snippet, SSHKey, TerminalS
 import { resolveSnippetCommand } from './components/SnippetExecutionProvider';
 import { isScriptSnippet } from './domain/snippetScript.ts';
 import { ScriptAutomationRoot } from './components/scripts/ScriptAutomationRoot';
+import { ExternalMcpApprovalsHost } from './components/ai/ExternalMcpApprovalsHost';
 import { AppActiveTabChrome } from './application/app/AppActiveTabChrome';
 import { AppView } from './application/app/AppView';
 import { useAppStartupEffects } from './application/app/useAppStartupEffects';
@@ -1528,6 +1529,7 @@ function AppWithProviders() {
       <ToastProvider>
         <TooltipProvider delayDuration={300}>
           <ScriptAutomationRoot />
+          <ExternalMcpApprovalsHost />
           <App settings={settings} />
         </TooltipProvider>
       </ToastProvider>
