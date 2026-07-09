@@ -59,6 +59,28 @@ test('claude managed config matches by sdk backend value', () => {
   );
 });
 
+test('workbuddy managed config matches by sdk backend and discovered id', () => {
+  assert.equal(
+    matchesManagedAgentConfig(
+      { id: 'discovered_workbuddy', command: 'workbuddy', sdkBackend: 'workbuddy' },
+      'workbuddy',
+    ),
+    true,
+  );
+  assert.equal(
+    matchesManagedAgentConfig(
+      {
+        id: 'discovered_workbuddy',
+        command:
+          'C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy',
+        sdkBackend: 'workbuddy',
+      },
+      'workbuddy',
+    ),
+    true,
+  );
+});
+
 test('legacy backend field is still accepted for saved settings', () => {
   assert.equal(
     getExternalAgentSdkBackend({ acpCommand: 'codex' }),

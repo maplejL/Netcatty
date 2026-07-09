@@ -209,6 +209,7 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
     copilot: string;
     cursor: string;
     codebuddy: string;
+    workbuddy: string;
     opencode: string;
   } | null>(null);
   if (!initialManagedPathsRef.current) {
@@ -269,6 +270,12 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
   const [codebuddyCustomPath, setCodebuddyCustomPath] = useState(() => initialManagedPathsRef.current?.codebuddy ?? "");
   const [isResolvingCodebuddy, setIsResolvingCodebuddy] = useState(false);
 
+  const [workbuddyPathInfo, setWorkbuddyPathInfo] = useState<AgentPathInfo | null>(
+    () => getSavedManagedAgentPathInfo(externalAgents, "workbuddy"),
+  );
+  const [workbuddyCustomPath, setWorkbuddyCustomPath] = useState(() => initialManagedPathsRef.current?.workbuddy ?? "");
+  const [isResolvingWorkbuddy, setIsResolvingWorkbuddy] = useState(false);
+
   const [opencodePathInfo, setOpencodePathInfo] = useState<AgentPathInfo | null>(
     () => getSavedManagedAgentPathInfo(externalAgents, "opencode"),
   );
@@ -311,7 +318,7 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
   useEffect(() => () => {
     mountedRef.current = false;
     codexRequestIdRef.current += 1;
-    for (const key of ["codex", "claude", "copilot", "cursor", "codebuddy", "opencode"] as ManagedAgentKey[]) {
+    for (const key of ["codex", "claude", "copilot", "cursor", "codebuddy", "workbuddy", "opencode"] as ManagedAgentKey[]) {
       agentPathRequestIdRef.current[key] = (agentPathRequestIdRef.current[key] ?? 0) + 1;
     }
   }, []);
@@ -331,6 +338,8 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
             ? setCursorPathInfo
             : agentKey === "codebuddy"
               ? setCodebuddyPathInfo
+              : agentKey === "workbuddy"
+                ? setWorkbuddyPathInfo
               : setOpencodePathInfo;
 
     setInfo(result);
@@ -372,6 +381,8 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
             ? setIsResolvingCursor
             : agentKey === "codebuddy"
               ? setIsResolvingCodebuddy
+              : agentKey === "workbuddy"
+                ? setIsResolvingWorkbuddy
               : setIsResolvingOpencode;
 
     setResolving(true);
@@ -405,6 +416,8 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
                 ? setCursorPathInfo
                 : agentKey === "codebuddy"
                   ? setCodebuddyPathInfo
+                  : agentKey === "workbuddy"
+                    ? setWorkbuddyPathInfo
                   : setOpencodePathInfo;
         setInfo(result);
         return result;
@@ -442,6 +455,7 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
         options: { apiKeyPresent: Boolean(cursorApiKeyEncrypted) },
       },
       { key: "codebuddy", delayMs: 1280, path: initialPaths?.codebuddy ?? "" },
+      { key: "workbuddy", delayMs: 1420, path: initialPaths?.workbuddy ?? "" },
       { key: "opencode", delayMs: 1560, path: initialPaths?.opencode ?? "" },
     ];
     const cancelTasks = tasks
@@ -593,6 +607,8 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
           ? copilotCustomPath
           : agentKey === "codebuddy"
             ? codebuddyCustomPath
+            : agentKey === "workbuddy"
+              ? workbuddyCustomPath
             : agentKey === "opencode"
               ? opencodeCustomPath
               : "";
@@ -607,7 +623,7 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
         codexPath: result?.path || customPath.trim() || undefined,
       });
     }
-  }, [claudeCustomPath, codexCustomPath, copilotCustomPath, codebuddyCustomPath, opencodeCustomPath, resolveAgentPath, refreshCodexIntegration]);
+  }, [claudeCustomPath, codexCustomPath, copilotCustomPath, codebuddyCustomPath, workbuddyCustomPath, opencodeCustomPath, resolveAgentPath, refreshCodexIntegration]);
 
   const handleResetCustomPath = useCallback(async (agentKey: ManagedAgentKey) => {
     if (agentKey === "codex") {
@@ -618,6 +634,8 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
       setCopilotCustomPath("");
     } else if (agentKey === "codebuddy") {
       setCodebuddyCustomPath("");
+    } else if (agentKey === "workbuddy") {
+      setWorkbuddyCustomPath("");
     } else if (agentKey === "opencode") {
       setOpencodeCustomPath("");
     }
@@ -978,6 +996,22 @@ const SettingsAITab: React.FC<SettingsAITabProps> = ({
               onInternetEnvChange={(v) => updateCodebuddyEnv(v, codebuddyEnvText)}
               envText={codebuddyEnvText}
               onEnvTextChange={(v) => updateCodebuddyEnv(codebuddyInternetEnv, v)}
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('ai.workbuddy.title')}
+            leading={<AgentIconBadge agent={{ id: "workbuddy", icon: "workbuddy", name: "WorkBuddy" }} variant="plain" className="h-5 w-5 text-muted-foreground/90" />}
+          >
+            <CopilotCliCard
+              pathInfo={workbuddyPathInfo}
+              isResolvingPath={isResolvingWorkbuddy}
+              customPath={workbuddyCustomPath}
+              onCustomPathChange={setWorkbuddyCustomPath}
+              onRecheckPath={() => void handleCheckCustomPath("workbuddy")}
+              onResetPath={() => void handleResetCustomPath("workbuddy")}
+              i18nPrefix="ai.workbuddy"
+              allowEmptyCheck
             />
           </SettingsSection>
 

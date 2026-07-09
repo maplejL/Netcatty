@@ -21,6 +21,7 @@ export type AgentIconKey =
   | 'opencode'
   | 'kimi'
   | 'codebuddy'
+  | 'workbuddy'
   | 'terminal'
   | 'plus';
 
@@ -114,6 +115,11 @@ export const AGENT_ICON_VISUALS: Record<AgentIconKey, AgentIconVisual> = {
   codebuddy: {
     src: '/ai/agents/codebuddy.svg',
     badgeClassName: 'border-indigo-500/22 bg-indigo-500/12',
+    imageClassName: 'object-contain dark:brightness-0 dark:invert opacity-90',
+  },
+  workbuddy: {
+    src: '/ai/agents/workbuddy.svg',
+    badgeClassName: 'border-sky-500/22 bg-sky-500/12',
     imageClassName: 'object-contain dark:brightness-0 dark:invert opacity-90',
   },
   terminal: {

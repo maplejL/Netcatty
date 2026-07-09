@@ -241,6 +241,29 @@ function resolveWindowsShimToNativeExe(command, platform = process.platform) {
 
 function prepareCommandForSpawn(command, args) {
   const spawnArgs = Array.isArray(args) ? args : [];
+  // WorkBuddy/CodeBuddy package bin scripts are extensionless Node entrypoints
+  // (#!/usr/bin/env node). On Windows CreateProcess cannot launch them directly.
+  // In the packaged app process.execPath is Netcatty.exe — must set
+  // ELECTRON_RUN_AS_NODE so the child runs as Node rather than relaunching the UI.
+  if (process.platform === "win32") {
+    const normalized = String(command || "").trim();
+    const ext = path.extname(normalized).toLowerCase();
+    if (normalized && !ext && existsSync(normalized)) {
+      try {
+        if (statSync(normalized).isFile()) {
+          const head = readFileSync(normalized, "utf8").slice(0, 120);
+          if (/^#!.*\bnode\b/m.test(head) || /process\.emit|require\(|import\s/.test(head)) {
+            return {
+              command: process.execPath,
+              args: [normalized, ...spawnArgs],
+              shell: false,
+              env: { ELECTRON_RUN_AS_NODE: "1" },
+            };
+          }
+        }
+      } catch { /* fall through */ }
+    }
+  }
   if (!shouldUseShellForCommand(command)) {
     return { command, args: spawnArgs, shell: false };
   }
@@ -445,14 +468,129 @@ function resolveCodexExecutableForSdk(codexExecutablePath, platform = process.pl
   return ext === ".cmd" || ext === ".bat" || ext === ".ps1" ? null : normalized;
 }
 
+/**
+ * Resolve the CodeBuddy-compatible agent CLI embedded inside a WorkBuddy desktop install.
+ * WorkBuddy.exe is the Electron shell; the agent entry is:
+ *   resources/app.asar.unpacked/cli/bin/codebuddy
+ */
+function resolveWorkbuddyEmbeddedCliPath(options = {}) {
+  const platform = options.platform || process.platform;
+  const env = options.env || process.env;
+  const home = options.homeDir || env.USERPROFILE || env.HOME || "";
+  const localAppData = options.localAppData || env.LOCALAPPDATA || (home ? path.join(home, "AppData", "Local") : "");
+  const programFiles = options.programFiles || env.ProgramFiles || "";
+  const programFilesX86 = options.programFilesX86 || env["ProgramFiles(x86)"] || "";
+
+  const installRoots = [];
+  if (localAppData) {
+    installRoots.push(path.join(localAppData, "Programs", "WorkBuddy"));
+    installRoots.push(path.join(localAppData, "WorkBuddy"));
+  }
+  if (programFiles) installRoots.push(path.join(programFiles, "WorkBuddy"));
+  if (programFilesX86) installRoots.push(path.join(programFilesX86, "WorkBuddy"));
+
+  for (const root of installRoots) {
+    const desktopExe = path.join(root, "WorkBuddy.exe");
+    const embeddedCli = path.join(root, "resources", "app.asar.unpacked", "cli", "bin", "codebuddy");
+    if (existsSync(embeddedCli)) return embeddedCli;
+    // Prefer known desktop install even if CLI layout changes later.
+    if (platform === "win32" && existsSync(desktopExe)) {
+      if (existsSync(embeddedCli)) return embeddedCli;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a WorkBuddy agent CLI path for discovery / SDK use.
+ * Accepts: explicit embedded CLI path, WorkBuddy.exe (maps to embedded CLI), or PATH `workbuddy`.
+ */
+function resolveWorkbuddyAgentCliPath(configuredPath, options = {}) {
+  const platform = options.platform || process.platform;
+  const normalized = String(configuredPath || "").trim();
+
+  if (normalized) {
+    if (existsSync(normalized)) {
+      const base = path.basename(normalized).toLowerCase();
+      // Desktop shell → embedded agent CLI.
+      if (base === "workbuddy.exe" || base === "workbuddy") {
+        const installRoot = path.dirname(normalized);
+        const embedded = path.join(installRoot, "resources", "app.asar.unpacked", "cli", "bin", "codebuddy");
+        if (existsSync(embedded)) return embedded;
+      }
+      // Already the CodeBuddy-compatible JS entry (or a real native binary).
+      return normalized;
+    }
+    return null;
+  }
+
+  if (platform === "win32") {
+    return resolveWorkbuddyEmbeddedCliPath(options);
+  }
+  return null;
+}
+
+/**
+ * Map a CodeBuddy/WorkBuddy `bin/codebuddy` path to a dist entry the Agent SDK
+ * can execute via `node` / electron-as-node.
+ *
+ * `@tencent-ai/agent-sdk` ProcessTransport rewrites `.../bin/codebuddy` →
+ * `.../dist/codebuddy-headless.js`. Official CodeBuddy ships that file; WorkBuddy's
+ * embedded CLI only ships `dist/codebuddy.js`. Passing the missing headless path
+ * makes the child exit immediately → "CLI process stdout closed unexpectedly".
+ *
+ * Prefer headless when present (SDK / npm codebuddy-code); else codebuddy.js.
+ */
+function resolveCodebuddyDistEntryForSdk(codebuddyExecutablePath) {
+  const normalized = String(codebuddyExecutablePath || "").trim();
+  if (!normalized) return null;
+
+  const base = path.basename(normalized).toLowerCase();
+  const parent = path.basename(path.dirname(normalized)).toLowerCase();
+  const isBinCodebuddy =
+    (base === "codebuddy" || base === "codebuddy.js") && parent === "bin";
+  if (!isBinCodebuddy) {
+    // Already a concrete dist entry (or unrelated path).
+    if (base.endsWith(".js") && existsSync(normalized)) return normalized;
+    return null;
+  }
+
+  const cliRoot = path.dirname(path.dirname(normalized));
+  const candidates = [
+    path.join(cliRoot, "dist", "codebuddy-headless.js"),
+    path.join(cliRoot, "dist", "codebuddy.js"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 function resolveCodebuddyExecutableForSdk(codebuddyExecutablePath, platform = process.platform) {
   const normalized = String(codebuddyExecutablePath || "").trim();
   if (!normalized) return null;
+
+  // Prefer a real dist entry before any platform-specific shim handling.
+  // Must run on all platforms: WorkBuddy's embedded bin path is identical on macOS.
+  const distFromInput = resolveCodebuddyDistEntryForSdk(normalized);
+  if (distFromInput) return distFromInput;
+
   if (platform !== "win32") return normalized;
 
   const ext = path.extname(normalized).toLowerCase();
   // A native exe or an explicit .js entry can be launched by the Agent SDK as-is.
   if (ext === ".exe" || ext === ".js") return normalized;
+  // Extensionless real Node entrypoints without a sibling dist/ entry: hand the
+  // bin path through. Thin npm POSIX shims (`#!/bin/sh`) must still fall through
+  // to package-root resolution below.
+  if (!ext && existsSync(normalized)) {
+    try {
+      if (statSync(normalized).isFile()) {
+        const head = readFileSync(normalized, "utf8").slice(0, 200);
+        if (/^#!.*\bnode\b/m.test(head)) return normalized;
+      }
+    } catch { /* fall through to shim resolution */ }
+  }
   // Any other concrete, non-shim extension: leave it untouched.
   if (ext && ext !== ".cmd" && ext !== ".bat" && ext !== ".ps1") return normalized;
 
@@ -461,7 +599,7 @@ function resolveCodebuddyExecutableForSdk(codebuddyExecutablePath, platform = pr
   // (electron-as-node in a packaged app), which cannot parse a batch/POSIX shim
   // as JavaScript — the spawned process exits immediately and the SDK surfaces
   // "CLI process stdout closed unexpectedly". Resolve the shim to the package's
-  // real `bin/codebuddy` JS entry so the SDK runs it exactly as on macOS/Linux.
+  // real JS entry so the SDK runs it exactly as on macOS/Linux.
   const baseDir = path.dirname(normalized);
   const packageRoots = [
     path.join(baseDir, "node_modules", "@tencent-ai", "codebuddy-code"),
@@ -469,7 +607,9 @@ function resolveCodebuddyExecutableForSdk(codebuddyExecutablePath, platform = pr
   ];
   for (const root of packageRoots) {
     const binJs = path.join(root, "bin", "codebuddy");
-    if (existsSync(binJs)) return binJs;
+    if (existsSync(binJs)) {
+      return resolveCodebuddyDistEntryForSdk(binJs) || binJs;
+    }
   }
 
   // Fall back to parsing the shim for the bin/codebuddy path it references.
@@ -483,7 +623,9 @@ function resolveCodebuddyExecutableForSdk(codebuddyExecutablePath, platform = pr
       if (match) {
         const ref = match[1].replace(/^%~dp0[\\/]?/i, "").replace(/[\\/]+/g, path.sep);
         const binJs = path.isAbsolute(ref) ? ref : path.resolve(path.dirname(shimPath), ref);
-        if (existsSync(binJs)) return binJs;
+        if (existsSync(binJs)) {
+          return resolveCodebuddyDistEntryForSdk(binJs) || binJs;
+        }
       }
     } catch {
       // Try the next shim candidate.
@@ -846,6 +988,8 @@ module.exports = {
   isLocalhostHostname,
   extractFirstNonLocalhostUrl,
   normalizeCliPathForPlatform,
+  resolveWorkbuddyEmbeddedCliPath,
+  resolveWorkbuddyAgentCliPath,
   shouldUseShellForCommand,
   quoteWindowsShellArg,
   buildWindowsShellCommandLine,
@@ -855,7 +999,10 @@ module.exports = {
   normalizeClaudeCodeExecutableEnvForSdk,
   resolveCodexExecutableForSdk,
   addCodexExecutableEnvForSdk,
+  resolveCodebuddyDistEntryForSdk,
   resolveCodebuddyExecutableForSdk,
+  resolveWorkbuddyEmbeddedCliPath,
+  resolveWorkbuddyAgentCliPath,
   resolveSdkBinPath,
   resolveSdkBinPathAsync,
   resolveCliFromPath,

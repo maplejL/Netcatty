@@ -158,7 +158,10 @@ function resolveConfiguredSdkPath({
   if (backendKey === "codex" && typeof resolveCodexExecutableForSdk === "function") {
     return resolveCodexExecutableForSdk(realPath) || undefined;
   }
-  if (backendKey === "codebuddy" && typeof resolveCodebuddyExecutableForSdk === "function") {
+  if (
+    (backendKey === "codebuddy" || backendKey === "workbuddy")
+    && typeof resolveCodebuddyExecutableForSdk === "function"
+  ) {
     return resolveCodebuddyExecutableForSdk(realPath) || undefined;
   }
   return realPath;
@@ -167,13 +170,18 @@ function resolveConfiguredSdkPath({
 function resolveSdkBackendBinPath({
   backendKey, configuredCommand, shellEnv, env, resolveCliFromPath, normalizeCliPathForPlatform,
   resolveSdkBinPath, resolveClaudeCodeExecutableForSdk, resolveCodexExecutableForSdk,
-  resolveCodebuddyExecutableForSdk, realpath = realpathSync,
+  resolveCodebuddyExecutableForSdk, resolveWorkbuddyAgentCliPath, realpath = realpathSync,
 }) {
   const configuredPath = normalizeConfiguredCommandPath(configuredCommand, normalizeCliPathForPlatform);
   if (configuredPath) {
+    let pathForSdk = configuredPath;
+    if (backendKey === "workbuddy" && typeof resolveWorkbuddyAgentCliPath === "function") {
+      pathForSdk = resolveWorkbuddyAgentCliPath(configuredPath, { env: { ...shellEnv, ...env } })
+        || configuredPath;
+    }
     return resolveConfiguredSdkPath({
       backendKey,
-      configuredPath,
+      configuredPath: pathForSdk,
       realpath,
       resolveClaudeCodeExecutableForSdk,
       resolveCodexExecutableForSdk,
@@ -181,10 +189,22 @@ function resolveSdkBackendBinPath({
     });
   }
 
-  if (backendKey === "codebuddy") {
-    const configuredEnvPath = normalizeCliPathForPlatform?.(env?.CODEBUDDY_CODE_PATH);
-    const rawPath = configuredEnvPath || resolveCliFromPath(backendKey, shellEnv) || undefined;
+  if (backendKey === "codebuddy" || backendKey === "workbuddy") {
+    const envPathKey = backendKey === "workbuddy" ? "WORKBUDDY_CODE_PATH" : "CODEBUDDY_CODE_PATH";
+    const configuredEnvPath = normalizeCliPathForPlatform?.(env?.[envPathKey])
+      || normalizeCliPathForPlatform?.(env?.CODEBUDDY_CODE_PATH);
+    let rawPath = configuredEnvPath || undefined;
+    if (!rawPath && backendKey === "workbuddy" && typeof resolveWorkbuddyAgentCliPath === "function") {
+      rawPath = resolveWorkbuddyAgentCliPath("", { env: { ...shellEnv, ...env } }) || undefined;
+    }
+    if (!rawPath) {
+      rawPath = resolveCliFromPath(backendKey === "workbuddy" ? "workbuddy" : "codebuddy", shellEnv) || undefined;
+    }
     if (!rawPath) return undefined;
+    // WorkBuddy users may paste WorkBuddy.exe; map to the embedded agent CLI.
+    if (backendKey === "workbuddy" && typeof resolveWorkbuddyAgentCliPath === "function") {
+      rawPath = resolveWorkbuddyAgentCliPath(rawPath, { env: { ...shellEnv, ...env } }) || rawPath;
+    }
     const realPath = resolveRealCliPath(rawPath, realpath);
     // On Windows the discovered path is an npm shim (codebuddy.cmd/.ps1) that the
     // Agent SDK can't run through `node`; resolve it to the package's JS entry so
@@ -341,6 +361,7 @@ function registerSdkStreamHandlers(ctx) {
             resolveClaudeCodeExecutableForSdk,
             resolveCodexExecutableForSdk,
             resolveCodebuddyExecutableForSdk,
+            resolveWorkbuddyAgentCliPath,
           });
           if (backendKey === "codex") {
             env = addCodexExecutableEnvForSdk(env, binPath);
@@ -473,6 +494,7 @@ function registerSdkStreamHandlers(ctx) {
           resolveClaudeCodeExecutableForSdk,
           resolveCodexExecutableForSdk,
           resolveCodebuddyExecutableForSdk,
+          resolveWorkbuddyAgentCliPath,
         });
         // claude/copilot enumerate models via the SDK; codex has no catalog (its
         // driver returns []), so the renderer falls back to curated presets.

@@ -235,7 +235,7 @@ export interface ExternalAgentConfig {
   icon?: string;
   enabled: boolean;
   available?: boolean;
-  /** SDK backend key for managed agents (claude|codex|copilot|cursor|codebuddy|opencode). */
+  /** SDK backend key for managed agents (claude|codex|copilot|cursor|codebuddy|workbuddy|opencode). */
   sdkBackend?: string;
   /** Internal: whether the managed command was set manually or auto-detected. */
   commandSource?: "manual" | "auto";
@@ -260,8 +260,8 @@ export interface DiscoveredAgent {
   /** @deprecated Legacy discovery field from the pre-SDK migration. */
   acpCommand?: string;
   acpArgs?: string[];
-  /** SDK backend key (claude|codex|copilot|cursor|codebuddy|opencode) — the routing value. */
-  sdkBackend?: 'claude' | 'codex' | 'copilot' | 'cursor' | 'codebuddy' | 'opencode';
+  /** SDK backend key (claude|codex|copilot|cursor|codebuddy|workbuddy|opencode) — the routing value. */
+  sdkBackend?: 'claude' | 'codex' | 'copilot' | 'cursor' | 'codebuddy' | 'workbuddy' | 'opencode';
   /** Absolute resolved CLI path (preferred over `path`). */
   binPath?: string;
   installed?: boolean;
@@ -505,7 +505,9 @@ export function getAgentModelPresets(agentCommand?: string): AgentModelPreset[] 
   if (basename.startsWith('claude')) return CLAUDE_MODEL_PRESETS;
   if (basename.startsWith('codex')) return CODEX_MODEL_PRESETS;
   if (basename.startsWith('cursor')) return CURSOR_MODEL_PRESETS;
-  if (basename.startsWith('codebuddy')) return CODEBUDDY_MODEL_PRESETS;
+  if (basename.startsWith('codebuddy') || basename.startsWith('workbuddy')) {
+    return CODEBUDDY_MODEL_PRESETS;
+  }
   if (basename.startsWith('opencode')) return OPENCODE_MODEL_PRESETS;
   return [];
 }

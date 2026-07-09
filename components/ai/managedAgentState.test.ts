@@ -195,6 +195,26 @@ test('buildManagedAgentState stores CODEBUDDY_CODE_PATH for codebuddy', () => {
   });
 });
 
+test('buildManagedAgentState stores WORKBUDDY_CODE_PATH for workbuddy', () => {
+  const embedded =
+    'C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy';
+  const state = buildManagedAgentState(
+    [],
+    'catty',
+    'workbuddy',
+    { path: embedded, version: '2.103.3', available: true },
+  );
+
+  assert.equal(state.agents.length, 1);
+  assert.equal(state.agents[0].id, 'discovered_workbuddy');
+  assert.equal(state.agents[0].command, embedded);
+  assert.equal(state.agents[0].sdkBackend, 'workbuddy');
+  assert.deepEqual(state.agents[0].env, {
+    WORKBUDDY_CODE_PATH: embedded,
+    CODEBUDDY_CODE_PATH: embedded,
+  });
+});
+
 test('buildManagedAgentState stores OPENCODE_BIN for opencode', () => {
   const state = buildManagedAgentState(
     [],

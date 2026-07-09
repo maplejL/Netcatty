@@ -20,7 +20,12 @@ type SdkRuntimeModelRefreshOptions = {
 };
 
 const SDK_RUNTIME_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
-const MODEL_CACHE_ENV_HINTS = ['CLAUDE_CODE_EXECUTABLE', 'CODEBUDDY_CODE_PATH', 'OPENCODE_BIN'] as const;
+const MODEL_CACHE_ENV_HINTS = [
+  'CLAUDE_CODE_EXECUTABLE',
+  'CODEBUDDY_CODE_PATH',
+  'WORKBUDDY_CODE_PATH',
+  'OPENCODE_BIN',
+] as const;
 
 function cloneCatalog(catalog: SdkRuntimeModelCatalog): SdkRuntimeModelCatalog {
   return {
@@ -113,6 +118,7 @@ export function shouldLoadSdkRuntimeModels(agent?: ExternalAgentConfig): boolean
   return sdkBackend === 'claude'
     || sdkBackend === 'copilot'
     || sdkBackend === 'codebuddy'
+    || sdkBackend === 'workbuddy'
     || sdkBackend === 'opencode';
 }
 
