@@ -417,7 +417,9 @@ function init(deps) {
   externalMcpController.setSessionSyncHandler(async () => {
     mcpServerBridge.syncLiveSessionsToExternalScope();
   });
-  mcpServerBridge.setExternalMcpHooks(externalMcpController);
+  if (typeof mcpServerBridge.setExternalMcpHooks === "function") {
+    mcpServerBridge.setExternalMcpHooks(externalMcpController);
+  }
 }
 
 function withCliDiscoveryEnv(env) {
