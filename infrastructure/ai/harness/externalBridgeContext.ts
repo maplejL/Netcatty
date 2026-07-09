@@ -53,6 +53,18 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Strip pseudo tool-call markup copied from other agents (e.g. Cursor MCP
+ * `<tool_call>get_environment({...})`) so CodeBuddy/WorkBuddy do not echo it
+ * as plain assistant text when history is replayed after an agent rebind.
+ */
+export function sanitizeCrossAgentReplayText(content: string): string {
+  let next = String(content || "");
+  next = next.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "[prior agent tool call omitted]");
+  next = next.replace(/<tool_call>[^\n]*/gi, "[prior agent tool call omitted]");
+  return next.trim();
+}
+
 function isImportantText(value: string): boolean {
   return IMPORTANT_PATTERNS.some((pattern) => pattern.test(value));
 }
@@ -181,8 +193,9 @@ function summarizeDurableUserMessage(message: ChatMessage): string | null {
 
 function summarizeDurableAssistantMessage(message: ChatMessage): string | null {
   if (message.role !== "assistant" || !message.content) return null;
-  if (!isSubstantiveAssistantMessage(message.content)) return null;
-  return `Assistant context: ${truncateText(normalizeWhitespace(message.content), MAX_DURABLE_ASSISTANT_MESSAGE_CHARS)}`;
+  const sanitized = sanitizeCrossAgentReplayText(message.content);
+  if (!sanitized || !isSubstantiveAssistantMessage(sanitized)) return null;
+  return `Assistant context: ${truncateText(normalizeWhitespace(sanitized), MAX_DURABLE_ASSISTANT_MESSAGE_CHARS)}`;
 }
 
 /**
@@ -240,7 +253,10 @@ function toRawHistoryMessage(
 
   if (message.role === "assistant") {
     const parts: string[] = [];
-    if (message.content) parts.push(message.content);
+    if (message.content) {
+      const sanitized = sanitizeCrossAgentReplayText(message.content);
+      if (sanitized) parts.push(sanitized);
+    }
     if (message.toolCalls?.length) {
       parts.push(...message.toolCalls.map((tc) => `Tool call: ${tc.name}(${JSON.stringify(tc.arguments ?? {})})`));
     }

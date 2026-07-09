@@ -104,3 +104,13 @@ export function getManualAgentCommand(
   const command = String(config?.command || '').trim();
   return config?.commandSource === 'manual' && command ? command : undefined;
 }
+
+/** CLI path for SDK turns: explicit manual path, or auto-discovered path-like command. */
+export function getSdkAgentCommand(
+  config: Pick<ExternalAgentConfig, 'command' | 'commandSource'> | null | undefined,
+): string | undefined {
+  const manual = getManualAgentCommand(config);
+  if (manual) return manual;
+  const command = String(config?.command || '').trim();
+  return isPathLikeCommand(command) ? command : undefined;
+}

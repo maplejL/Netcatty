@@ -7,6 +7,7 @@ const {
   normalizeSdkListModelsResult,
   resolveSdkResumeSessionId,
   resolveBackendKey,
+  resolveSdkToolIntegrationMode,
   resolveSdkBackendBinPath,
   shouldCacheSdkRuntimeModels,
 } = require("./sdkStreamHandlers.cjs");
@@ -23,6 +24,14 @@ test("resolveBackendKey returns null for unknown", () => {
   assert.equal(resolveBackendKey("claude-agent-acp"), null);
   assert.equal(resolveBackendKey(""), null);
   assert.equal(resolveBackendKey(undefined), null);
+});
+
+test("resolveSdkToolIntegrationMode forces skills for WorkBuddy", () => {
+  const normalize = (mode) => (mode === "skills" ? "skills" : "mcp");
+  assert.equal(resolveSdkToolIntegrationMode("workbuddy", "mcp", normalize), "skills");
+  assert.equal(resolveSdkToolIntegrationMode("workbuddy", "skills", normalize), "skills");
+  assert.equal(resolveSdkToolIntegrationMode("codebuddy", "mcp", normalize), "mcp");
+  assert.equal(resolveSdkToolIntegrationMode("claude", "skills", normalize), "skills");
 });
 
 test("SDK session keys include backend and resolved CLI path", () => {
@@ -351,4 +360,44 @@ test("resolveSdkBackendBinPath does not fall back to Windows shell shims for non
     resolveSdkBinPath: () => null,
   });
   assert.equal(out, undefined);
+});
+
+test("resolveSdkBackendBinPath rediscovers WorkBuddy when stored env path is missing", () => {
+  const embedded =
+    "C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy";
+  const distJs =
+    "C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\dist\\codebuddy.js";
+  const out = resolveSdkBackendBinPath({
+    backendKey: "workbuddy",
+    shellEnv: { LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" },
+    env: { CODEBUDDY_CODE_PATH: "C:\\old\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy" },
+    resolveCliFromPath: () => null,
+    normalizeCliPathForPlatform: () => null,
+    resolveWorkbuddyAgentCliPath: (configuredPath) => {
+      if (!configuredPath) return embedded;
+      return null;
+    },
+    resolveCodebuddyExecutableForSdk: (p) => (p === embedded ? distJs : null),
+    realpath: (p) => p,
+  });
+  assert.equal(out, distJs);
+});
+
+test("resolveSdkBackendBinPath uses configured WorkBuddy embedded CLI path from renderer", () => {
+  const embedded =
+    "C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy";
+  const distJs =
+    "C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\dist\\codebuddy.js";
+  const out = resolveSdkBackendBinPath({
+    backendKey: "workbuddy",
+    configuredCommand: embedded,
+    shellEnv: {},
+    env: {},
+    resolveCliFromPath: () => null,
+    normalizeCliPathForPlatform: (value) => value,
+    resolveWorkbuddyAgentCliPath: (configuredPath) => configuredPath,
+    resolveCodebuddyExecutableForSdk: (p) => (p === embedded ? distJs : null),
+    realpath: (p) => p,
+  });
+  assert.equal(out, distJs);
 });
