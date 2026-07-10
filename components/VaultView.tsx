@@ -717,11 +717,20 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   const connectSelectedHostsAsWorkspace = useCallback(() => {
     if (selectedHostIds.size === 0 || !onCreateWorkspaceWithHosts) return;
     const targets = hosts.filter((h) => selectedHostIds.has(h.id));
+    if (targets.length === 0) return;
+    // One host: same as a normal connect (handler may also short-circuit to a single tab).
+    if (targets.length === 1) {
+      onConnect(targets[0]);
+      clearHostSelection();
+      setIsMultiSelectMode(false);
+      toast.success(t("vault.hosts.connectMultiple.success", { count: 1 }));
+      return;
+    }
     onCreateWorkspaceWithHosts(targets, { enableBroadcast: true });
     clearHostSelection();
     setIsMultiSelectMode(false);
     toast.success(t("vault.hosts.connectWorkspace.success", { count: targets.length }));
-  }, [selectedHostIds, hosts, onCreateWorkspaceWithHosts, clearHostSelection, t]);
+  }, [selectedHostIds, hosts, onConnect, onCreateWorkspaceWithHosts, clearHostSelection, t]);
 
   const openBatchExecForSelection = useCallback(() => {
     if (selectedHostIds.size === 0 || !onOpenBatchExec) return;

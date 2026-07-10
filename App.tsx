@@ -978,12 +978,18 @@ function App({ settings }: { settings: SettingsState }) {
     options?: { enableBroadcast?: boolean },
   ) => {
     const effectiveHosts = selectedHosts.map(resolveEffectiveHost);
+    // A single host does not need a multi-pane workspace — open a normal session tab.
+    if (effectiveHosts.length === 1) {
+      handleConnectToHost(effectiveHosts[0]);
+      return;
+    }
+    if (effectiveHosts.length === 0) return;
     createWorkspaceWithHosts('Workspace', effectiveHosts, {
       layout: 'auto',
       enableBroadcast: options?.enableBroadcast ?? true,
       viewMode: 'split',
     });
-  }, [createWorkspaceWithHosts, resolveEffectiveHost]);
+  }, [createWorkspaceWithHosts, handleConnectToHost, resolveEffectiveHost]);
 
   const _handleSshDeepLink = useEffectEvent((payload: { url?: string }) => {
     const rawUrl = payload?.url || '';

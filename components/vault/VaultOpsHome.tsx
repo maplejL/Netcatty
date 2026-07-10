@@ -145,7 +145,10 @@ export function VaultOpsHome({
       workspacePickerSelectedIds.includes(host.id),
     );
     if (selected.length === 0) return;
-    onCreateWorkspaceWithHosts(selected, { enableBroadcast: true });
+    // App handler opens a normal session when only one host is selected.
+    onCreateWorkspaceWithHosts(selected, {
+      enableBroadcast: selected.length > 1,
+    });
     setWorkspacePicker(null);
     setWorkspacePickerSelectedIds([]);
   }, [onCreateWorkspaceWithHosts, workspacePicker, workspacePickerSelectedIds]);
