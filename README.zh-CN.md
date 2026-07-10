@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  基于 <a href="https://github.com/binaricat/Netcatty">binaricat/Netcatty</a> 定制：完整继承上游 SSH 工作台能力，并针对日常运维增强 Vault 导入、IP 分组与批量操作。
+  基于 <a href="https://github.com/binaricat/Netcatty">binaricat/Netcatty</a> 定制：完整继承上游 SSH 工作台能力，并针对日常运维增强 Vault 导入、IP 分组、批量操作与外部 AI Agent 集成。
 </p>
 
 <p align="center">
@@ -41,9 +41,11 @@
 
 | | 上游 Netcatty | 本 fork |
 |---|---------------|---------|
-| SSH / SFTP / 分屏 / AI | ✅ 完整继承 | ✅ |
+| SSH / SFTP / 分屏 / Catty AI | ✅ 完整继承 | ✅ |
 | FinalShell 导入、IPv4 树分组 | — | ✅ |
-| Vault 多选开工作区、批量命令汇总 | — | ✅ |
+| 运维首页、多选工作区 / 批量命令 | — | ✅ |
+| WorkBuddy 等外部 Agent、同会话切换 Agent | — | ✅ |
+| 长时间 `tail` 输出性能默认策略 | 上游有流控 | ✅ 进一步默认收紧 |
 
 ---
 
@@ -67,30 +69,32 @@
 - 支持 SSH、本地 Shell、Telnet、Mosh、串口等（视环境与配置而定）
 - 跳板链（`hostChain`）、受管 `ssh_config`、连接复用
 - 端口转发（本地 / 远程 / 动态）、连接日志与脚本录制
+- 输出流控与写合并（高吞吐时限流），关键词高亮、会话日志可选
 
 ### SFTP 与编辑器
 
 - 双窗格 SFTP 浏览、拖拽传输、传输队列
 - 内置 Monaco 编辑器，可在外部编辑远程文件
 
-### AI（Catty Agent）
+### AI（Catty 与外部 Agent）
 
-- 侧边栏对话式 AI，理解当前终端会话与主机上下文
+- 侧边栏对话式 **Catty**，理解当前终端会话与主机上下文
 - **Capability 工具目录**：终端、SFTP、Vault、端口转发等可通过工具调用
-- 外部 Agent 集成：MCP stdio 服务、CLI / RPC 能力面（见 `AGENTS.md`）
+- 外部 Agent（SDK / CLI）集成面：MCP stdio、CLI / RPC（见 `AGENTS.md`）
 - 写操作（SFTP 写入、端口转发启动等）支持确认模式审批
 
 ### 体验与其它
 
 - 主题 / 终端配色 / 字体 / 高亮规则自定义
 - 可选 GitHub Gist 同步配置
+- 系统托盘：关闭到托盘、快捷恢复主窗口
 - 跨平台：macOS、Windows、Linux（Electron）
 
 ---
 
 ## 本 fork 增强功能
 
-在继承上述能力之外，本仓库针对**从 FinalShell 迁移**与**多机批量运维**做了以下增量（上游暂无或未默认提供）。
+在继承上述能力之外，本仓库针对 **FinalShell 迁移**、**多机批量运维**、**外部 AI Agent** 与 **高吞吐终端** 做了增量（上游暂无或本仓库默认策略不同）。
 
 ### FinalShell 主机导入
 
@@ -116,12 +120,44 @@
 | 能力 | 入口 | 说明 |
 |------|------|------|
 | **运维首页** | Vault 视图 → **首页**（新用户默认） | 继续会话、置顶/最近、按网段一键工作区或批量命令 |
-| **工作区打开** | Vault 多选 → **工作区** | 将选中主机收入同一 Workspace 标签；默认开启广播 |
+| **工作区打开** | Vault 多选 → **工作区**；运维首页网段 → **开工作区** | ≥2 台收入同一 Workspace 分屏，默认开启广播 |
+| **单机直连** | 同上入口仅选 **1 台** | **不建工作区**，与普通「连接」一致，打开独立会话标签 |
 | **四宫格布局** | 一次选 4 台主机开工作区 | 自动 2×2 分屏；更多窗格可继续拆分 |
 | **批量命令** | Vault 多选 → **批量命令**；或工作区 Compose 栏终端图标 | 并行 `execCommand`，按主机汇总 stdout / 退出码 |
 | **错峰连接** | 多选连接 / 开工作区 | 终端挂载错峰，减轻多 WebGL 窗格同时启动的压力 |
+| **失焦 WebGL** | 工作区非焦点窗格 | 可挂起 WebGL，降低多窗格 GPU 压力 |
 
 **批量命令 v1 限制：** 仅 SSH 直连主机；暂不支持跳板链（`hostChain`）。
+
+### AI 与外部 Agent（本 fork）
+
+| 能力 | 说明 |
+|------|------|
+| **WorkBuddy** | 可作为托管外部 Agent 使用；自动解析桌面版内嵌 CLI 路径，SDK 默认走 skills 集成（避免 MCP 冷启动超时） |
+| **CodeBuddy 族路径** | 改进 CLI / SDK 可执行文件发现与环境注入（含 `CODEBUDDY_CODE_PATH`） |
+| **同会话切换 Agent** | 同一 scope 下切换 Agent 时**保留消息历史**，清除 `externalSessionId`，下一轮按 Netcatty 消息回放，避免误续旧 CLI 会话 |
+| **跨 Agent 历史清洗** | 回放前剥离易冲突的 tool-call 标记文本，降低换 Agent 后上下文污染 |
+| **侧栏打开稳定性** | 打包环境下 AI 面板与终端层协同加载，避免懒加载大 chunk 导致白屏/卡死 |
+
+设置中可配置多个外部 Agent（Claude Code、Codex、Copilot、CodeBuddy、WorkBuddy、OpenCode 等，以当前版本托管列表为准）。
+
+### 终端高吞吐与默认性能
+
+长时间 `tail -f` 或超大文件输出时，整窗卡顿多来自 xterm 全量解析 + 大 scrollback + 关键词高亮。本 fork 默认策略：
+
+| 策略 | 说明 |
+|------|------|
+| **默认 scrollback 3000 行** | 新配置默认更保守（仍可在设置中调大；`0` 表示无限制时有内部上限） |
+| **输出压力下跳过高亮** | 大输出 / 长行 / 后台时硬跳过关键词扫描，安静后补扫可见区域 |
+| **写队列 flood 让出主线程** | 洪峰时更小 drain、强制 yield，减轻 UI 卡死 |
+| **旁路减负** | flood 时跳过连接日志捕获；Activity 标记先做廉价判断再过滤 |
+
+已保存的个人设置不会被覆盖：若本地 scrollback 仍很大，请到 **设置 → 终端** 自行调低。
+
+### Windows 托盘
+
+- 右键托盘使用**原生菜单**（打开主窗口、会话、端口转发、退出等），避免自定义 `app://` 面板在部分环境下被系统当成外部链接
+- 文本资源通过 `app://` 提供时声明 UTF-8，减轻中文 Windows 乱码
 
 ### 其他导入格式（继承上游）
 
@@ -135,10 +171,10 @@ PuTTY、MobaXterm、CSV、SecureCRT、`ssh_config` 等与上游一致。
 
 - 现代化替代 PuTTY、Termius、SecureCRT 等工具
 - 双窗格 SFTP、内置编辑器、拖拽传输
-- 分屏终端、多标签工作区、Vault 多视图
-- 内置 Catty AI Agent 与外部 MCP / CLI 集成
+- 分屏终端、多标签工作区、Vault 多视图与运维首页
+- 内置 Catty，并可接入 WorkBuddy 等外部 Agent
 
-更完整的能力列表见上文 **[上游核心能力](#上游核心能力)**。
+更完整的能力列表见上文 **[上游核心能力](#上游核心能力)** 与 **[本 fork 增强功能](#本-fork-增强功能)**。
 
 ---
 
@@ -191,6 +227,23 @@ npx electron-builder --config electron-builder.config.cjs --config.npmRebuild=fa
 
 **Windows 便携目录：** `release/win-unpacked/`，直接运行其中的 `Netcatty.exe`。可将整个目录复制到任意路径使用。
 
+#### 增量更新已安装目录的 `app.asar`（Windows）
+
+若本机已有解压版安装目录（例如 `D:\work\Netcatty`），可在改完代码后只同步应用内容，无需整包重打：
+
+```powershell
+# 完整流程：vite build + 打包并部署 app.asar
+npm run pack:asar
+
+# 已手动 build 时跳过构建
+npm run pack:asar -- -SkipBuild
+
+# 指定安装根目录（默认见 scripts/pack-app-asar.ps1）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -InstallRoot "D:\work\Netcatty"
+```
+
+部署前会备份原 `resources\app.asar` 为 `app.asar.bak`。**需完全退出再启动** Netcatty 后新代码才会生效。
+
 **常见打包注意：**
 
 - 网络不稳定时可设 `ELECTRON_BUILDER_OFFLINE=true` 使用已缓存的 Electron
@@ -199,10 +252,10 @@ npx electron-builder --config electron-builder.config.cjs --config.npmRebuild=fa
 
 ### Vault 多选与批量运维
 
-1. 在 **Vault** 中多选主机
-2. 底部操作栏可选：
+1. 在 **Vault** 中多选主机（或从 **运维首页** 按网段选机）
+2. 底部操作栏 / 首页按钮可选：
    - **连接**：每台主机独立标签页
-   - **工作区**：同一 Workspace 分屏（4 台时 2×2），默认开启广播
+   - **工作区**：≥2 台时同一 Workspace 分屏（4 台时 2×2），默认开启广播；**仅 1 台则直接连接**
    - **批量命令**：输入一条命令，查看各机输出与退出码
 
 ### FinalShell 导入步骤
@@ -212,6 +265,13 @@ npx electron-builder --config electron-builder.config.cjs --config.npmRebuild=fa
 3. 多选 json 文件后确认
 4. 若主机已存在且无密码，需先删除旧条目再导入（重复导入会跳过已有主机）
 5. 在树形视图下按 IP 段查看分组；连接前可在主机详情中确认密码已填入
+
+### 外部 Agent 快速验证
+
+1. 安装 WorkBuddy / CodeBuddy 等桌面或 CLI（路径可自动发现，也可在设置中手动指定）
+2. 打开任意终端侧栏 **AI**，在 Agent 列表中选择对应外部 Agent
+3. 发送一条消息确认 CLI 可启动；切换回 Catty 时同一会话消息应仍在
+4. 长时间 `tail` 大日志时，若仍卡顿：在 **设置 → 终端** 调低 scrollback、必要时关闭关键词高亮
 
 ---
 
