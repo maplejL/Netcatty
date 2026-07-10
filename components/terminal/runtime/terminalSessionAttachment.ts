@@ -264,10 +264,15 @@ const writeSessionDataImmediate = (
       ctx.promptLineBreakStateRef?.current,
       forcePromptNewLine,
     );
-    ctx.onTerminalLogData?.(pasteDisplayData);
+    // Connection-log capture is for close diagnostics; skip under write-queue flood
+    // so the same main-thread budget stays available for xterm + UI.
+    const captureConnectionLog = !isTerminalWriteQueueInFloodMode(term);
+    if (captureConnectionLog) {
+      ctx.onTerminalLogData?.(pasteDisplayData);
+    }
     const clearPasteResidualAndCapture = () => {
       const cleanupData = clearPasteResidualAfterTerminalWrite(term);
-      if (cleanupData) {
+      if (cleanupData && captureConnectionLog) {
         ctx.onTerminalLogData?.(cleanupData);
       }
     };

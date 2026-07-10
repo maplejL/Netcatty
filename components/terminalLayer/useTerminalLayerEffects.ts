@@ -284,15 +284,16 @@ export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
           activityEscapeFiltersRef.current.set(session.id, filter);
         }
         return onSessionData(session.id, (chunk) => {
-          const hasNotifiableOutput = hasNotifiableTerminalOutput(filter, chunk);
-          if (!shouldMarkSessionActivity(activeTabIdRef.current, session)) {
-            return;
-          }
+          // Cheap exits first: already-badged or active-tab sessions must not pay
+          // escape-filter cost on every high-rate output chunk (e.g. tail -f).
           if (sessionActivityStore.getSnapshot()[session.id]) {
             return;
           }
-          if (!hasNotifiableOutput) return;
-  
+          if (!shouldMarkSessionActivity(activeTabIdRef.current, session)) {
+            return;
+          }
+          if (!hasNotifiableTerminalOutput(filter, chunk)) return;
+
           sessionActivityStore.setTabActive(session.id, true);
         });
       });

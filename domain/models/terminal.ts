@@ -311,7 +311,9 @@ export const normalizeTerminalSettings = (
 };
 
 const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
-  scrollback: 10000,
+  // Keep scrollback modest: long-running tails (e.g. `tail -f`) still parse every
+  // line into xterm cells; 10k+ rows make the whole renderer feel laggy over time.
+  scrollback: 3000,
   drawBoldInBrightColors: true,
   terminalEmulationType: 'xterm-256color',
   startupCommandDelayMs: 600,

@@ -11,6 +11,7 @@ import {
   TERMINAL_AUX_LONG_LINE_SCAN_LIMIT_CHARS,
   TERMINAL_LONG_LINE_PRESSURE_BYTES,
 } from "./runtime/terminalFlowConstants.ts";
+import { XTERM_PERFORMANCE_CONFIG } from "../../infrastructure/config/xtermPerformance.ts";
 
 type RafCallback = (time: number) => void;
 
@@ -463,7 +464,10 @@ test("large output delays keyword highlight scans until output quiets", async ()
 
     assert.equal(getTranslateCount(), 0);
 
-    await new Promise((resolve) => { setTimeout(resolve, 220); });
+    // Hard-skip under large-output pressure; catch-up runs after largeOutputQuietMs.
+    const quietMs = XTERM_PERFORMANCE_CONFIG.highlighting.largeOutputQuietMs;
+    await new Promise((resolve) => { setTimeout(resolve, quietMs + 40); });
+    raf.flush();
     assert.ok(getTranslateCount() > 0);
     highlighter.dispose();
     resetTerminalOutputPressure(term as never);
