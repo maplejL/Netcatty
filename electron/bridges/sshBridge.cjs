@@ -56,8 +56,10 @@ const {
 const PREFERRED_KEY_NAMES = ["id_ed25519", "id_ecdsa", "id_rsa"];
 // Match any private key file: id_* but not *.pub
 const SSH_KEY_PATTERN = /^id_[\w-]+$/;
-const SSH_TCP_CONNECT_TIMEOUT_MS = 20000;
-const SSH_AUTH_READY_TIMEOUT_MS = 120000;
+const {
+  createStartSessionApi,
+  resolveSshConnectionTimeouts,
+} = require("./sshBridge/startSession.cjs");
 
 function quoteShellArg(value) {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
@@ -488,6 +490,7 @@ function closeTerminalOutputSession(sessionId) {
  * Connect through a chain of jump hosts
  */
 async function connectThroughChain(event, options, jumpHosts, targetHost, targetPort, sessionId) {
+  const { tcpConnectTimeoutMs, authReadyTimeoutMs } = resolveSshConnectionTimeouts(options);
   const sender = event.sender;
   const connections = options?._connectionsRef || [];
   const sshDiagnosticLogger = options?._sshDiagnosticLogger || log;
@@ -532,8 +535,10 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
         host: jump.hostname,
         port: jump.port || 22,
         username: jump.username || 'root',
-        timeout: SSH_TCP_CONNECT_TIMEOUT_MS,
-        readyTimeout: SSH_AUTH_READY_TIMEOUT_MS, // 2 minutes to allow for keyboard-interactive (2FA/MFA)
+        timeout: tcpConnectTimeoutMs,
+        // ssh2 starts readyTimeout before TCP connects. The auth-ready timer
+        // below starts explicitly from the connection event instead.
+        readyTimeout: 0,
         keepaliveInterval: hopInterval > 0 ? hopInterval * 1000 : 0,
         keepaliveCountMax: hopInterval > 0 ? hopCountMax : 0,
         // Enable keyboard-interactive authentication (required for 2FA/MFA)
@@ -701,7 +706,7 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
       const effectiveHopProxy = isFirst ? ((hasUsableJumpProxy ? jump.proxy : null) || options.proxy) : null;
       if (effectiveHopProxy) {
         currentSocket = await createProxySocket(effectiveHopProxy, jump.hostname, jump.port || 22, {
-          timeoutMs: SSH_TCP_CONNECT_TIMEOUT_MS,
+          timeoutMs: tcpConnectTimeoutMs,
           onSocket: (socket) => {
             if (options?._tunnelRef) {
               options._tunnelRef.pendingConn = socket;
@@ -725,11 +730,23 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
 
       // Connect this hop
       await new Promise((resolve, reject) => {
+        let settled = false;
+        let authReadyTimer = null;
+        const clearAuthReadyTimer = () => {
+          if (authReadyTimer) {
+            clearTimeout(authReadyTimer);
+            authReadyTimer = null;
+          }
+        };
         conn.once('handshake', () => {
+          if (settled) return;
           console.log(`[Chain] Hop ${i + 1}/${totalHops}: ${hopLabel} handshake complete`);
           sendProgress(i + 1, totalHops + 1, hopLabel, 'authenticating');
         });
         conn.once('ready', () => {
+          if (settled) return;
+          settled = true;
+          clearAuthReadyTimer();
           console.log(`[Chain] Hop ${i + 1}/${totalHops}: ${hopLabel} connected`);
           sendProgress(i + 1, totalHops + 1, hopLabel, 'connected');
           if (options?._tunnelRef) {
@@ -739,6 +756,9 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
           resolve();
         });
         conn.once('error', (err) => {
+          if (settled) return;
+          settled = true;
+          clearAuthReadyTimer();
           console.error(`[Chain] Hop ${i + 1}/${totalHops}: ${hopLabel} error:`, err.message);
           sendProgress(i + 1, totalHops + 1, hopLabel, 'error', err.message);
           if (isChainAuthError(err)) {
@@ -751,10 +771,21 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
           reject(err);
         });
         conn.once('timeout', () => {
+          if (settled) return;
+          settled = true;
+          clearAuthReadyTimer();
           console.error(`[Chain] Hop ${i + 1}/${totalHops}: ${hopLabel} timeout`);
           const errMsg = `Connection timeout to ${hopLabel}`;
           sendProgress(i + 1, totalHops + 1, hopLabel, 'error', errMsg);
           try { conn.destroy(); } catch { }
+          reject(new Error(errMsg));
+        });
+        conn.once('close', () => {
+          if (settled) return;
+          settled = true;
+          clearAuthReadyTimer();
+          const errMsg = `Connection to ${hopLabel} closed before authentication completed`;
+          sendProgress(i + 1, totalHops + 1, hopLabel, 'error', errMsg);
           reject(new Error(errMsg));
         });
         // Handle keyboard-interactive authentication for jump hosts (2FA/MFA)
@@ -778,6 +809,9 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
         console.log(`[Chain] Hop ${i + 1}/${totalHops}: Connecting to ${hopLabel}...`);
         conn.once('connect', () => {
           try { conn._sock?.setTimeout?.(0); } catch { }
+          clearAuthReadyTimer();
+          authReadyTimer = setTimeout(() => conn.emit('timeout'), authReadyTimeoutMs);
+          authReadyTimer.unref?.();
           sendProgress(i + 1, totalHops + 1, hopLabel, 'tcp-connected');
           enableSshNoDelay(conn);
         });
@@ -804,7 +838,7 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
       console.log(`[Chain] Hop ${i + 1}/${totalHops}: Forwarding from ${hopLabel} to ${nextHost}:${nextPort}...`);
       sendProgress(i + 1, totalHops + 1, hopLabel, 'forwarding');
       currentSocket = await new Promise((resolve, reject) => {
-        const forwardTimeoutMs = options?._forwardTimeoutMs || SSH_TCP_CONNECT_TIMEOUT_MS;
+        const forwardTimeoutMs = options?._forwardTimeoutMs || tcpConnectTimeoutMs;
         let settled = false;
         const timeout = setTimeout(() => {
           if (settled) return;
@@ -856,7 +890,6 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
 /**
  * Start an SSH session
  */
-const { createStartSessionApi } = require("./sshBridge/startSession.cjs");
 const startSessionApi = createStartSessionApi({
   get sessions() { return sessions; },
   get electronModule() { return electronModule; },
