@@ -674,15 +674,15 @@ function createStartSessionApi(ctx) {
         });
 
         let authAgent = null;
-        const systemAuthAgent = await prepareSystemSshAgentForAuth(options, "[SSH]");
+        const systemAuthAgent = hasCertificate
+          ? null
+          : await prepareSystemSshAgentForAuth(options, "[SSH]");
         // Kick off the default-key scan now so it overlaps the identity-file /
         // inline-key preparation below instead of running serially after it.
         // findAllDefaultPrivateKeys swallows its own fs errors and never rejects,
         // so leaving this promise briefly unawaited cannot surface an unhandled
         // rejection even if the key prep throws first.
-        const defaultKeysPromise = systemAuthAgent && options.identitiesOnly
-          ? Promise.resolve([])
-          : findAllDefaultPrivateKeys();
+        const defaultKeysPromise = findAllDefaultPrivateKeys();
         const identityFile = !options.privateKey && !systemAuthAgent
           ? await loadFirstIdentityFileForAuth({
             sender,
@@ -765,9 +765,10 @@ function createStartSessionApi(ctx) {
         // of walking ~/.ssh a second time. (Pinned by
         // sshBridge.defaultKeyEquivalence.test.cjs.)
         let usedDefaultKeyAsPrimary = false;
+        const discoveredDefaultKeys = await defaultKeysPromise;
         const allDefaultKeys = systemAuthAgent && options.identitiesOnly
           ? []
-          : await defaultKeysPromise;
+          : discoveredDefaultKeys;
         const defaultKeyInfo = allDefaultKeys[0] ?? null;
         // Explicit password without a user-configured key/certificate/agent is
         // password-only — same predicate buildAuthHandler uses for isPasswordOnly.
@@ -1127,7 +1128,7 @@ function createStartSessionApi(ctx) {
         // Handle chain/proxy connections
         if (hasJumpHosts) {
           // Pass fetched keys to chain connection to avoid re-reading files
-          options._defaultKeys = allDefaultKeys;
+          options._defaultKeys = discoveredDefaultKeys;
           options._sshDiagnosticLogger = log;
 
           const chainResult = await connectThroughChain(
