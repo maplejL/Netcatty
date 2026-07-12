@@ -743,6 +743,7 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
           sendProgress(i + 1, totalHops + 1, hopLabel, 'error', err.message);
           if (isChainAuthError(err)) {
             err.isJumpHostAuthError = true;
+            err.jumpHostIndex = i;
             err.jumpHostLabel = hopLabel;
             err.jumpHostHostname = jump.hostname;
             err.message = `Jump host authentication failed for "${hopLabel}": ${err.message}`;
@@ -976,10 +977,16 @@ function isStrictAgentAuthFailure(options, err) {
   if (!err?.isJumpHostAuthError) {
     return options.useSshAgent === true && options.identitiesOnly === true;
   }
-  const failedJump = (options.jumpHosts || []).find((jump) => (
+  const jumpHosts = options.jumpHosts || [];
+  if (Number.isInteger(err.jumpHostIndex) && err.jumpHostIndex >= 0) {
+    const failedJump = jumpHosts[err.jumpHostIndex];
+    return failedJump?.useSshAgent === true && failedJump.identitiesOnly === true;
+  }
+  const matchingJumps = jumpHosts.filter((jump) => (
     (err.jumpHostHostname && jump.hostname === err.jumpHostHostname)
     || (err.jumpHostLabel && jump.label === err.jumpHostLabel)
   ));
+  const failedJump = matchingJumps.length === 1 ? matchingJumps[0] : undefined;
   return failedJump?.useSshAgent === true && failedJump.identitiesOnly === true;
 }
 
@@ -1090,6 +1097,7 @@ async function startSSHSessionWrapper(event, options) {
                 authError.isAuthError = true;
                 if (retryErr.isJumpHostAuthError) {
                   authError.isJumpHostAuthError = true;
+                  authError.jumpHostIndex = retryErr.jumpHostIndex;
                   authError.jumpHostLabel = retryErr.jumpHostLabel;
                   authError.jumpHostHostname = retryErr.jumpHostHostname;
                 }
@@ -1118,6 +1126,7 @@ async function startSSHSessionWrapper(event, options) {
       authError.isAuthError = true;
       if (err.isJumpHostAuthError) {
         authError.isJumpHostAuthError = true;
+        authError.jumpHostIndex = err.jumpHostIndex;
         authError.jumpHostLabel = err.jumpHostLabel;
         authError.jumpHostHostname = err.jumpHostHostname;
       }
@@ -1288,5 +1297,6 @@ module.exports = {
   // derives the preferred default key from findAllDefaultPrivateKeys()[0]).
   _findDefaultPrivateKey: findDefaultPrivateKey,
   _findAllDefaultPrivateKeys: findAllDefaultPrivateKeys,
+  _isStrictAgentAuthFailure: isStrictAgentAuthFailure,
   ensureMoshStatsConnection,
 };
