@@ -7,7 +7,7 @@ import React, { memo, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 import { SftpFileEntry } from '../../types';
-import { buildSftpColumnTemplate, ColumnWidths, formatBytes, formatDate, getFileIcon, isNavigableDirectory } from './utils';
+import { buildSftpColumnTemplate, formatBytes, formatDate, getFileIcon, isNavigableDirectory, type ColumnWidths, type SftpColumnVisibility } from './utils';
 
 interface SftpFileRowProps {
     entry: SftpFileEntry;
@@ -16,6 +16,7 @@ interface SftpFileRowProps {
     showSelectionHighlight: boolean;
     isDragOver: boolean;
     columnWidths: ColumnWidths;
+    visibleColumns: SftpColumnVisibility;
     onSelect: (entry: SftpFileEntry, index: number, e: React.MouseEvent) => void;
     onOpen: (entry: SftpFileEntry) => void;
     onAuxClick?: (entry: SftpFileEntry, e: React.MouseEvent) => void;
@@ -33,6 +34,7 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
     showSelectionHighlight,
     isDragOver,
     columnWidths,
+    visibleColumns,
     onSelect,
     onOpen,
     onAuxClick,
@@ -92,7 +94,7 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
                     : "hover:bg-accent/50",
                 isDragOver && isNavDir && "bg-primary/25 ring-1 ring-primary/50"
             )}
-            style={{ display: 'grid', gridTemplateColumns: buildSftpColumnTemplate(columnWidths) }}
+            style={{ display: 'grid', gridTemplateColumns: buildSftpColumnTemplate(columnWidths, visibleColumns) }}
         >
             <div className="flex items-center gap-3 min-w-0">
                 <div className={cn(
@@ -132,13 +134,19 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
                     <TooltipContent>{entry.name}</TooltipContent>
                 </Tooltip>
             </div>
-            <span className={cn("text-xs truncate", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>{modifiedLabel}</span>
-            <span className={cn("text-xs truncate text-right", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>
-                {isNavDir ? '--' : sizeLabel}
-            </span>
-            <span className={cn("text-xs truncate capitalize text-right", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>
-                {isSymlinkToDirectory ? 'link → folder' : entry.type === 'directory' ? 'folder' : entry.type === 'symlink' ? 'link' : entry.name.split('.').pop()?.toLowerCase() || 'file'}
-            </span>
+            {visibleColumns.modified && (
+                <span className={cn("text-xs truncate", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>{modifiedLabel}</span>
+            )}
+            {visibleColumns.size && (
+                <span className={cn("text-xs truncate text-right", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>
+                    {isNavDir ? '--' : sizeLabel}
+                </span>
+            )}
+            {visibleColumns.type && (
+                <span className={cn("text-xs truncate capitalize text-right", isSelectionVisible ? "text-accent-foreground/85" : "text-muted-foreground")}>
+                    {isSymlinkToDirectory ? 'link → folder' : entry.type === 'directory' ? 'folder' : entry.type === 'symlink' ? 'link' : entry.name.split('.').pop()?.toLowerCase() || 'file'}
+                </span>
+            )}
         </div>
     );
 };
@@ -153,6 +161,9 @@ const areEqual = (prev: SftpFileRowProps, next: SftpFileRowProps): boolean => {
     if (prev.columnWidths.modified !== next.columnWidths.modified) return false;
     if (prev.columnWidths.size !== next.columnWidths.size) return false;
     if (prev.columnWidths.type !== next.columnWidths.type) return false;
+    if (prev.visibleColumns.modified !== next.visibleColumns.modified) return false;
+    if (prev.visibleColumns.size !== next.visibleColumns.size) return false;
+    if (prev.visibleColumns.type !== next.visibleColumns.type) return false;
     // Compare callbacks - important for ".." entry which has static properties
     if (prev.onOpen !== next.onOpen) return false;
     if (prev.onSelect !== next.onSelect) return false;
