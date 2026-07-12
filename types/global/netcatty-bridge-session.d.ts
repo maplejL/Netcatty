@@ -45,6 +45,11 @@ declare global {
       keyId?: string;
       passphrase?: string;
       identityFilePaths?: string[];
+      useSshAgent?: boolean;
+      identityAgent?: string;
+      identitiesOnly?: boolean;
+      addKeysToAgent?: string;
+      useKeychain?: boolean;
       port?: number;
       moshServerPath?: string;
       moshClientPath?: string;
@@ -77,6 +82,11 @@ declare global {
       passphrase?: string;
       authMethod?: 'password' | 'key' | 'certificate';
       identityFilePaths?: string[];
+      useSshAgent?: boolean;
+      identityAgent?: string;
+      identitiesOnly?: boolean;
+      addKeysToAgent?: string;
+      useKeychain?: boolean;
       port?: number;
       etPort?: number;
       legacyAlgorithms?: boolean;
@@ -145,7 +155,7 @@ declare global {
       bits?: number;
       comment?: string;
     }): Promise<{ success: boolean; privateKey?: string; publicKey?: string; error?: string }>;
-    checkSshAgent?(): Promise<{ running: boolean; startupType: string | null; error: string | null }>;
+    checkSshAgent?(identityAgent?: string): Promise<{ running: boolean; startupType: string | null; error: string | null }>;
     getDefaultKeys?(): Promise<Array<{ name: string; path: string }>>;
     execCommand(options: {
       hostname: string;
@@ -158,6 +168,11 @@ declare global {
       keyId?: string;
       keySource?: 'generated' | 'imported' | 'reference';
       identityFilePaths?: string[];
+      useSshAgent?: boolean;
+      identityAgent?: string;
+      identitiesOnly?: boolean;
+      addKeysToAgent?: string;
+      useKeychain?: boolean;
       passphrase?: string;
       command: string;
       timeout?: number;
