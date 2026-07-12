@@ -162,6 +162,7 @@ function createExecCommandApi(ctx) {
             username: connectOpts.username,
             logPrefix: "[SSH Exec]",
             defaultKeys,
+            allowAgentFallback: payload.useSshAgent !== false,
           });
     
           applyAuthToConnOpts(connectOpts, authConfig);

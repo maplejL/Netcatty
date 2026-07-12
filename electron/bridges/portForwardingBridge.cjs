@@ -250,6 +250,7 @@ async function startPortForward(event, payload) {
       username: connectOpts.username,
       logPrefix: "[PortForward]",
       defaultKeys,
+      allowAgentFallback: useSshAgent !== false,
     });
     applyAuthToConnOpts(connectOpts, authConfig);
     if (isTunnelCancelled(tunnelState)) {
