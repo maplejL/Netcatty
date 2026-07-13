@@ -882,7 +882,10 @@ function buildAuthHandler(options) {
     (!hasExplicitAgent && !isPasswordOnly && sshAgentSocket) ||
     unlockedEncryptedKeys.length > 0;
 
-  // If only simple auth methods and no fallback keys needed, use array-based handler
+  // Simple explicit auth with no fallback keys: preserve the old ordered
+  // method list, but use a function handler so we can observe partialSuccess
+  // for second-factor keyboard-interactive (#2150). Plain string arrays hide
+  // that signal from us and leave authPhase stuck at false.
   if (hasExplicitAuth && !hasFallbackOptions) {
     const authMethods = ["none"]; // Always try none first per RFC 4252
     if (effectiveAgent) authMethods.push("agent");
@@ -890,14 +893,13 @@ function buildAuthHandler(options) {
     if (password) authMethods.push("password");
     authMethods.push("keyboard-interactive");
 
+    const authPhase = { hadPartialSuccess: false };
     return {
-      authHandler: authMethods,
+      authHandler: createOrderedStringAuthHandler(authMethods, authPhase),
       privateKey: effectivePrivateKey,
       agent: effectiveAgent,
       usedDefaultKeys: false,
-      // Array-form authHandler does not surface partialSuccess to us; the
-      // keyboard-interactive deny-list still covers EDR secondary prompts.
-      authPhase: { hadPartialSuccess: false },
+      authPhase,
     };
   }
 
@@ -1161,6 +1163,44 @@ const OTP_PROMPT_PATTERN = new RegExp(
 const PASSWORD_PROMPT_PATTERN = /passw(or)?d|密\s*码|口\s*令/i;
 
 /**
+ * Wrap a simple ordered list of ssh2 auth method *strings* (the form used by
+ * `connectOpts.authHandler = ["none","password","keyboard-interactive"]`)
+ * so callers can observe `partialSuccess` for multi-factor flows (#2150).
+ *
+ * Behavior mirrors ssh2's array handler: try methods in order, skip ones the
+ * server is not currently advertising, continue after partial success.
+ *
+ * @param {string[]} order
+ * @param {{ hadPartialSuccess: boolean }} authPhase - mutated on partialSuccess
+ * @returns {(methodsLeft: string[]|null, partialSuccess: boolean, callback: Function) => void}
+ */
+function createOrderedStringAuthHandler(order, authPhase) {
+  let index = 0;
+  return (methodsLeft, partialSuccess, callback) => {
+    if (partialSuccess && authPhase) {
+      authPhase.hadPartialSuccess = true;
+    }
+
+    const available = Array.isArray(methodsLeft) && methodsLeft.length > 0
+      ? methodsLeft
+      : null;
+
+    while (index < order.length) {
+      const method = order[index++];
+      if (available) {
+        const allowed =
+          available.includes(method) ||
+          (method === "agent" && available.includes("publickey"));
+        // "none" is only meaningful on the initial probe (methodsLeft null).
+        if (!allowed) continue;
+      }
+      return callback(method);
+    }
+    return callback(false);
+  };
+}
+
+/**
  * Decide whether a keyboard-interactive challenge is "just a PAM-wrapped
  * password prompt" that we can answer with the saved host password without
  * bothering the user. PAM-based Linux servers commonly advertise only
@@ -1186,6 +1226,24 @@ function isAutoFillablePasswordChallenge(prompts, password) {
   const promptText = typeof prompt.prompt === "string" ? prompt.prompt : "";
   if (OTP_PROMPT_PATTERN.test(promptText)) return false;
   return PASSWORD_PROMPT_PATTERN.test(promptText);
+}
+
+/**
+ * Whether the modal may pre-fill / offer-to-save the host login password for
+ * this challenge. Single secondary/EDR prompts and post-partialSuccess
+ * challenges must open empty (#2150). Multi-prompt forms (password + OTP)
+ * and failed auto-fill retries still get the saved value as a convenience.
+ */
+function shouldPrefillSavedPassword(prompts, password, { skipAutoFill = false } = {}) {
+  if (skipAutoFill) return false;
+  if (typeof password !== "string" || password.length === 0) return false;
+  if (!Array.isArray(prompts) || prompts.length === 0) return false;
+  // Single-prompt: only prefill classic first-factor password challenges.
+  if (prompts.length === 1) {
+    return isAutoFillablePasswordChallenge(prompts, password);
+  }
+  // Multi-prompt: let the modal fill the password slot(s); OTP slots stay empty.
+  return true;
 }
 
 /**
@@ -1282,6 +1340,15 @@ function createKeyboardInteractiveHandler(options) {
       echo: p.echo,
     }));
 
+    // Never prefill / offer-to-save the host login password into a second-factor
+    // challenge. Passing null here is what keeps KeyboardInteractiveModal from
+    // re-submitting the wrong secret on Enter (#2150).
+    const savedPasswordForModal = shouldPrefillSavedPassword(prompts, password, {
+      skipAutoFill,
+    })
+      ? password
+      : null;
+
     console.log(`${logPrefix} Showing modal for ${promptsData.length} prompts`);
     try { onPromptShown?.(); } catch (err) { console.warn(`${logPrefix} onPromptShown callback threw`, err); }
 
@@ -1292,7 +1359,7 @@ function createKeyboardInteractiveHandler(options) {
       instructions: instructions || "",
       prompts: promptsData,
       hostname: hostname,
-      savedPassword: password || null,
+      savedPassword: savedPasswordForModal,
       scope,
     });
   };
@@ -1395,8 +1462,10 @@ module.exports = {
   resolveIdentityAgentPath,
   prepareSystemSshAgentForAuth,
   buildAuthHandler,
+  createOrderedStringAuthHandler,
   createKeyboardInteractiveHandler,
   isAutoFillablePasswordChallenge,
+  shouldPrefillSavedPassword,
   applyAuthToConnOpts,
   safeSend,
   requestPassphrasesForEncryptedKeys,
