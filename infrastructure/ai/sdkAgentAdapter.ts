@@ -72,9 +72,14 @@ export interface FileAttachment {
   filePath?: string;
 }
 
-async function buildAgentEnvWithStoredApiKey(
+/**
+ * Merge agent env with stored secrets needed by SDK drivers (e.g. Cursor API key).
+ * Shared by stream turns and runtime model-catalog fetches so list-models sees the
+ * same credentials as chat.
+ */
+export async function buildAgentEnvWithStoredApiKey(
   sdkBackend: string,
-  config: ExternalAgentConfig,
+  config: Pick<ExternalAgentConfig, 'env' | 'apiKey'>,
 ): Promise<Record<string, string> | undefined> {
   const env = { ...(config.env ?? {}) };
   if (sdkBackend === 'cursor' && config.apiKey) {

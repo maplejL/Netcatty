@@ -396,35 +396,28 @@ async function runCursorTurn({
   }
 }
 
-function modelVariantId(modelId, params) {
-  const search = new URLSearchParams();
-  for (const param of params || []) {
-    if (param?.id && param?.value) search.set(param.id, param.value);
-  }
-  const qs = search.toString();
-  return qs ? `${modelId}?${qs}` : modelId;
-}
-
+/**
+ * Map Cursor.models.list() into picker rows.
+ *
+ * Keep one row per base model id. Expanding variants/parameters into separate
+ * selectable ids produced long near-duplicate lists (e.g. "GPT-5", "GPT-5 - Fast",
+ * "GPT-5 - High") that felt like duplicates in the UI. Users can still send a
+ * previously selected variant id if it is already stored; the picker itself only
+ * offers the account's base catalog.
+ */
 function mapCursorModels(models) {
   const out = [];
   if (!Array.isArray(models)) return out;
+  const seen = new Set();
   for (const model of models) {
-    if (!model?.id) continue;
+    if (!model?.id || seen.has(model.id)) continue;
+    seen.add(model.id);
     const name = model.displayName || model.name || model.id;
     out.push({
       id: model.id,
       name,
       ...(model.description ? { description: model.description } : {}),
     });
-    for (const variant of model.variants || []) {
-      const id = modelVariantId(model.id, variant.params || []);
-      if (id === model.id) continue;
-      out.push({
-        id,
-        name: `${name} - ${variant.displayName || id}`,
-        ...(variant.description ? { description: variant.description } : {}),
-      });
-    }
   }
   return out;
 }
@@ -432,10 +425,20 @@ function mapCursorModels(models) {
 async function listCursorModels({ apiKey, env, sdkModule } = {}) {
   let resolvedModule = sdkModule;
   if (!resolvedModule) {
-    try { resolvedModule = await import("@cursor/sdk"); } catch { return []; }
+    try { resolvedModule = await import("@cursor/sdk"); } catch (err) {
+      console.warn("[Cursor SDK] list models: failed to load @cursor/sdk", err?.message || err);
+      return [];
+    }
   }
   const effectiveApiKey = apiKey || env?.CURSOR_API_KEY || process.env.CURSOR_API_KEY;
-  if (!effectiveApiKey) return [];
+  if (!effectiveApiKey) {
+    console.warn("[Cursor SDK] list models: missing CURSOR_API_KEY");
+    return [];
+  }
+  if (!resolvedModule.Cursor?.models?.list) {
+    console.warn("[Cursor SDK] list models: Cursor.models.list unavailable");
+    return [];
+  }
   const models = await resolvedModule.Cursor.models.list({ apiKey: effectiveApiKey });
   return mapCursorModels(models);
 }

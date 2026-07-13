@@ -66,10 +66,28 @@ test("normalizeSdkListModelsResult preserves current model ids from object resul
   });
 });
 
+test("normalizeSdkListModelsResult drops duplicate model ids", () => {
+  assert.deepEqual(normalizeSdkListModelsResult({
+    currentModelId: "a",
+    models: [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+      { id: "a", name: "A again" },
+    ],
+  }), {
+    currentModelId: "a",
+    models: [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ],
+  });
+});
+
 test("shouldCacheSdkRuntimeModels skips OpenCode model catalogs", () => {
   assert.equal(shouldCacheSdkRuntimeModels("opencode"), false);
   assert.equal(shouldCacheSdkRuntimeModels("claude"), true);
   assert.equal(shouldCacheSdkRuntimeModels("codebuddy"), true);
+  assert.equal(shouldCacheSdkRuntimeModels("cursor"), true);
 });
 
 test("SDK resume only uses the current backend/path session key", () => {

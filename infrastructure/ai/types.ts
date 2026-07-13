@@ -461,8 +461,12 @@ export const CODEX_MODEL_PRESETS: AgentModelPreset[] = [
   { id: 'gpt-4o', name: 'GPT-4o' },
 ];
 
+// Fallback only when Cursor.models.list() fails. Prefer runtime catalog.
+// IDs must match Cursor SDK model ids (dots, not hyphens in the minor segment
+// for Claude aliases vary by account — runtime list is authoritative).
 export const CURSOR_MODEL_PRESETS: AgentModelPreset[] = [
   { id: 'composer-2.5', name: 'Composer 2.5', description: 'Recommended' },
+  { id: 'auto', name: 'Auto', description: 'Cursor selects a model' },
   { id: 'gpt-5.5', name: 'GPT-5.5' },
   { id: 'gpt-5.2', name: 'GPT-5.2' },
   { id: 'gpt-5.1', name: 'GPT-5.1' },
@@ -495,7 +499,20 @@ export const OPENCODE_MODEL_PRESETS: AgentModelPreset[] = [
   { id: 'ollama/llama3.3', name: 'Ollama Llama 3.3' },
 ];
 
-export function getAgentModelPresets(agentCommand?: string): AgentModelPreset[] {
+export function getAgentModelPresets(
+  agentCommand?: string,
+  sdkBackend?: string,
+): AgentModelPreset[] {
+  // Prefer explicit SDK backend — managed agents may use a path basename that
+  // does not start with the product name (e.g. WorkBuddy's embedded codebuddy).
+  const backend = String(sdkBackend || '').trim().toLowerCase();
+  if (backend === 'claude') return CLAUDE_MODEL_PRESETS;
+  if (backend === 'codex') return CODEX_MODEL_PRESETS;
+  if (backend === 'cursor') return CURSOR_MODEL_PRESETS;
+  if (backend === 'codebuddy' || backend === 'workbuddy') return CODEBUDDY_MODEL_PRESETS;
+  if (backend === 'opencode') return OPENCODE_MODEL_PRESETS;
+  if (backend === 'copilot') return [];
+
   if (!agentCommand) return [];
   // Split on both POSIX (/) and Windows (\) separators so command paths like
   // "C:\\Users\\foo\\codex.cmd" resolve to the right basename. Splitting only

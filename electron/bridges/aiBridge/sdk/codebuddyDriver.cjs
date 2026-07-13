@@ -225,15 +225,48 @@ function translateCodebuddyMessage(message, emitter, opts = {}) {
   // tool_progress, compact_boundary — no renderer mapping.
 }
 
-/** Classify a spawn failure for user-friendly error messages. */
+/**
+ * Classify spawn / transport failures for user-friendly messages.
+ *
+ * IMPORTANT: do not match bare "not found" — CodeBuddy/WorkBuddy surfaces that
+ * phrase for models, MCP servers, marketplace plugins, and stale resume sessions.
+ * Matching it rewrote those mid-session failures into a misleading
+ * "CLI not found" after the agent had already worked for a while.
+ */
 function classifyCodebuddySpawnError(error) {
   const code = error && error.code;
   const msg = String((error && error.message) || error || "");
   const isSpawnEnoent =
     code === "ENOENT" ||
     /ENOENT/i.test(msg) ||
-    /not found/i.test(msg);
-  return { isSpawnEnoent, message: msg };
+    /CLINotFoundError/i.test(msg) ||
+    /CodeBuddy CLI not found/i.test(msg) ||
+    /CLI process spawn error/i.test(msg) ||
+    /spawn\s+\S+\s+ENOENT/i.test(msg);
+  const isStaleResume =
+    /session\s+(?:id\s+)?(?:not found|invalid|expired|unknown)/i.test(msg) ||
+    /(?:cannot|can't|unable to|failed to)\s+resume/i.test(msg) ||
+    /no\s+such\s+session/i.test(msg) ||
+    /resume(?:d)?\s+session\s+(?:not found|missing|invalid)/i.test(msg);
+  return { isSpawnEnoent, isStaleResume, message: msg };
+}
+
+function formatCodebuddyCliMissingError(pathToCodebuddyCode) {
+  const pathHint = pathToCodebuddyCode
+    ? ` (tried: ${pathToCodebuddyCode})`
+    : "";
+  const isWorkbuddyPath = /workbuddy/i.test(String(pathToCodebuddyCode || ""));
+  if (isWorkbuddyPath) {
+    return (
+      "WorkBuddy agent CLI not found or not runnable" + pathHint + ". " +
+      "Reinstall WorkBuddy, or set WORKBUDDY_CODE_PATH to the embedded CLI at " +
+      "WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy."
+    );
+  }
+  return (
+    "CodeBuddy CLI not found or not runnable" + pathHint + ". " +
+    "Install codebuddy and ensure it's on PATH, or set CODEBUDDY_CODE_PATH."
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -280,19 +313,7 @@ function buildCodebuddyPromptInput(prompt, attachments) {
  * @param {object} args.emitter  createStreamEmitter(...)
  * @param {Function} [args.queryFn] inject @tencent-ai/agent-sdk query (for tests)
  */
-async function runCodebuddyTurn({ prompt, attachments, options, emitter, queryFn }) {
-  let query = queryFn;
-  if (!query) {
-    let sdk;
-    try { sdk = await import("@tencent-ai/agent-sdk"); } catch {
-      emitter.emitError("CodeBuddy Agent SDK not installed. Run: npm install @tencent-ai/agent-sdk");
-      return { sessionId: null };
-    }
-    query = sdk.query;
-  }
-
-  const promptInput = buildCodebuddyPromptInput(prompt, attachments);
-
+async function runCodebuddyTurnOnce({ promptInput, options, emitter, query }) {
   let sessionId = null;
   let hasContent = false;
   let hasStreamedText = false;
@@ -340,28 +361,96 @@ async function runCodebuddyTurn({ prompt, attachments, options, emitter, queryFn
       }
     }
     if (!hasContent && !options.abortController?.signal?.aborted) {
-      emitter.emitError(
-        "CodeBuddy returned an empty response. Run `codebuddy` in a terminal to log in, " +
-        "or set CODEBUDDY_API_KEY / CODEBUDDY_AUTH_TOKEN.",
-      );
-      return { sessionId };
+      return {
+        ok: false,
+        sessionId,
+        empty: true,
+      };
     }
-    emitter.emitDone();
-    return { sessionId };
+    return { ok: true, sessionId };
   } catch (error) {
-    const classified = classifyCodebuddySpawnError(error);
-    if (classified.isSpawnEnoent) {
-      emitter.emitError(
-        "CodeBuddy CLI not found or not runnable. " +
-        "Install codebuddy and ensure it's on PATH, or set CODEBUDDY_CODE_PATH.",
-      );
-    } else {
-      emitter.emitError(classified.message || "CodeBuddy turn failed");
-    }
-    return { sessionId };
+    return {
+      ok: false,
+      sessionId,
+      error,
+    };
   } finally {
     removeAbortListener?.();
   }
+}
+
+/**
+ * Run a CodeBuddy turn. Streams events via `emitter`, resolves with { sessionId }.
+ * @param {object} args
+ * @param {string} args.prompt
+ * @param {Array<object>} [args.attachments]
+ * @param {object} args.options  result of buildCodebuddyQueryOptions
+ * @param {object} args.emitter  createStreamEmitter(...)
+ * @param {Function} [args.queryFn] inject @tencent-ai/agent-sdk query (for tests)
+ */
+async function runCodebuddyTurn({ prompt, attachments, options, emitter, queryFn }) {
+  let query = queryFn;
+  if (!query) {
+    let sdk;
+    try { sdk = await import("@tencent-ai/agent-sdk"); } catch {
+      emitter.emitError("CodeBuddy Agent SDK not installed. Run: npm install @tencent-ai/agent-sdk");
+      return { sessionId: null };
+    }
+    query = sdk.query;
+  }
+
+  let result = await runCodebuddyTurnOnce({
+    promptInput: buildCodebuddyPromptInput(prompt, attachments),
+    options,
+    emitter,
+    query,
+  });
+  let resumeInvalidated = false;
+
+  // After long chats, WorkBuddy/CodeBuddy may fail resume when the CLI session
+  // file was GC'd or the CLI was upgraded. Drop resume once and start a fresh
+  // turn instead of surfacing a false "CLI not found".
+  if (
+    !result.ok &&
+    !result.empty &&
+    options?.resume &&
+    !options.abortController?.signal?.aborted
+  ) {
+    const classified = classifyCodebuddySpawnError(result.error);
+    if (classified.isStaleResume) {
+      resumeInvalidated = true;
+      const { resume: _staleResume, ...freshOptions } = options;
+      emitter.status?.("Previous agent session expired; starting a fresh turn…");
+      result = await runCodebuddyTurnOnce({
+        // Async generators are single-use; rebuild the prompt for the retry.
+        promptInput: buildCodebuddyPromptInput(prompt, attachments),
+        options: freshOptions,
+        emitter,
+        query,
+      });
+    }
+  }
+
+  if (result.ok) {
+    emitter.emitDone();
+    return { sessionId: result.sessionId, resumeInvalidated };
+  }
+
+  if (result.empty) {
+    emitter.emitError(
+      "CodeBuddy returned an empty response. Run `codebuddy` in a terminal to log in, " +
+      "or set CODEBUDDY_API_KEY / CODEBUDDY_AUTH_TOKEN.",
+    );
+    return { sessionId: result.sessionId, resumeInvalidated };
+  }
+
+  const classified = classifyCodebuddySpawnError(result.error);
+  if (classified.isSpawnEnoent) {
+    emitter.emitError(formatCodebuddyCliMissingError(options?.pathToCodebuddyCode));
+  } else {
+    emitter.emitError(classified.message || "CodeBuddy turn failed");
+  }
+  return { sessionId: result.sessionId, resumeInvalidated };
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +524,7 @@ module.exports = {
   buildCodebuddyQueryOptions,
   translateCodebuddyMessage,
   classifyCodebuddySpawnError,
+  formatCodebuddyCliMissingError,
   buildCodebuddyPromptInput,
   buildCodebuddyThinkingEnv,
   parseCodebuddyThinking,

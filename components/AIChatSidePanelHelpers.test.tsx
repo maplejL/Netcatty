@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildSdkRuntimeModelCacheKey,
   createSdkRuntimeModelCache,
   modelPresetsContainId,
   normalizeSdkRuntimeModelPresets,
@@ -33,11 +34,38 @@ test('shouldLoadSdkRuntimeModels includes SDK agents with model catalogs', () =>
 
   assert.equal(shouldLoadSdkRuntimeModels(agent('claude')), true);
   assert.equal(shouldLoadSdkRuntimeModels(agent('copilot')), true);
+  assert.equal(shouldLoadSdkRuntimeModels(agent('cursor')), true);
   assert.equal(shouldLoadSdkRuntimeModels(agent('codebuddy')), true);
   assert.equal(shouldLoadSdkRuntimeModels(agent('workbuddy')), true);
   assert.equal(shouldLoadSdkRuntimeModels(agent('opencode')), true);
   assert.equal(shouldLoadSdkRuntimeModels(agent('codex')), false);
   assert.equal(shouldLoadSdkRuntimeModels(undefined), false);
+});
+
+test('buildSdkRuntimeModelCacheKey redacts Cursor API key material', () => {
+  const withKey = buildSdkRuntimeModelCacheKey({
+    id: 'discovered_cursor',
+    command: 'cursor',
+    sdkBackend: 'cursor',
+    env: { CURSOR_API_KEY: 'super-secret-key' },
+  });
+  const withStoredOnly = buildSdkRuntimeModelCacheKey({
+    id: 'discovered_cursor',
+    command: 'cursor',
+    sdkBackend: 'cursor',
+    apiKey: 'encrypted-blob',
+  });
+  const withoutKey = buildSdkRuntimeModelCacheKey({
+    id: 'discovered_cursor',
+    command: 'cursor',
+    sdkBackend: 'cursor',
+  });
+
+  assert.equal(withKey.includes('super-secret-key'), false);
+  assert.equal(withKey.includes('CURSOR_API_KEY=1'), true);
+  assert.equal(withStoredOnly.includes('CURSOR_API_KEY=1'), true);
+  assert.equal(withoutKey.includes('CURSOR_API_KEY=1'), false);
+  assert.notEqual(withKey, withoutKey);
 });
 
 test('shouldAdoptSdkCurrentModel keeps SDK defaults when no runtime list is returned', () => {
@@ -60,6 +88,20 @@ test('normalizeSdkRuntimeModelPresets preserves SDK current model without a cata
   assert.deepEqual(
     normalizeSdkRuntimeModelPresets([{ id: 'openai/gpt-5.1', name: 'GPT-5.1' }], 'custom/provider-model'),
     [{ id: 'openai/gpt-5.1', name: 'GPT-5.1' }],
+  );
+});
+
+test('normalizeSdkRuntimeModelPresets drops duplicate model ids', () => {
+  assert.deepEqual(
+    normalizeSdkRuntimeModelPresets([
+      { id: 'gpt-5.2', name: 'GPT-5.2' },
+      { id: 'gpt-5.2', name: 'GPT-5.2 again' },
+      { id: 'composer-2.5', name: 'Composer 2.5' },
+    ], null),
+    [
+      { id: 'gpt-5.2', name: 'GPT-5.2' },
+      { id: 'composer-2.5', name: 'Composer 2.5' },
+    ],
   );
 });
 

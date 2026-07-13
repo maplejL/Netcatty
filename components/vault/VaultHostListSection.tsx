@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
 import { HostNotesIndicator } from "../host/HostNotesIndicator";
+import { HostNotesSummaryLine } from "../host/HostNotesSummaryLine";
 import { VaultEntityIcon, vaultPrimaryIconClass } from "./VaultEntityIcon";
 import { VaultOpsHome } from "./VaultOpsHome";
 import {
@@ -254,10 +255,10 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                     "vault-drop-indicator-row group cursor-pointer relative",
                                     viewMode === "grid"
                                       ? cn(
-                                        "soft-card elevate rounded-xl h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
+                                        "soft-card elevate rounded-xl min-h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
                                         draggingHostId === host.id && "opacity-45",
                                       )
-                                      : "h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
+                                      : "min-h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
                                   )}
                                   data-host-id={host.id}
                                   data-vault-grid-item={`pinned:${host.id}`}
@@ -297,6 +298,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                       <div className="text-[11px] text-muted-foreground font-mono truncate leading-4">
                                         {safeHost.username}@{safeHost.hostname}
                                       </div>
+                                      <HostNotesSummaryLine notes={safeHost.notes} />
                                     </div>
                                     <Button
                                       variant="ghost"
@@ -369,10 +371,10 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                     "vault-drop-indicator-row group cursor-pointer relative",
                                     viewMode === "grid"
                                       ? cn(
-                                        "soft-card elevate rounded-xl h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
+                                        "soft-card elevate rounded-xl min-h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
                                         draggingHostId === host.id && "opacity-45",
                                       )
-                                      : "h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
+                                      : "min-h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
                                   )}
                                   data-host-id={host.id}
                                   data-vault-grid-item={`recent:${host.id}`}
@@ -407,6 +409,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                       <div className="text-[11px] text-muted-foreground font-mono truncate leading-4">
                                         {safeHost.username}@{safeHost.hostname}
                                       </div>
+                                      <HostNotesSummaryLine notes={safeHost.notes} />
                                     </div>
                                     <Button
                                       variant="ghost"
@@ -490,8 +493,8 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                               className={cn(
                                 "vault-drop-indicator-row group cursor-pointer transition-colors duration-150",
                                 viewMode === "grid"
-                                  ? "soft-card elevate rounded-xl h-[68px] px-3 py-2 will-change-transform transition-[box-shadow,border-color,background-color] duration-150"
-                                  : "h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
+                                  ? "soft-card elevate rounded-xl min-h-[68px] px-3 py-2 will-change-transform transition-[box-shadow,border-color,background-color] duration-150"
+                                  : "min-h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
                                 getDropTargetClasses({ kind: "group", path: node.path }),
                               )}
                               data-group-path={node.path}
@@ -697,10 +700,10 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                           "vault-drop-indicator-row group cursor-pointer relative",
                                           viewMode === "grid"
                                             ? cn(
-                                              "soft-card elevate rounded-xl h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
+                                              "soft-card elevate rounded-xl min-h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
                                               draggingHostId === host.id && "opacity-45",
                                             )
-                                            : "h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
+                                            : "min-h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
                                         )}
                                         data-host-id={host.id}
                                         data-vault-grid-item={`grouped:${group.name || "__ungrouped__"}:${host.id}`}
@@ -753,6 +756,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                             <div className="text-[11px] text-muted-foreground font-mono truncate leading-4">
                                               {safeHost.username}@{safeHost.hostname}
                                             </div>
+                                            <HostNotesSummaryLine notes={safeHost.notes} />
                                           </div>
                                           <Button
                                             variant="ghost"
@@ -846,10 +850,10 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                     "vault-drop-indicator-row group cursor-pointer relative",
                                     viewMode === "grid"
                                       ? cn(
-                                        "soft-card elevate rounded-xl h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
+                                        "soft-card elevate rounded-xl min-h-[68px] px-3 py-2 will-change-transform transition-[opacity,box-shadow,border-color,background-color] duration-150",
                                         draggingHostId === host.id && "opacity-45",
                                       )
-                                      : "h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
+                                      : "min-h-14 px-3 py-2 hover:bg-secondary/60 rounded-lg transition-colors",
                                   )}
                                   data-host-id={host.id}
                                   data-vault-grid-item={`main:${host.id}`}
@@ -902,6 +906,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                       <div className="text-[11px] text-muted-foreground font-mono truncate leading-4">
                                         {safeHost.username}@{safeHost.hostname}
                                       </div>
+                                      <HostNotesSummaryLine notes={safeHost.notes} />
                                     </div>
                                     <Button
                                       variant="ghost"

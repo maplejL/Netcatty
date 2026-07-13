@@ -49,7 +49,15 @@ function shouldCacheSdkRuntimeModels(backendKey) {
 function normalizeSdkListModelsResult(raw) {
   const rawModels = Array.isArray(raw) ? raw : raw?.models;
   const currentModelId = Array.isArray(raw) ? null : raw?.currentModelId || null;
-  const models = Array.isArray(rawModels) ? rawModels.filter((m) => m && m.id) : [];
+  const models = [];
+  if (Array.isArray(rawModels)) {
+    const seen = new Set();
+    for (const model of rawModels) {
+      if (!model?.id || seen.has(model.id)) continue;
+      seen.add(model.id);
+      models.push(model);
+    }
+  }
   return { currentModelId, models };
 }
 
@@ -539,6 +547,11 @@ function registerSdkStreamHandlers(ctx) {
           });
 
           // Persist any new session id for resume on the next turn.
+          // Stale resume retries drop the previous id so the next turn does not
+          // keep replaying a dead WorkBuddy/CodeBuddy session.
+          if (result?.resumeInvalidated) {
+            sdkSessionIds.delete(sdkSessionKey);
+          }
           const newSessionId = result?.sessionId || result?.threadId;
           if (newSessionId) sdkSessionIds.set(sdkSessionKey, newSessionId);
 
@@ -565,7 +578,8 @@ function registerSdkStreamHandlers(ctx) {
           return { ok: true, currentModelId: null, models: [] };
         }
         const shellEnv = await getShellEnv();
-        const env = buildSdkAgentEnv({
+        // Must be `let` — codebuddy/workbuddy reassign after bin resolution.
+        let env = buildSdkAgentEnv({
           shellEnv,
           requestedAgentEnv: normalizeAgentEnv(requestedAgentEnv),
           withCliDiscoveryEnv,
@@ -602,12 +616,17 @@ function registerSdkStreamHandlers(ctx) {
         }
         const raw = await withTimeout(driver.listModels({ binPath, env }), MODEL_LIST_TIMEOUT_MS);
         const { currentModelId, models } = normalizeSdkListModelsResult(raw);
-        if (shouldCacheModels) sdkModelCache.set(cacheKey, { at: Date.now(), currentModelId, models });
+        // Never cache empty catalogs — auth/env races would pin the UI on
+        // curated presets for the full TTL after a single failed probe.
+        if (shouldCacheModels && (models.length > 0 || currentModelId)) {
+          sdkModelCache.set(cacheKey, { at: Date.now(), currentModelId, models });
+        }
         return { ok: true, currentModelId, models };
       } catch (err) {
         // Degrade to [] so the renderer keeps its curated presets (never empty).
-        console.debug(`[sdk] list-models(${backendKey}) unavailable, using curated presets`);
-        return { ok: true, currentModelId: null, models: [] };
+        const message = err?.message || String(err);
+        console.warn(`[sdk] list-models(${backendKey}) unavailable, using curated presets:`, message);
+        return { ok: true, currentModelId: null, models: [], error: message };
       }
     });
 

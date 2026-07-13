@@ -17,6 +17,7 @@ import { HostTreeGroupContextMenuContent, HostTreeHostContextMenuContent } from 
 import { ContextMenu, ContextMenuTrigger } from './ui/context-menu';
 import { DistroAvatar } from './DistroAvatar';
 import { HostNotesIndicator } from './host/HostNotesIndicator';
+import { HostNotesSummaryLine } from './host/HostNotesSummaryLine';
 import { Button } from './ui/button';
 import { VaultTreeGroupRow, VaultTreeItemRow } from './vault/VaultTreeRow';
 
@@ -469,6 +470,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {displayUsername}@{host.hostname}:{displayPort}
               </div>
+              <HostNotesSummaryLine notes={host.notes} />
             </div>
           )}
           actions={(

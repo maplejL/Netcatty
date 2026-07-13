@@ -401,16 +401,32 @@ test("runCursorTurn cancels a late Cursor run when aborted while sending", async
   assert.equal(cancelled, true);
 });
 
-test("mapCursorModels maps display names and variants", () => {
+test("mapCursorModels keeps one row per base model id", () => {
   assert.deepEqual(
     mapCursorModels([
       { id: "composer-2.5", displayName: "Composer 2.5", description: "Default" },
-      { id: "gpt-5", displayName: "GPT-5", variants: [{ displayName: "Fast", params: [{ id: "effort", value: "low" }] }] },
+      {
+        id: "gpt-5",
+        displayName: "GPT-5",
+        variants: [
+          { displayName: "Standard", params: [], isDefault: true },
+          { displayName: "Fast", params: [{ id: "effort", value: "low" }] },
+        ],
+      },
+      {
+        id: "composer-2.5",
+        displayName: "Composer 2.5 again",
+        parameters: [
+          {
+            id: "fast",
+            values: [{ value: "false" }, { value: "true", displayName: "Fast" }],
+          },
+        ],
+      },
     ]),
     [
       { id: "composer-2.5", name: "Composer 2.5", description: "Default" },
       { id: "gpt-5", name: "GPT-5" },
-      { id: "gpt-5?effort=low", name: "GPT-5 - Fast" },
     ],
   );
 });

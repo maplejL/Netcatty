@@ -9,6 +9,7 @@ import {
   Terminal,
 } from 'lucide-react';
 
+import { summarizeHostNotes } from '../../domain/hostNotes';
 import {
   buildIpSegmentSummaries,
   buildOpsResumeItems,
@@ -20,6 +21,8 @@ import {
 import type { Host, TerminalSession, Workspace } from '../../types';
 import { formatRelativeTime } from '../AIChatSessionHistoryDrawer';
 import { DistroAvatar } from '../DistroAvatar';
+import { HostNotesIndicator } from '../host/HostNotesIndicator';
+import { HostNotesSummaryLine } from '../host/HostNotesSummaryLine';
 import { SelectHostDialog } from '../SelectHostDialog';
 import { Button } from '../ui/button';
 import { toast } from '../ui/toast';
@@ -49,12 +52,13 @@ function HostQuickTile({
 }) {
   const effectiveDistro = getEffectiveHostDistro(host);
   const badge = (host.os || 'L')[0].toUpperCase();
+  const notesExcerpt = summarizeHostNotes(host.notes);
 
   return (
     <button
       type="button"
       className={cn(
-        'soft-card elevate rounded-xl h-[68px] px-3 py-2 text-left',
+        'soft-card elevate rounded-xl min-h-[68px] px-3 py-2 text-left',
         'hover:border-primary/30 transition-colors w-full min-w-[200px] max-w-[280px]',
       )}
       onClick={() => onConnect(host)}
@@ -62,12 +66,19 @@ function HostQuickTile({
       <div className="flex items-center gap-3 h-full">
         <DistroAvatar host={host} fallback={badge} size="lg" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold truncate">{host.label}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="text-sm font-semibold truncate">{host.label}</div>
+            <HostNotesIndicator notes={host.notes} />
+          </div>
           <div className="text-[11px] text-muted-foreground font-mono truncate">
             {host.username}@{host.hostname}
           </div>
-          {effectiveDistro && (
-            <div className="text-[10px] text-muted-foreground truncate">{effectiveDistro}</div>
+          {notesExcerpt ? (
+            <HostNotesSummaryLine notes={host.notes} />
+          ) : (
+            effectiveDistro && (
+              <div className="text-[10px] text-muted-foreground truncate">{effectiveDistro}</div>
+            )
           )}
         </div>
         <Plug size={14} className="text-muted-foreground shrink-0" />

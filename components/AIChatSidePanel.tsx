@@ -15,6 +15,7 @@ import type {
 import type { ExecutorContext } from '../infrastructure/ai/cattyAgent/executor';
 import { getAgentModelPresets } from '../infrastructure/ai/types';
 import { getExternalAgentSdkBackend, getManualAgentCommand, getSdkAgentCommand, matchesManagedAgentConfig } from '../infrastructure/ai/managedAgents';
+import { buildAgentEnvWithStoredApiKey } from '../infrastructure/ai/sdkAgentAdapter';
 import { useAgentDiscovery } from '../application/state/useAgentDiscovery';
 import {
   getReadyUserSkillOptions,
@@ -289,6 +290,8 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
 
   const [showHistory, setShowHistory] = useState(false);
   const [runtimeAgentModelPresets, setRuntimeAgentModelPresets] = useState<Record<string, AgentModelPreset[]>>({});
+  /** Agents currently fetching runtime model catalogs (avoids flashing curated presets). */
+  const [loadingRuntimeModelAgentIds, setLoadingRuntimeModelAgentIds] = useState<Record<string, boolean>>({});
   const [userSkillOptions, setUserSkillOptions] = useState<UserSkillOption[]>([]);
   const [userSkillsStatusVersion, setUserSkillsStatusVersion] = useState(0);
   const { openSettingsWindow } = useWindowControls();
@@ -689,15 +692,23 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   const agentModelMapRef = useRef(agentModelMap);
   agentModelMapRef.current = agentModelMap;
 
-  const buildExternalAgentRuntimeModelTarget = useCallback((agent: ExternalAgentConfig | undefined): SdkRuntimeModelTarget | null => {
+  const buildExternalAgentRuntimeModelTarget = useCallback(async (
+    agent: ExternalAgentConfig | undefined,
+  ): Promise<SdkRuntimeModelTarget | null> => {
     if (!agent) return null;
     const sdkBackend = getExternalAgentSdkBackend(agent);
     if (!sdkBackend) return null;
+    // Cursor list-models needs the decrypted API key; stream turns already inject it.
+    const agentEnv = await buildAgentEnvWithStoredApiKey(sdkBackend, agent);
     return {
       agentId: agent.id,
-      cacheKey: buildSdkRuntimeModelCacheKey(agent),
+      cacheKey: buildSdkRuntimeModelCacheKey({
+        ...agent,
+        env: agentEnv,
+        apiKey: agent.apiKey,
+      }),
       sdkBackend,
-      agentEnv: agent.env,
+      agentEnv,
       agentCommand: getSdkAgentCommand(agent),
     };
   }, []);
@@ -789,37 +800,51 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
     if (!currentAgentConfig) return;
     if (!shouldLoadSdkRuntimeModels(currentAgentConfig) && !isCodexManagedAgent) return;
 
-    const target = buildExternalAgentRuntimeModelTarget(currentAgentConfig);
-    if (!target) return;
-
-    const cached = sdkRuntimeModelCache.read(target.cacheKey);
-    if (cached) {
-      applySdkRuntimeModelCatalog(target.agentId, cached);
-    }
-
+    const agentId = currentAgentConfig.id;
     let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
+
+    setLoadingRuntimeModelAgentIds((prev) => (
+      prev[agentId] ? prev : { ...prev, [agentId]: true }
+    ));
+
+    void buildExternalAgentRuntimeModelTarget(currentAgentConfig).then((target) => {
+      if (cancelled || !target) {
+        if (!cancelled) {
+          setLoadingRuntimeModelAgentIds((prev) => {
+            if (!prev[agentId]) return prev;
+            const { [agentId]: _removed, ...rest } = prev;
+            return rest;
+          });
+        }
+        return;
+      }
+
+      const cached = sdkRuntimeModelCache.read(target.cacheKey);
+      if (cached && (cached.models.length > 0 || cached.currentModelId)) {
+        applySdkRuntimeModelCatalog(target.agentId, cached);
+      }
+
+      // Fetch immediately (no idle deferral) so the picker leaves "loading" quickly.
+      // force:true so a prior empty/failed probe cannot stick curated presets.
       void loadSdkRuntimeModelCatalog(target, {
-        force: target.sdkBackend === 'opencode',
+        force: true,
       }).then((catalog) => {
-        if (cancelled || !catalog) return;
-        applySdkRuntimeModelCatalog(target.agentId, catalog, { adoptCurrentModel: true });
+        if (cancelled) return;
+        if (catalog) {
+          applySdkRuntimeModelCatalog(target.agentId, catalog, { adoptCurrentModel: true });
+        }
+      }).finally(() => {
+        if (cancelled) return;
+        setLoadingRuntimeModelAgentIds((prev) => {
+          if (!prev[agentId]) return prev;
+          const { [agentId]: _removed, ...rest } = prev;
+          return rest;
+        });
       });
-    };
+    });
 
-    if (typeof requestIdleCallback === 'function') {
-      const idleId = requestIdleCallback(run, { timeout: 3000 });
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(idleId);
-      };
-    }
-
-    const timeoutId = window.setTimeout(run, 0);
     return () => {
       cancelled = true;
-      window.clearTimeout(timeoutId);
     };
   }, [
     isVisible,
@@ -832,35 +857,39 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
 
   useEffect(() => {
     if (!isVisible) return;
-    const targets = new Map<string, SdkRuntimeModelTarget>();
-    const configuredTargetCacheKeys = new Set<string>();
-
-    for (const agent of externalAgents) {
-      if (!agent.enabled || getExternalAgentSdkBackend(agent) !== 'opencode') continue;
-      const target = buildExternalAgentRuntimeModelTarget(agent);
-      if (target) {
-        targets.set(target.cacheKey, target);
-        configuredTargetCacheKeys.add(target.cacheKey);
-      }
-    }
-
-    for (const agent of discoveredAgents) {
-      const target = buildDiscoveredAgentRuntimeModelTarget(agent);
-      if (target) targets.set(target.cacheKey, target);
-    }
-
-    if (targets.size === 0) return;
-
     let cancelled = false;
-    for (const target of targets.values()) {
-      void loadSdkRuntimeModelCatalog(target, { logErrors: false })
-        .then((catalog) => {
-          if (cancelled || !catalog) return;
-          if (configuredTargetCacheKeys.has(target.cacheKey)) {
-            applySdkRuntimeModelCatalog(target.agentId, catalog);
-          }
-        });
-    }
+
+    void (async () => {
+      const targets = new Map<string, SdkRuntimeModelTarget>();
+      const configuredTargetCacheKeys = new Set<string>();
+
+      for (const agent of externalAgents) {
+        if (!agent.enabled || getExternalAgentSdkBackend(agent) !== 'opencode') continue;
+        const target = await buildExternalAgentRuntimeModelTarget(agent);
+        if (cancelled) return;
+        if (target) {
+          targets.set(target.cacheKey, target);
+          configuredTargetCacheKeys.add(target.cacheKey);
+        }
+      }
+
+      for (const agent of discoveredAgents) {
+        const target = buildDiscoveredAgentRuntimeModelTarget(agent);
+        if (target) targets.set(target.cacheKey, target);
+      }
+
+      if (cancelled || targets.size === 0) return;
+
+      for (const target of targets.values()) {
+        void loadSdkRuntimeModelCatalog(target, { logErrors: false })
+          .then((catalog) => {
+            if (cancelled || !catalog) return;
+            if (configuredTargetCacheKeys.has(target.cacheKey)) {
+              applySdkRuntimeModelCatalog(target.agentId, catalog);
+            }
+          });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -876,6 +905,11 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   ]);
 
   const hasCodexCustomConfig = codexCustomConfigResolved && isCodexManagedAgent;
+  const isLoadingAgentModels = Boolean(
+    currentAgentId !== 'catty'
+    && loadingRuntimeModelAgentIds[currentAgentId]
+    && (shouldLoadSdkRuntimeModels(currentAgentConfig) || isCodexManagedAgent),
+  );
 
   const agentModelPresets = useMemo(() => {
     const runtimePresets = runtimeAgentModelPresets[currentAgentId];
@@ -883,13 +917,28 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
       if (runtimePresets) {
         return runtimePresets;
       }
+      if (isLoadingAgentModels) return [];
       if (codexConfigModel) {
         return [{ id: codexConfigModel, name: codexConfigModel }];
       }
       return [];
     }
-    return runtimePresets ?? getAgentModelPresets(currentAgentConfig?.command);
-  }, [currentAgentConfig?.command, currentAgentId, runtimeAgentModelPresets, hasCodexCustomConfig, codexConfigModel]);
+    if (runtimePresets) return runtimePresets;
+    // While the runtime catalog is in flight, do not flash curated fallbacks —
+    // the picker shows a loading row instead.
+    if (isLoadingAgentModels) return [];
+    return getAgentModelPresets(
+      currentAgentConfig?.command,
+      getExternalAgentSdkBackend(currentAgentConfig),
+    );
+  }, [
+    currentAgentConfig,
+    currentAgentId,
+    runtimeAgentModelPresets,
+    hasCodexCustomConfig,
+    codexConfigModel,
+    isLoadingAgentModels,
+  ]);
 
   const selectedAgentModel = useMemo(() => {
     const stored = agentModelMap[currentAgentId];
@@ -1349,6 +1398,7 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
         providerDisplayName={providerDisplayName}
         modelDisplayName={modelDisplayName}
         agentModelPresets={agentModelPresets}
+        isLoadingAgentModels={isLoadingAgentModels}
         selectedAgentModel={selectedAgentModel}
         handleAgentModelSelect={handleAgentModelSelect}
         cattyConfiguredProviders={cattyConfiguredProviders}

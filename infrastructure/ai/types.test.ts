@@ -5,6 +5,7 @@ import {
   CLAUDE_MODEL_PRESETS,
   CODEBUDDY_MODEL_PRESETS,
   CODEX_MODEL_PRESETS,
+  CURSOR_MODEL_PRESETS,
   getAgentModelPresets,
 } from './types';
 
@@ -29,5 +30,16 @@ test('getAgentModelPresets resolves Windows command paths with backslashes', () 
   assert.deepEqual(
     getAgentModelPresets('C\\Program Files\\nodejs\\claude.exe'),
     CLAUDE_MODEL_PRESETS,
+  );
+});
+
+test('getAgentModelPresets prefers sdkBackend over command basename', () => {
+  assert.deepEqual(
+    getAgentModelPresets('/Apps/WorkBuddy/bin/codebuddy', 'workbuddy'),
+    CODEBUDDY_MODEL_PRESETS,
+  );
+  assert.deepEqual(
+    getAgentModelPresets('/opt/weird/agent.exe', 'cursor'),
+    CURSOR_MODEL_PRESETS,
   );
 });
