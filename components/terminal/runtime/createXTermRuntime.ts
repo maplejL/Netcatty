@@ -38,6 +38,7 @@ import {
   clearTerminalViewport,
   installEraseInDisplayHandlers,
 } from "../clearTerminalViewport";
+import { getNormalizedTerminalSelection } from "../normalizeTerminalSelection";
 import {
   createKittyKeyboardModeState,
   encodeKittyControlKey,
@@ -938,7 +939,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           e.stopPropagation();
           switch (action) {
             case "copy": {
-              const selection = term.getSelection();
+              const selection = getNormalizedTerminalSelection(term);
               if (selection) navigator.clipboard.writeText(selection);
               break;
             }
@@ -955,7 +956,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
               break;
             }
             case "pasteSelection": {
-              const selection = term.getSelection();
+              const selection = getNormalizedTerminalSelection(term);
               const id = ctx.sessionRef.current;
               if (selection && id) {
                 pasteTextIntoTerminal(term, selection, {
