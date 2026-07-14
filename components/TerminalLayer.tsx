@@ -1001,16 +1001,36 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onSetWorkspaceFocusedSession?.(activeWorkspace.id, sessionId);
   }, [onSetWorkspaceFocusedSession]);
 
-  // Get the focused terminal's current working directory
-  const getTerminalCwd = useCallback(async (options?: { preferFreshBackend?: boolean }): Promise<string | null> => {
-    const sessionId = getActiveTerminalSessionId();
-    return resolvePreferredTerminalCwd({
+  // Get a terminal session's current working directory.
+  // Prefer an explicit sessionId (SFTP-linked pane) so go-to-cwd / follow do not
+  // accidentally query a different focused session after a focus race.
+  const getTerminalCwd = useCallback(async (options?: {
+    preferFreshBackend?: boolean;
+    sessionId?: string | null;
+  }): Promise<string | null> => {
+    // Prefer an explicit linked session when SFTP provides one. If the key is
+    // omitted (or null after a brief link miss), fall back to the focused
+    // terminal so go-to / follow still work on the common single-host path.
+    const explicitSessionId = options && Object.prototype.hasOwnProperty.call(options, "sessionId")
+      ? (options.sessionId ?? null)
+      : undefined;
+    const sessionId = explicitSessionId || getActiveTerminalSessionId();
+    const cwd = await resolvePreferredTerminalCwd({
       rendererCwd: sessionId ? terminalRendererCwdBySessionRef.current.get(sessionId) : undefined,
       sessionId,
-      getSessionPwd: (id, options) => terminalBackend.getSessionPwd(id, options),
+      getSessionPwd: (id, pwdOptions) => terminalBackend.getSessionPwd(id, pwdOptions),
       preferFreshBackend: options?.preferFreshBackend,
     });
-  }, [getActiveTerminalSessionId, terminalBackend]);
+    // Keep the renderer cache in sync when a fresh backend probe succeeds so
+    // subsequent follow / go-to jumps do not re-hit getSessionPwd unnecessarily.
+    if (sessionId && cwd && options?.preferFreshBackend) {
+      const existing = terminalRendererCwdBySessionRef.current.get(sessionId);
+      if (existing !== cwd) {
+        handleTerminalCwdChange(sessionId, cwd);
+      }
+    }
+    return cwd;
+  }, [getActiveTerminalSessionId, handleTerminalCwdChange, terminalBackend]);
 
   const refocusTerminalSession = useCallback((sessionId?: string | null) => {
     focusTerminalSessionInput(sessionId);

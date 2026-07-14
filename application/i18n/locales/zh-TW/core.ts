@@ -736,6 +736,7 @@ export const zhTWCoreMessages: Messages = {
   'sftp.transfers.dragToResize': '拖拽調整高度',
   'sftp.goUp': '上一級',
   'sftp.goToTerminalCwd': '定位到終端目前目錄',
+  'sftp.goToTerminalCwdLoading': '正在定位終端目錄…',
   'sftp.followTerminalCwd': '追隨終端目錄',
   'sftp.followTerminalCwd.enable': '開啟追隨終端目錄',
   'sftp.followTerminalCwd.disable': '關閉追隨終端目錄',

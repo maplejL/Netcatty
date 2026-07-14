@@ -96,6 +96,7 @@ import {
 } from "./promptLineBreak";
 import { recordTerminalCommandExecution } from "./terminalCommandExecution";
 import { markTerminalCommandWrite } from "./terminalCommandTiming";
+import { parseOsc7CwdPayload } from "./terminalOsc7Cwd";
 import {
   getSingleBracketedPasteLine,
   getSinglePastedCommand,
@@ -1257,21 +1258,11 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   // OSC 7 is the standard way for shells to report the current working directory
   const osc7Disposable = term.parser.registerOscHandler(7, (data) => {
     try {
-      // data is the content after "7;" - typically "file://hostname/path"
-      if (data.startsWith('file://')) {
-        // Extract path from file:// URL
-        const url = new URL(data);
-        const path = decodeURIComponent(url.pathname);
-        if (path && path.length > 0) {
-          currentCwd = path;
-          ctx.onCwdChange?.(path);
-          logger.debug('[XTerm] OSC 7 CWD update:', path);
-        }
-      } else if (data.startsWith('/')) {
-        // Some shells send just the path without file:// prefix
-        currentCwd = data;
-        ctx.onCwdChange?.(data);
-        logger.debug('[XTerm] OSC 7 CWD update (raw path):', data);
+      const path = parseOsc7CwdPayload(data);
+      if (path) {
+        currentCwd = path;
+        ctx.onCwdChange?.(path);
+        logger.debug('[XTerm] OSC 7 CWD update:', path);
       }
     } catch (err) {
       logger.warn('[XTerm] Failed to parse OSC 7:', err);

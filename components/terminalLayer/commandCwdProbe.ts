@@ -19,10 +19,14 @@ export const shouldProbeCommandCwd = ({
 }: ShouldProbeCommandCwdOptions): boolean => {
   if (restoreTerminalCwd) return true;
 
-  if (!visibleSftpHost) return false;
+  // Keep the renderer cwd cache warm whenever SFTP is open (go-to-cwd) or
+  // follow is enabled on the session/global host setting.
+  if (visibleSftpHost) return true;
+
   const followHost = resolveSftpFollowTerminalCwdTargetHost(visibleSftpHost, sessionHost);
+  if (!followHost) return false;
   return resolveHostFollowTerminalCwd(
-    followHost?.sftpFollowTerminalCwd,
+    followHost.sftpFollowTerminalCwd,
     globalSftpFollowTerminalCwd,
   );
 };

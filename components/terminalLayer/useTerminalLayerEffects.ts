@@ -223,10 +223,15 @@ export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
       if (!activeTabId || !sftpActiveHost) return;
       if (sidePanelOpenTabs.get(activeTabId) !== 'sftp') return;
       const stored = sftpHostForTab.get(activeTabId);
+      // Include username so su/different-user session overrides refresh the
+      // stored host used for follow-cwd and endpoint matching. Also refresh when
+      // follow-cwd host setting changes so command probes re-enable after toggle.
       if (stored?.id === sftpActiveHost.id
         && stored?.hostname === sftpActiveHost.hostname
         && stored?.port === sftpActiveHost.port
-        && stored?.protocol === sftpActiveHost.protocol) return;
+        && stored?.protocol === sftpActiveHost.protocol
+        && (stored?.username || 'root') === (sftpActiveHost.username || 'root')
+        && stored?.sftpFollowTerminalCwd === sftpActiveHost.sftpFollowTerminalCwd) return;
       setSftpHostForTab(prev => {
         const next = new Map(prev);
         next.set(activeTabId, sftpActiveHost);

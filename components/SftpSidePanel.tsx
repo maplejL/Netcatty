@@ -88,7 +88,10 @@ interface SftpSidePanelProps {
   keyBindings: KeyBinding[];
   editorWordWrap: boolean;
   setEditorWordWrap: (value: boolean) => void;
-  onGetTerminalCwd?: (options?: { preferFreshBackend?: boolean }) => Promise<string | null>;
+  onGetTerminalCwd?: (options?: {
+    preferFreshBackend?: boolean;
+    sessionId?: string | null;
+  }) => Promise<string | null>;
   activeTerminalCwd?: string | null;
   sftpFollowTerminalCwd?: boolean;
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
@@ -484,6 +487,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
         sftpRef={sftpRef}
         sftpDefaultViewMode={sftpDefaultViewMode}
         activeHost={activeHost}
+        activeSessionId={activeSessionId}
         showWorkspaceHostHeader={showWorkspaceHostHeader}
         renderOverlays={renderOverlays}
         sftpDoubleClickBehavior={sftpDoubleClickBehavior}
@@ -526,6 +530,8 @@ type SftpSidePanelInteractiveBodyProps = {
   sftpRef: MutableRefObject<ReturnType<typeof useSftpState>>;
   sftpDefaultViewMode: "list" | "tree";
   activeHost: Host | null;
+  /** Linked terminal session for go-to-cwd / follow (endpoint-matched). */
+  activeSessionId?: string | null;
   showWorkspaceHostHeader: boolean;
   renderOverlays: boolean;
   sftpDoubleClickBehavior: "open" | "transfer";
@@ -534,7 +540,10 @@ type SftpSidePanelInteractiveBodyProps = {
   keyBindings: KeyBinding[];
   editorWordWrap: boolean;
   setEditorWordWrap: (value: boolean) => void;
-  onGetTerminalCwd?: (options?: { preferFreshBackend?: boolean }) => Promise<string | null>;
+  onGetTerminalCwd?: (options?: {
+    preferFreshBackend?: boolean;
+    sessionId?: string | null;
+  }) => Promise<string | null>;
   activeTerminalCwd?: string | null;
   sftpFollowTerminalCwd: boolean;
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
@@ -565,6 +574,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
   sftpRef,
   sftpDefaultViewMode,
   activeHost,
+  activeSessionId = null,
   showWorkspaceHostHeader,
   renderOverlays,
   hotkeyScheme,
@@ -817,15 +827,43 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     }
   }, [connectionId, connectionPath, sftp.leftPane.loading]);
 
+  const [isGoingToTerminalCwd, setIsGoingToTerminalCwd] = useState(false);
+  const goToTerminalCwdInFlightRef = useRef(false);
+
+  const resolveLinkedTerminalCwd = useCallback(async (preferFreshBackend: boolean) => {
+    if (!onGetTerminalCwd) return null;
+    // Only pin to the endpoint-matched session when we have one. Passing
+    // sessionId: null used to disable the focused-session fallback and made
+    // go-to / follow no-ops whenever linking briefly failed.
+    const sessionOpts = activeSessionId ? { sessionId: activeSessionId as string } : {};
+    const known = (activeTerminalCwd || "").trim() || null;
+    if (!preferFreshBackend && known) return known;
+
+    const probed = await onGetTerminalCwd({
+      preferFreshBackend,
+      ...sessionOpts,
+    });
+    return (probed || "").trim() || known;
+  }, [activeSessionId, activeTerminalCwd, onGetTerminalCwd]);
+
   const handleGoToTerminalCwd = useCallback(async () => {
-    if (!onGetTerminalCwd) return;
-    const cwd = await onGetTerminalCwd({ preferFreshBackend: true });
-    if (!cwd) return;
-    const navigateResult = await sftpRef.current.navigateTo("left", cwd);
-    if (navigateResult === "reached") {
-      blockedFollowRef.current = null;
+    if (!onGetTerminalCwd || goToTerminalCwdInFlightRef.current) return;
+    goToTerminalCwdInFlightRef.current = true;
+    setIsGoingToTerminalCwd(true);
+    try {
+      // Always attempt a fresh probe so a stale/empty OSC 7 cache cannot leave
+      // the button as a silent no-op. Known renderer cwd is the fallback.
+      const cwd = await resolveLinkedTerminalCwd(true);
+      if (!cwd) return;
+      const navigateResult = await sftpRef.current.navigateTo("left", cwd);
+      if (navigateResult === "reached") {
+        blockedFollowRef.current = null;
+      }
+    } finally {
+      goToTerminalCwdInFlightRef.current = false;
+      setIsGoingToTerminalCwd(false);
     }
-  }, [onGetTerminalCwd, sftpRef]);
+  }, [onGetTerminalCwd, resolveLinkedTerminalCwd, sftpRef]);
 
   const syncFollowToTerminalCwd = useCallback(async () => {
     if (!onGetTerminalCwd || !effectiveFollowTerminalCwd || !canFollowTerminalCwd) {
@@ -834,9 +872,12 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
 
     const syncGeneration = followSyncGenerationRef.current;
 
-    let terminalCwd = activeTerminalCwd;
+    // Prefer OSC 7 / renderer-tracked cwd when present (instant, interactive
+    // shell). Probe backend when cache is empty so enabling follow still jumps
+    // even before the first OSC 7 / post-command probe.
+    let terminalCwd = (activeTerminalCwd || "").trim() || null;
     if (!terminalCwd) {
-      terminalCwd = await onGetTerminalCwd({ preferFreshBackend: true });
+      terminalCwd = await resolveLinkedTerminalCwd(true);
     }
     if (!terminalCwd) return;
     if (
@@ -887,6 +928,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     hasActiveWork,
     isVisible,
     onGetTerminalCwd,
+    resolveLinkedTerminalCwd,
     sftpRef,
   ]);
 
@@ -1073,6 +1115,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
                   forceActive
                   onToggleShowHiddenFiles={() => handleToggleHiddenFiles(pane.id)}
                   onGoToTerminalCwd={onGetTerminalCwd ? handleGoToTerminalCwd : undefined}
+                  goToTerminalCwdLoading={isGoingToTerminalCwd}
                   followTerminalCwd={canFollowTerminalCwd ? effectiveFollowTerminalCwd : undefined}
                   onToggleFollowTerminalCwd={canFollowTerminalCwd ? handleToggleFollowTerminalCwd : undefined}
                 />

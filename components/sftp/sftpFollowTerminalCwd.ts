@@ -1,3 +1,5 @@
+import { isSameSftpPath } from "../../application/state/sftp/utils";
+
 export type SftpFollowTerminalCwdBlock = {
   connectionId: string;
   terminalCwd: string;
@@ -19,6 +21,18 @@ export const resolveHostFollowTerminalCwd = (
   hostFollowTerminalCwd: boolean | undefined,
   globalFollowTerminalCwd: boolean,
 ): boolean => hostFollowTerminalCwd ?? globalFollowTerminalCwd;
+
+/** Compare cwd paths for follow/block logic (trailing slashes, Windows drive case). */
+export const isSameTerminalCwdPath = (
+  a?: string | null,
+  b?: string | null,
+): boolean => {
+  if (a == null || b == null) return false;
+  const left = a.trim();
+  const right = b.trim();
+  if (!left || !right) return false;
+  return isSameSftpPath(left, right);
+};
 
 export const resolveSftpFollowTerminalCwdTargetHost = <T>(
   visibleHost: T | null | undefined,
@@ -55,7 +69,7 @@ export const shouldClearBlockedFollowOnReach = (
   if (loading || !blockedFollow || !connectionId || !currentPath) return false;
   return (
     blockedFollow.connectionId === connectionId
-    && blockedFollow.terminalCwd === currentPath
+    && isSameTerminalCwdPath(blockedFollow.terminalCwd, currentPath)
   );
 };
 
@@ -77,10 +91,11 @@ export const shouldFollowTerminalCwdNavigate = ({
     blockedFollow
     && connectionId
     && blockedFollow.connectionId === connectionId
-    && blockedFollow.terminalCwd === terminalCwd
+    && isSameTerminalCwdPath(blockedFollow.terminalCwd, terminalCwd)
   ) {
     return false;
   }
-  if (!currentPath || currentPath === terminalCwd) return false;
+  // No current path yet (still connecting) — still allow first follow jump.
+  if (currentPath && isSameTerminalCwdPath(currentPath, terminalCwd)) return false;
   return true;
 };

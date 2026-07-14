@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { useActiveTabId } from '../../application/state/activeTabStore';
 import { sessionCapabilitiesStore } from '../../application/state/sessionCapabilitiesStore';
@@ -110,32 +110,68 @@ export function TerminalLayerTabBridge({ stableRef }: { stableRef: StableRef }) 
     return sftpHostForTab.get(activeTabId) ?? null;
   }, [activeSession, activeTabId, activeWorkspace, focusedSessionId, isSftpOpenForCurrentTab, sessionHostsMap, sftpHostForTab]);
 
+  const resolveSftpLinkedSessionId = useCallback((
+    sessionId: string | null | undefined,
+    host: Host | null,
+  ): string | null => {
+    if (!sessionId || !host) return null;
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    // CWD follow/go-to need a live SSH-like session. Mosh/ET cannot run getSessionPwd.
+    if (!session || session.status !== 'connected') return null;
+    if (session.protocol === 'local' || session.protocol === 'serial' || session.protocol === 'telnet') {
+      return null;
+    }
+    if (session.moshEnabled || session.etEnabled) return null;
+    const sessionHost = sessionHostsMap.get(session.id);
+    if (!sessionHost) {
+      // Fall back to session hostId when the map has not resolved yet.
+      return session.hostId === host.id ? session.id : null;
+    }
+    // Prefer vault host id; hostname/port is a secondary match for session-time
+    // overrides. Do NOT require username — su/sudo changes the shell user while
+    // SFTP stays on the login identity, and that used to unlink the session.
+    const sameHost =
+      sessionHost.id === host.id
+      || (
+        sessionHost.hostname === host.hostname
+        && (sessionHost.port || 22) === (host.port || 22)
+      );
+    return sameHost ? session.id : null;
+  }, [sessionHostsMap, sessions]);
+
   const activeTerminalSessionIdForSftp = useMemo((): string | null => {
     if (!isSftpOpenForCurrentTab || !sftpActiveHost) return null;
-    const sessionId = activeWorkspace ? focusedSessionId : activeSession?.id;
-    if (!sessionId) return null;
-    const session = sessions.find((candidate) => candidate.id === sessionId);
-    if (!session || !canReuseTerminalConnection(session)) return null;
-    const sessionHost = sessionHostsMap.get(session.id);
-    if (!sessionHost) return null;
-    const sameEndpoint =
-      sessionHost.hostname === sftpActiveHost.hostname
-      && (sessionHost.port || 22) === (sftpActiveHost.port || 22)
-      && (sessionHost.username || 'root') === (sftpActiveHost.username || 'root');
-    return sameEndpoint ? session.id : null;
-  }, [activeSession?.id, activeWorkspace, focusedSessionId, isSftpOpenForCurrentTab, sessions, sessionHostsMap, sftpActiveHost]);
+    const preferredSessionId = activeWorkspace
+      ? (focusedSessionId ?? effectiveFocusedSessionId)
+      : activeSession?.id;
+    const linked = resolveSftpLinkedSessionId(preferredSessionId, sftpActiveHost);
+    if (linked) return linked;
 
-  const linkedTerminalSessionIdForSftp = useMemo((): string | null => {
-    if (!isSftpOpenForCurrentTab) return null;
-    if (activeTerminalSessionIdForSftp) return activeTerminalSessionIdForSftp;
-    return activeWorkspace ? (focusedSessionId ?? null) : (activeSession?.id ?? null);
+    // Last resort for single-host tabs: any connected SSH session on the same
+    // host. Without this, a brief focus/map mismatch leaves activeTerminalCwd
+    // permanently null and follow never reacts to `cd`.
+    for (const session of sessions) {
+      if (session.status !== 'connected') continue;
+      if (activeWorkspace && session.workspaceId && session.workspaceId !== activeWorkspace.id) {
+        continue;
+      }
+      const candidate = resolveSftpLinkedSessionId(session.id, sftpActiveHost);
+      if (candidate) return candidate;
+    }
+    return null;
   }, [
     activeSession?.id,
-    activeTerminalSessionIdForSftp,
     activeWorkspace,
+    effectiveFocusedSessionId,
     focusedSessionId,
     isSftpOpenForCurrentTab,
+    resolveSftpLinkedSessionId,
+    sessions,
+    sftpActiveHost,
   ]);
+
+  // Endpoint-matched (or same-host fallback) sessions feed SFTP follow / go-to-cwd.
+  const linkedTerminalSessionIdForSftp = activeTerminalSessionIdForSftp;
 
   const activeTerminalCwd = useMemo(() => {
     if (!linkedTerminalSessionIdForSftp) return null;
@@ -531,6 +567,7 @@ export function TerminalLayerTabBridge({ stableRef }: { stableRef: StableRef }) 
     showHostTreeSidebar,
     setSidePanelPosition: s.setSidePanelPosition,
     setSftpFollowTerminalCwd: s.setSftpFollowTerminalCwd,
+    setSftpHostForTab: s.setSftpHostForTab,
     sftpActiveHost,
     sftpHostForTab,
     sftpAutoSync: s.sftpAutoSync,

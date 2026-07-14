@@ -86,7 +86,10 @@ export const probeBackendSessionCwdAfterCommand = async ({
   if (!allowed || getOsc7Signal() !== osc7SignalAtCommand) return null;
 
   try {
-    const result = await getSessionPwd(sessionId);
+    // Never accept home-directory fallback here: after `cd` / sudo the probe
+    // may only be able to read the login shell, and writing home into the
+    // renderer cache makes SFTP follow jump to /root (or $HOME) and stick.
+    const result = await getSessionPwd(sessionId, { allowHomeFallback: false });
     if (getOsc7Signal() !== osc7SignalAtCommand) return null;
     return result.success ? normalizeCwd(result.cwd) : null;
   } catch {

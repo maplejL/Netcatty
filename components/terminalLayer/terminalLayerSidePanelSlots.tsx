@@ -74,6 +74,7 @@ function SidePanelSftpSlotInner({
     getTerminalCwd,
     sftpFollowTerminalCwd,
     setSftpFollowTerminalCwd,
+    setSftpHostForTab,
     refocusActiveTerminalSession,
     terminalSettings,
   } = ctx;
@@ -104,7 +105,20 @@ function SidePanelSftpSlotInner({
     } else {
       setSftpFollowTerminalCwd(enabled);
     }
-  }, [hosts, sftpHostForTab, setSftpFollowTerminalCwd, tabId, updateHosts]);
+    // Keep the tab-local host snapshot in sync. Command-cwd probing reads
+    // sftpHostForTab (not the vault hosts array); a stale sftpFollowTerminalCwd
+    // here would stop post-`cd` probes and leave SFTP stuck after follow is on.
+    setSftpHostForTab((prev: Map<string, Host>) => {
+      const current = prev.get(tabId);
+      const base = current?.id === targetHost.id ? current : targetHost;
+      if (base.sftpFollowTerminalCwd === enabled && current?.id === targetHost.id) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(tabId, { ...base, sftpFollowTerminalCwd: enabled });
+      return next;
+    });
+  }, [hosts, sftpHostForTab, setSftpFollowTerminalCwd, setSftpHostForTab, tabId, updateHosts]);
 
   const handleInitialLocationApplied = useCallback(
     (location: { hostId: string; path: string }) => {

@@ -236,7 +236,10 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
         if (!shouldProbeSessionCwd({ isNetworkDevice, remoteSshVersion: info?.remoteSshVersion })) {
           return;
         }
-        const result = await terminalBackend.getSessionPwd(id);
+        // Do not seed the renderer cache from a home-directory fallback —
+        // that would make SFTP "follow terminal" jump to /root when the
+        // interactive shell is elsewhere and OSC 7 has not fired yet.
+        const result = await terminalBackend.getSessionPwd(id, { allowHomeFallback: false });
         if (!cancelled && !terminalCwdTracker.getRendererCwd() && result.success && result.cwd) {
           const cwd = terminalCwdTracker.setRendererCwd(result.cwd);
           knownCwdRef.current = cwd;
