@@ -21,6 +21,7 @@ import {
   STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED,
   STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED,
   STORAGE_KEY_SSH_DEEP_LINK_ENABLED,
+  STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   STORAGE_KEY_SFTP_AUTO_OPEN_SIDEBAR,
   STORAGE_KEY_SFTP_FOLLOW_TERMINAL_CWD,
   STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE,
@@ -72,6 +73,7 @@ interface UseSettingsIpcSyncParams {
   setSessionLogsFormat: Dispatch<SetStateAction<SessionLogFormat>>;
   setSessionLogsTimestampsEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDebugLogsEnabled: Dispatch<SetStateAction<boolean>>;
+  setTerminalCommandTimingDebugEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDeepLinkEnabledState: (enabled: boolean) => void;
   setHotkeyScheme: Dispatch<SetStateAction<HotkeyScheme>>;
   applyIncomingCustomKeyBindings: (incoming: { bindings: CustomKeyBindings; version: number; origin: string }) => void;
@@ -112,6 +114,7 @@ export function useSettingsIpcSync({
   setSessionLogsFormat,
   setSessionLogsTimestampsEnabled,
   setSshDebugLogsEnabled,
+  setTerminalCommandTimingDebugEnabled,
   setSshDeepLinkEnabledState,
   setHotkeyScheme,
   applyIncomingCustomKeyBindings,
@@ -215,6 +218,9 @@ export function useSettingsIpcSync({
       if (key === STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED && typeof value === 'boolean') {
         setSshDebugLogsEnabled((prev) => (prev === value ? prev : value));
       }
+      if (key === STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED && typeof value === 'boolean') {
+        setTerminalCommandTimingDebugEnabled((prev) => (prev === value ? prev : value));
+      }
       if (key === STORAGE_KEY_SSH_DEEP_LINK_ENABLED && typeof value === 'boolean') {
         setSshDeepLinkEnabledState(value);
       }
@@ -305,6 +311,7 @@ export function useSettingsIpcSync({
     setSessionLogsTimestampsEnabled,
     setSshDeepLinkEnabledState,
     setSshDebugLogsEnabled,
+    setTerminalCommandTimingDebugEnabled,
     setSftpAutoOpenSidebar,
     setSftpFollowTerminalCwd,
     setSftpDefaultViewMode,

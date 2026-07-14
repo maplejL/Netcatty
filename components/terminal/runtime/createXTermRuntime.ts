@@ -95,6 +95,7 @@ import {
   type PromptLineBreakState,
 } from "./promptLineBreak";
 import { recordTerminalCommandExecution } from "./terminalCommandExecution";
+import { markTerminalCommandWrite } from "./terminalCommandTiming";
 import {
   getSingleBracketedPasteLine,
   getSinglePastedCommand,
@@ -1109,6 +1110,9 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           writeToSession: (nextData) => {
             ctx.onOutputTriggerUserInputRef?.current?.(nextData);
             ctx.terminalBackend.writeToSession(id, nextData);
+            if (handledSubmittedInput) {
+              markTerminalCommandWrite(id);
+            }
           },
           writeToTerminal: writeLocalTerminalData,
         });
@@ -1121,6 +1125,9 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         }
         ctx.onOutputTriggerUserInputRef?.current?.(outData);
         ctx.terminalBackend.writeToSession(id, outData);
+        if (handledSubmittedInput) {
+          markTerminalCommandWrite(id);
+        }
 
         // Local echo for serial connections only when explicitly enabled
         if (ctx.host.protocol === "serial" && ctx.serialLocalEcho) {

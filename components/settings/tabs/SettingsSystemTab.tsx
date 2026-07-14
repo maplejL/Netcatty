@@ -11,6 +11,7 @@ import { SessionLogFormat, keyEventToString } from "../../../domain/models";
 import { Button } from "../../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
 import { Toggle, Select, SettingRow, SectionHeader, SettingCard, SettingsTabContent } from "../settings-ui";
+import { TerminalCommandTimingPanel } from "../TerminalCommandTimingPanel";
 import { cn } from "../../../lib/utils";
 
 interface CrashLogFile {
@@ -86,6 +87,8 @@ interface SettingsSystemTabProps {
   setSessionLogsTimestampsEnabled: (enabled: boolean) => void;
   sshDebugLogsEnabled: boolean;
   setSshDebugLogsEnabled: (enabled: boolean) => void;
+  terminalCommandTimingDebugEnabled: boolean;
+  setTerminalCommandTimingDebugEnabled: (enabled: boolean) => void;
   sshDeepLinkEnabled: boolean;
   setSshDeepLinkEnabled: (enabled: boolean) => void;
   restorePreviousSession: boolean;
@@ -120,6 +123,8 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
   setSessionLogsTimestampsEnabled,
   sshDebugLogsEnabled,
   setSshDebugLogsEnabled,
+  terminalCommandTimingDebugEnabled,
+  setTerminalCommandTimingDebugEnabled,
   sshDeepLinkEnabled,
   setSshDeepLinkEnabled,
   restorePreviousSession,
@@ -990,6 +995,26 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
 
             <p className="text-xs text-muted-foreground">
               {t("settings.sshDebugLogs.hint")}
+            </p>
+
+          <SectionHeader title={t("settings.terminalCommandTiming.title")} />
+            <SettingCard className="min-w-0 max-w-full overflow-hidden space-y-4 py-4">
+              <SettingRow
+                label={t("settings.terminalCommandTiming.enable")}
+                description={t("settings.terminalCommandTiming.enableDesc")}
+              >
+                <Toggle
+                  checked={terminalCommandTimingDebugEnabled}
+                  onChange={setTerminalCommandTimingDebugEnabled}
+                  ariaLabel={t("settings.terminalCommandTiming.enable")}
+                />
+              </SettingRow>
+
+              <TerminalCommandTimingPanel enabled={terminalCommandTimingDebugEnabled} />
+            </SettingCard>
+
+            <p className="text-xs text-muted-foreground">
+              {t("settings.terminalCommandTiming.hint")}
             </p>
 
           <SectionHeader title={t("settings.globalHotkey.title")} />

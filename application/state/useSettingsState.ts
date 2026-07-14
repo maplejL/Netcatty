@@ -39,6 +39,7 @@ import {
   STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED,
   STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED,
   STORAGE_KEY_SSH_DEEP_LINK_ENABLED,
+  STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   STORAGE_KEY_TOGGLE_WINDOW_HOTKEY,
   STORAGE_KEY_CLOSE_TO_TRAY,
   STORAGE_KEY_GLOBAL_HOTKEY_ENABLED,
@@ -98,6 +99,7 @@ import {
   DEFAULT_DISABLE_TERMINAL_FONT_ZOOM,
   DEFAULT_SSH_DEBUG_LOGS_ENABLED,
   DEFAULT_SSH_DEEP_LINK_ENABLED,
+  DEFAULT_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   DEFAULT_TERMINAL_THEME,
   DEFAULT_THEME,
   DEFAULT_WINDOW_OPACITY,
@@ -116,6 +118,7 @@ import {
 } from './settingsStateDefaults';
 import { resolveRestorePreviousSessionSetting, resolveRestoreTerminalCwdSetting } from './sessionRestoreSettings';
 import { sessionRestoreStorage } from './sessionRestoreStorage';
+import { setTerminalCommandTimingDebugEnabled } from '../../components/terminal/runtime/terminalCommandTiming';
 import { useSettingsStorageSync } from './settingsStorageSync';
 import { useSettingsIpcSync } from './settingsIpcSync';
 import { TERMINAL_THEME_AUTO } from '../../domain/terminalAppearance';
@@ -317,6 +320,10 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
   const [sshDebugLogsEnabled, setSshDebugLogsEnabled] = useState<boolean>(() => {
     const stored = readStoredString(STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED);
     return stored === 'true' ? true : DEFAULT_SSH_DEBUG_LOGS_ENABLED;
+  });
+  const [terminalCommandTimingDebugEnabled, setTerminalCommandTimingDebugEnabled] = useState<boolean>(() => {
+    const stored = readStoredString(STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED);
+    return stored === 'true' ? true : DEFAULT_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED;
   });
   const [sshDeepLinkEnabled, setSshDeepLinkEnabledState] = useState<boolean>(() => {
     const stored = localStorageAdapter.readBoolean(STORAGE_KEY_SSH_DEEP_LINK_ENABLED);
@@ -596,6 +603,10 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     if (storedSshDebugLogsEnabled === 'true' || storedSshDebugLogsEnabled === 'false') {
       setSshDebugLogsEnabled(storedSshDebugLogsEnabled === 'true');
     }
+    const storedTerminalCommandTimingDebugEnabled = readStoredString(STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED);
+    if (storedTerminalCommandTimingDebugEnabled === 'true' || storedTerminalCommandTimingDebugEnabled === 'false') {
+      setTerminalCommandTimingDebugEnabled(storedTerminalCommandTimingDebugEnabled === 'true');
+    }
     const storedSshDeepLinkEnabled = localStorageAdapter.readBoolean(STORAGE_KEY_SSH_DEEP_LINK_ENABLED);
     applyIncomingSshDeepLinkEnabled(storedSshDeepLinkEnabled ?? DEFAULT_SSH_DEEP_LINK_ENABLED);
 
@@ -723,6 +734,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSessionLogsFormat,
     setSessionLogsTimestampsEnabled,
     setSshDebugLogsEnabled,
+    setTerminalCommandTimingDebugEnabled,
     setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setHotkeyScheme,
     applyIncomingCustomKeyBindings,
@@ -770,7 +782,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
     sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
-    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, sshDeepLinkEnabled,
+    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
     setTheme, setLightUiThemeId, setDarkUiThemeId, setAccentMode, setCustomAccent,
     setCustomCSS, setUiFontFamilyId, setHotkeyScheme, setUiLanguage,
@@ -779,7 +791,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
     setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpDefaultViewMode,
     setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
-    setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
+    setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
     setSftpTransferConcurrencyState, applyIncomingCustomKeyBindings, mergeIncomingTerminalSettings,
   });
@@ -1026,6 +1038,18 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     if (!persistMountedRef.current) return;
     notifySettingsChanged(STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED, sshDebugLogsEnabled);
   }, [sshDebugLogsEnabled, notifySettingsChanged]);
+
+  useEffect(() => {
+    localStorageAdapter.writeString(
+      STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
+      terminalCommandTimingDebugEnabled ? 'true' : 'false',
+    );
+    // Must be a static import (not dynamic) so the terminal hot path and this
+    // settings effect share the same module-level store instance.
+    setTerminalCommandTimingDebugEnabled(terminalCommandTimingDebugEnabled);
+    if (!persistMountedRef.current) return;
+    notifySettingsChanged(STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED, terminalCommandTimingDebugEnabled);
+  }, [terminalCommandTimingDebugEnabled, notifySettingsChanged]);
 
   useEffect(() => {
     sshDeepLinkEnabledRef.current = sshDeepLinkEnabled;
@@ -1276,6 +1300,8 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSessionLogsTimestampsEnabled,
     sshDebugLogsEnabled,
     setSshDebugLogsEnabled,
+    terminalCommandTimingDebugEnabled,
+    setTerminalCommandTimingDebugEnabled,
     sshDeepLinkEnabled,
     setSshDeepLinkEnabled,
     // Global Toggle Window (Quake Mode)
@@ -1305,7 +1331,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
       customKeyBindings, editorWordWrap,
       sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles, sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
       showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom,
-      customThemes, workspaceFocusStyle, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, sshDeepLinkEnabled,
+      customThemes, workspaceFocusStyle, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     ]),
   };
 };
