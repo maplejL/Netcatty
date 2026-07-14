@@ -481,7 +481,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
     }
     updateDraft(scopeKey, defaultAgentId, (draft) => ({
       ...draft,
-      attachments: [...draft.attachments, attachment],
+      attachments: [...(Array.isArray(draft.attachments) ? draft.attachments : []), attachment],
     }));
     onPendingTerminalSelectionConsumed?.(pendingTerminalSelection.requestId);
   }, [

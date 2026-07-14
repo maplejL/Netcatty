@@ -34,7 +34,11 @@ import {
   endDraftSend,
   tryBeginDraftSend,
 } from './ai/draftSendGate';
-import { selectDraftForAgentSwitch } from '../application/state/aiDraftState';
+import {
+  hasDraftContent,
+  normalizeAIDraft,
+  selectDraftForAgentSwitch,
+} from '../application/state/aiDraftState';
 import {
   buildPromptWithTerminalSelectionAttachments,
   isTerminalSelectionAttachment,
@@ -159,18 +163,10 @@ export function hasAIChatSidePanelRetainedContent(props: Pick<
   const activeSession = sessionId
     ? props.sessions.find((session) => session.id === sessionId)
     : null;
-  if (activeSession && activeSession.messages.length > 0) {
+  if (activeSession && (activeSession.messages?.length ?? 0) > 0) {
     return true;
   }
-  const draft = props.draftsByScope[scopeKey] ?? null;
-  return Boolean(
-    draft
-    && (
-      draft.text.trim().length > 0
-      || draft.attachments.length > 0
-      || draft.selectedUserSkillSlugs.length > 0
-    ),
-  );
+  return hasDraftContent(props.draftsByScope[scopeKey] ?? null);
 }
 
 export function shouldKeepAIChatSidePanelMounted(props: AIChatSidePanelProps): boolean {
@@ -346,7 +342,10 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
   );
 
   const explicitPanelView = panelViewByScope[scopeKey];
-  const currentDraft = draftsByScope[scopeKey] ?? null;
+  const currentDraft = useMemo(() => {
+    const draft = draftsByScope[scopeKey];
+    return draft ? normalizeAIDraft(draft) : null;
+  }, [draftsByScope, scopeKey]);
   const persistedSessionId = activeSessionIdMap[scopeKey] ?? null;
   const sessionIdsKey = sessions.map((session) => session.id).join("|");
   const knownSessionIds = useMemo(
@@ -518,16 +517,19 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
       if (!draft) {
         return;
       }
+      const selectedSlugs = Array.isArray(draft.selectedUserSkillSlugs)
+        ? draft.selectedUserSkillSlugs
+        : [];
 
       const nextSelectedUserSkillSlugs =
         getNextSelectedUserSkillSlugsMap(
-          { [scopeKey]: draft.selectedUserSkillSlugs },
+          { [scopeKey]: selectedSlugs },
           result,
         )[scopeKey] ?? [];
 
       const selectedUserSkillsChanged =
-        nextSelectedUserSkillSlugs.length !== draft.selectedUserSkillSlugs.length
-        || nextSelectedUserSkillSlugs.some((slug, index) => slug !== draft.selectedUserSkillSlugs[index]);
+        nextSelectedUserSkillSlugs.length !== selectedSlugs.length
+        || nextSelectedUserSkillSlugs.some((slug, index) => slug !== selectedSlugs[index]);
 
       if (!selectedUserSkillsChanged) {
         return;
@@ -591,7 +593,7 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
     [enableAgent, setExternalAgents],
   );
 
-  const messages = activeSession?.messages ?? [];
+  const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
   const selectedUserSkillSlugs = useMemo(
     () => currentDraft?.selectedUserSkillSlugs ?? [],
     [currentDraft],
@@ -1015,12 +1017,15 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
     if (!normalizedSlug) return;
     enterScopeDraftMode(currentAgentId, panelViewRef.current.mode === 'session');
     updateScopeDraft(currentAgentId, (draft) => {
-      if (draft.selectedUserSkillSlugs.includes(normalizedSlug)) {
+      const selected = Array.isArray(draft.selectedUserSkillSlugs)
+        ? draft.selectedUserSkillSlugs
+        : [];
+      if (selected.includes(normalizedSlug)) {
         return draft;
       }
       return {
         ...draft,
-        selectedUserSkillSlugs: [...draft.selectedUserSkillSlugs, normalizedSlug],
+        selectedUserSkillSlugs: [...selected, normalizedSlug],
       };
     });
   }, [currentAgentId, enterScopeDraftMode, updateScopeDraft]);
@@ -1030,10 +1035,13 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
     if (!normalizedSlug) return;
     enterScopeDraftMode(currentAgentId, panelViewRef.current.mode === 'session');
     updateScopeDraft(currentAgentId, (draft) => {
-      const nextSelectedUserSkillSlugs = draft.selectedUserSkillSlugs.filter(
+      const selected = Array.isArray(draft.selectedUserSkillSlugs)
+        ? draft.selectedUserSkillSlugs
+        : [];
+      const nextSelectedUserSkillSlugs = selected.filter(
         (entry) => entry !== normalizedSlug,
       );
-      if (nextSelectedUserSkillSlugs.length === draft.selectedUserSkillSlugs.length) {
+      if (nextSelectedUserSkillSlugs.length === selected.length) {
         return draft;
       }
       return {
@@ -1345,7 +1353,7 @@ const AIChatSidePanelActive: React.FC<AIChatSidePanelProps> = ({
       ...selectDraftForAgentSwitch(
         draft,
         agentId,
-        Boolean(active?.messages.length),
+        Boolean(active?.messages?.length),
       ),
     }));
     setShowHistory(false);

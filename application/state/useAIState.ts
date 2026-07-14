@@ -65,6 +65,8 @@ import {
   latestAIPanelViewByScopeSnapshot,
   latestAISessionsSnapshot,
   pruneSessionsForStorage,
+  readSanitizedAISessions,
+  sanitizeAISessions,
   setLatestAIActiveSessionMapSnapshot,
   setLatestAIDraftsByScopeSnapshot,
   setLatestAIPanelViewByScopeSnapshot,
@@ -121,11 +123,11 @@ export function useAIState() {
   );
 
   // ── Sessions ──
-  const [sessions, setSessionsRaw] = useState<AISession[]>(() =>
-    latestAISessionsSnapshot
-      ?? localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS)
-      ?? []
-  );
+  const [sessions, setSessionsRaw] = useState<AISession[]>(() => {
+    const next = readSanitizedAISessions();
+    setLatestAISessionsSnapshot(next);
+    return next;
+  });
   // Ref that always holds the latest sessions for use inside debounced callbacks
   const sessionsRef = useRef(sessions);
   useEffect(() => {
@@ -476,7 +478,9 @@ export function useAIState() {
             break;
           }
           case STORAGE_KEY_AI_SESSIONS: {
-            const nextSessions = localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS) ?? [];
+            const nextSessions = sanitizeAISessions(
+              localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS),
+            );
             setLatestAISessionsSnapshot(nextSessions);
             setSessionsRaw(nextSessions);
             break;
@@ -513,11 +517,7 @@ export function useAIState() {
       if (!key) return;
       switch (key) {
         case STORAGE_KEY_AI_SESSIONS:
-          setSessionsRaw(
-            latestAISessionsSnapshot
-              ?? localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS)
-              ?? [],
-          );
+          setSessionsRaw(readSanitizedAISessions());
           return;
         case STORAGE_KEY_AI_ACTIVE_SESSION_MAP:
           setActiveSessionIdMapRaw(
@@ -736,7 +736,7 @@ export function useAIState() {
     setSessionsRaw(prev => {
       const next = prev.map(s => {
         if (s.id !== sessionId) return s;
-        let msgs = [...s.messages, message];
+        let msgs = [...(Array.isArray(s.messages) ? s.messages : []), message];
         // Trim oldest messages if exceeding limit (keep system messages)
         if (msgs.length > MAX_MESSAGES_PER_SESSION) {
           const systemMsgs = msgs.filter(m => m.role === 'system');
@@ -756,8 +756,9 @@ export function useAIState() {
   const updateLastMessage = useCallback((sessionId: string, updater: (msg: ChatMessage) => ChatMessage) => {
     setSessionsRaw(prev => {
       const next = prev.map(s => {
-        if (s.id !== sessionId || s.messages.length === 0) return s;
-        const msgs = [...s.messages];
+        const existing = Array.isArray(s.messages) ? s.messages : [];
+        if (s.id !== sessionId || existing.length === 0) return s;
+        const msgs = [...existing];
         msgs[msgs.length - 1] = updater(msgs[msgs.length - 1]);
         return { ...s, messages: msgs, updatedAt: Date.now() };
       });
@@ -771,9 +772,10 @@ export function useAIState() {
     setSessionsRaw(prev => {
       const next = prev.map(s => {
         if (s.id !== sessionId) return s;
-        const idx = s.messages.findIndex(m => m.id === messageId);
+        const existing = Array.isArray(s.messages) ? s.messages : [];
+        const idx = existing.findIndex(m => m.id === messageId);
         if (idx === -1) return s;
-        const msgs = [...s.messages];
+        const msgs = [...existing];
         msgs[idx] = updater(msgs[idx]);
         return { ...s, messages: msgs, updatedAt: Date.now() };
       });
@@ -847,14 +849,17 @@ export function useAIState() {
       const currentDraft = prev[scopeKey];
       if (!currentDraft) return prev;
 
-      const nextDraft = {
-        ...updater(currentDraft),
-        updatedAt: Date.now(),
-      };
-      const next = {
-        ...prev,
-        [scopeKey]: nextDraft,
-      };
+      // Route through updateDraftForScope so partial/legacy drafts are normalized
+      // before updaters touch `.attachments` / skill arrays.
+      const next = updateDraftForScope(
+        prev,
+        scopeKey,
+        currentDraft.agentId || 'catty',
+        (draft) => ({
+          ...updater(draft),
+          updatedAt: Date.now(),
+        }),
+      );
       updated = true;
       setLatestAIDraftsByScopeSnapshot(next);
       emitAIStateChanged(AI_STATE_CHANGED_DRAFTS_BY_SCOPE);
@@ -970,10 +975,7 @@ export function useAIState() {
   const cleanupOrphanedSessions = useCallback((activeTargetIds: Set<string>) => {
     cleanupOrphanedAISessions(activeTargetIds);
 
-    const nextSessions =
-      latestAISessionsSnapshot
-      ?? localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS)
-      ?? [];
+    const nextSessions = readSanitizedAISessions();
     sessionsRef.current = nextSessions;
     setSessionsRaw(nextSessions);
     setActiveSessionIdMapRaw(

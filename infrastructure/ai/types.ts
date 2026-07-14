@@ -530,6 +530,8 @@ export function getAgentModelPresets(
 }
 
 export function formatThinkingLabel(level: string): string {
-  if (level === 'xhigh') return 'Extra High';
-  return level.charAt(0).toUpperCase() + level.slice(1);
+  const value = String(level ?? '').trim();
+  if (!value) return '';
+  if (value === 'xhigh') return 'Extra High';
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

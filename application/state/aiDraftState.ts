@@ -21,6 +21,40 @@ export function createEmptyDraft(agentId: string): AIDraft {
   };
 }
 
+/**
+ * Coerce partial / legacy drafts into a full AIDraft so UI code can safely
+ * read `.attachments` / `.selectedUserSkillSlugs` without crashing.
+ */
+export function normalizeAIDraft(
+  draft: Partial<AIDraft> | null | undefined,
+  fallbackAgentId = 'catty',
+): AIDraft {
+  if (!draft || typeof draft !== 'object') {
+    return createEmptyDraft(fallbackAgentId);
+  }
+  return {
+    text: typeof draft.text === 'string' ? draft.text : '',
+    agentId: typeof draft.agentId === 'string' && draft.agentId
+      ? draft.agentId
+      : fallbackAgentId,
+    attachments: Array.isArray(draft.attachments) ? draft.attachments : [],
+    selectedUserSkillSlugs: Array.isArray(draft.selectedUserSkillSlugs)
+      ? draft.selectedUserSkillSlugs.filter((slug): slug is string => typeof slug === 'string')
+      : [],
+    updatedAt: typeof draft.updatedAt === 'number' && Number.isFinite(draft.updatedAt)
+      ? draft.updatedAt
+      : Date.now(),
+  };
+}
+
+export function hasDraftContent(draft: Partial<AIDraft> | null | undefined): boolean {
+  if (!draft) return false;
+  const text = typeof draft.text === 'string' ? draft.text : '';
+  const attachments = Array.isArray(draft.attachments) ? draft.attachments : [];
+  const skills = Array.isArray(draft.selectedUserSkillSlugs) ? draft.selectedUserSkillSlugs : [];
+  return text.trim().length > 0 || attachments.length > 0 || skills.length > 0;
+}
+
 export function getDraftMutationVersionState(
   versionsByScope: DraftMutationVersionByScope,
   scopeKey: string,
@@ -140,8 +174,11 @@ export function updateDraftForScope(
   fallbackAgentId: string,
   updater: (draft: AIDraft) => AIDraft,
 ): DraftsByScope {
-  const currentDraft = draftsByScope[scopeKey] ?? createEmptyDraft(fallbackAgentId);
-  const nextDraft = updater(currentDraft);
+  const currentDraft = normalizeAIDraft(
+    draftsByScope[scopeKey],
+    fallbackAgentId,
+  );
+  const nextDraft = normalizeAIDraft(updater(currentDraft), fallbackAgentId);
 
   return {
     ...draftsByScope,
@@ -154,13 +191,28 @@ export function ensureDraftForScopeState(
   scopeKey: string,
   agentId: string,
 ): DraftsByScope {
-  if (draftsByScope[scopeKey]) {
+  const existing = draftsByScope[scopeKey];
+  if (!existing) {
+    return {
+      ...draftsByScope,
+      [scopeKey]: createEmptyDraft(agentId),
+    };
+  }
+
+  // Heal partial drafts already present in memory so later readers never see
+  // missing attachment/skill arrays.
+  if (
+    Array.isArray(existing.attachments)
+    && Array.isArray(existing.selectedUserSkillSlugs)
+    && typeof existing.text === 'string'
+    && typeof existing.agentId === 'string'
+  ) {
     return draftsByScope;
   }
 
   return {
     ...draftsByScope,
-    [scopeKey]: createEmptyDraft(agentId),
+    [scopeKey]: normalizeAIDraft(existing, agentId),
   };
 }
 
@@ -169,20 +221,13 @@ export function selectDraftForAgentSwitch(
   agentId: string,
   startFresh: boolean,
 ): AIDraft {
-  const hasPendingDraftContent = Boolean(
-    currentDraft
-    && (
-      currentDraft.text.length > 0
-      || currentDraft.attachments.length > 0
-      || currentDraft.selectedUserSkillSlugs.length > 0
-    ),
-  );
+  const hasPendingDraftContent = hasDraftContent(currentDraft);
 
   if (startFresh && !hasPendingDraftContent) {
     return createEmptyDraft(agentId);
   }
 
-  const baseDraft = currentDraft ?? createEmptyDraft(agentId);
+  const baseDraft = normalizeAIDraft(currentDraft, agentId);
   return {
     ...baseDraft,
     agentId,
