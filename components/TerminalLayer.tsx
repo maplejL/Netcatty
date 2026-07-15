@@ -815,7 +815,8 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       && currentHost.port === host.port
       && currentHost.protocol === host.protocol
       && currentHost.username === host.username
-      && currentHost.sftpSudo === host.sftpSudo;
+      && currentHost.sftpSudo === host.sftpSudo
+      && (currentHost.sftpFileProtocol || "auto") === (host.sftpFileProtocol || "auto");
 
     const isClosing = !shouldKeepOpen && isOpen && isSameEndpoint;
 
