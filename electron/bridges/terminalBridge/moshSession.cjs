@@ -1,4 +1,6 @@
 /* eslint-disable no-undef */
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const { emitTerminalSessionData } = require("../emitTerminalSessionData.cjs");
 const {
   setBufferedOutputBytes,
@@ -6,6 +8,8 @@ const {
   shouldProcessSessionOutput,
 } = require("../terminalFlowAck.cjs");
 const { createSshConnExecProbe } = require("../ai/sessionShellKind.cjs");
+
+const execFileAsync = promisify(execFile);
 
 // MoshCatty normally emits this cleanup together with an alternate-screen
 // exit. Netcatty keeps the primary screen, so restore only terminal modes that
