@@ -734,11 +734,14 @@ function createStartSessionApi(ctx) {
         const defaultKeyInfo = allDefaultKeys[0] ?? null;
         // Explicit password without a user-configured key/certificate/agent is
         // password-only — same predicate buildAuthHandler uses for isPasswordOnly.
+        // Note: upstream also checks systemAuthAgent (system SSH agent login path);
+        // that feature is not in this fork yet, so agent is covered by connectOpts.agent
+        // / hasCertificate when present.
         const isPasswordOnlyAuth =
           isPasswordProvided(connectOpts.password) &&
           !connectOpts.privateKey &&
           !hasCertificate &&
-          !systemAuthAgent &&
+          !connectOpts.agent &&
           !hasUserConfiguredKey(options);
         if (defaultKeyInfo && !isPasswordOnlyAuth) {
           log("Found default SSH key for fallback", { keyPath: defaultKeyInfo.keyPath, keyName: defaultKeyInfo.keyName });
