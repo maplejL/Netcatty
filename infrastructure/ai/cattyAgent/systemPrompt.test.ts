@@ -17,6 +17,21 @@ test('system prompt tells Catty how to import unknown attached host lists safely
   assert.match(prompt, /compressed|truncated/i);
 });
 
+test('system prompt requires vision for chat images and forbids remote OCR workarounds', () => {
+  const prompt = buildSystemPrompt({
+    scopeType: 'terminal',
+    hosts: [],
+    permissionMode: 'confirm',
+  });
+
+  assert.match(prompt, /Chat image attachments \(vision\)/i);
+  assert.match(prompt, /multimodal content/i);
+  assert.match(prompt, /read_attachment/i);
+  assert.match(prompt, /vision capabilities/i);
+  assert.match(prompt, /OCR/i);
+  assert.match(prompt, /remote hosts/i);
+});
+
 test('system prompt prefers explicit script wait APIs', () => {
   const prompt = buildSystemPrompt({
     scopeType: 'terminal',

@@ -546,10 +546,50 @@ function findRegisteredAttachment(params) {
   return { attachment };
 }
 
+function isImageAttachment(mediaType, filename) {
+  if (typeof mediaType === "string" && /^image\//i.test(mediaType.trim())) {
+    return true;
+  }
+  const ext = path.extname(filename || "").toLowerCase();
+  return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico", ".avif"].includes(ext);
+}
+
 function handleReadAttachment(params) {
   const found = findRegisteredAttachment(params);
   if (found.error) return { ok: false, error: found.error };
   const attachment = found.attachment;
+
+  // Images are already multimodal parts on the user message. Returning full base64
+  // here pushes models into terminal OCR / remote package installs instead of vision.
+  if (isImageAttachment(attachment.mediaType, attachment.filename)) {
+    let sizeBytes = typeof attachment.sizeBytes === "number" ? attachment.sizeBytes : undefined;
+    if (sizeBytes == null && attachment.base64Data) {
+      try {
+        sizeBytes = Buffer.from(attachment.base64Data, "base64").length;
+      } catch {
+        sizeBytes = undefined;
+      }
+    } else if (sizeBytes == null && attachment.filePath) {
+      try {
+        sizeBytes = fs.statSync(attachment.filePath).size;
+      } catch {
+        sizeBytes = undefined;
+      }
+    }
+    return {
+      ok: true,
+      filename: attachment.filename,
+      mediaType: attachment.mediaType || "image/*",
+      filePath: attachment.filePath || undefined,
+      sizeBytes,
+      imageInUserMessage: true,
+      guidance:
+        "This chat image is already attached as multimodal content in the user message. "
+        + "Use vision to describe/analyze it directly. Do not request base64, tool_output_read, "
+        + "or install OCR/image libraries on remote hosts for chat attachments.",
+    };
+  }
+
   let base64Data = attachment.base64Data;
   if (!base64Data && attachment.filePath) {
     try {

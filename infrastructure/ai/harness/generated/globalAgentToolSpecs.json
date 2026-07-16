@@ -40,7 +40,7 @@
     "toolName": "read_attachment",
     "rpcMethod": "netcatty/readAttachment",
     "localExecution": false,
-    "description": "Read a user-attached file from the current AI chat scope.",
+    "description": "Read a user-attached file from the current AI chat scope. For images, returns metadata only — the picture is already in the user message for vision; do not fetch base64 or use remote OCR for chat screenshots.",
     "inputShape": {
       "filePath": {
         "type": "string",
@@ -595,7 +595,7 @@
     "toolName": "vault_hosts_import",
     "rpcMethod": "vault/hosts/import",
     "localExecution": false,
-    "description": "Parse known host export file formats (PuTTY, MobaXterm, CSV, SecureCRT, ssh_config) into vault hosts. For arbitrary unstructured text, map to host objects and use vault_hosts_create instead. Only for text in known export formats (PuTTY reg, MobaXterm ini, CSV template, SecureCRT, ssh_config). If attached host text is unknown or auto-detection fails, use read_attachment content, extract fields yourself, and call vault_hosts_create.",
+    "description": "Parse known host export file formats (PuTTY, MobaXterm, CSV, SecureCRT, ssh_config, FinalShell) into vault hosts. For arbitrary unstructured text, map to host objects and use vault_hosts_create instead. Only for text in known export formats (PuTTY reg, MobaXterm ini, CSV template, SecureCRT, ssh_config). If attached host text is unknown or auto-detection fails, use read_attachment content, extract fields yourself, and call vault_hosts_create.",
     "inputShape": {
       "format": {
         "type": "string",

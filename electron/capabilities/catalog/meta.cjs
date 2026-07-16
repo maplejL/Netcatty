@@ -66,7 +66,10 @@ const META_CAPABILITIES = [
     id: "attachment.read",
     domain: "attachment",
     status: CAPABILITY_STATUS.IMPLEMENTED,
-    description: "Read a user-attached file from the current AI chat scope.",
+    description:
+      "Read a user-attached file from the current AI chat scope. "
+      + "For images, returns metadata only — the picture is already in the user message for vision; "
+      + "do not fetch base64 or use remote OCR for chat screenshots.",
     policy: {
       write: false,
       sensitiveRead: true,
