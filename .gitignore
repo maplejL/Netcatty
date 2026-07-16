@@ -51,6 +51,9 @@ coverage
 # Codebuddy
 .codebuddy
 
+# CodeStable local exports (session dumps, not product source)
+/.codestable/exports/
+
 # AI / Superpowers generated docs (local only)
 /docs/superpowers/
 /.superpowers/
