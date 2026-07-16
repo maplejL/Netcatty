@@ -230,6 +230,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   showHostTreeSidebar = true,
   toggleScriptsSidePanelRef,
   toggleSidePanelRef,
+  toggleHistorySidePanelRef,
   // Session rename props
   onStartSessionRename,
   onSubmitSessionRename,
@@ -245,6 +246,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const focusedSessionIdRef = useRef<string | undefined>(undefined);
   const terminalCwdRevisionRef = useRef(0);
   const [terminalCwdRevision, setTerminalCwdRevision] = useState(0);
+  const [commandHistoryPopupOpen, setCommandHistoryPopupOpen] = useState(false);
   const terminalOsc7SignalBySessionRef = useRef<Map<string, number>>(new Map());
   const cwdProbeCancelersRef = useRef<Map<string, () => void>>(new Map());
   const cwdProbeGenerationRef = useRef<Map<string, number>>(new Map());
@@ -1213,6 +1215,15 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     handleSwitchSidePanelTab('history');
   }, [handleSwitchSidePanelTab]);
 
+  // Hotkey: FinalShell-style floating command history over the terminal.
+  const handleToggleHistorySidePanel = useCallback(() => {
+    setCommandHistoryPopupOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseCommandHistoryPopup = useCallback(() => {
+    setCommandHistoryPopupOpen(false);
+  }, []);
+
   // Open AI chat side panel (side-panel rail button: a plain switch that is a
   // no-op when AI is already the active sub-panel, matching the other rail tabs)
   const handleOpenAI = useCallback(() => {
@@ -1638,6 +1649,10 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     handleHistoryPaste,
     handleHistoryRun,
     handleOpenHistory,
+    handleToggleHistorySidePanel,
+    handleCloseCommandHistoryPopup,
+    commandHistoryPopupOpen,
+    setCommandHistoryPopupOpen,
     handleOpenSftp,
     handleOpenScripts,
     handleOpenTheme,
@@ -1806,6 +1821,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     ThemeSidePanel,
     toggleScriptsSidePanelRef,
     toggleSidePanelRef,
+    toggleHistorySidePanelRef,
     Tooltip,
     TooltipContent,
     TooltipTrigger,

@@ -149,6 +149,7 @@ test('quick switch hotkey toggles the quick switcher open state', () => {
     systemInfoRef: { current: { username: 'user', hostname: 'host' } },
     toEditorTabId: (id: string) => `editor:${id}`,
     toggleBroadcast: noop,
+    toggleHistorySidePanelRef: { current: noop },
     toggleScriptsSidePanelRef: { current: noop },
     toggleSidePanelRef: { current: noop },
     workspaces: [],
@@ -168,6 +169,56 @@ test('quick switch hotkey toggles the quick switcher open state', () => {
 
   executeHotkeyActionImpl(() => ({ ...baseCtx, isQuickSwitcherOpen: true }), 'quickSwitch', event);
   assert.equal(isQuickSwitcherOpen, false);
+});
+
+test('openHistory toggles the terminal command history side panel', () => {
+  let opened = 0;
+  const noop = () => {};
+
+  executeHotkeyActionImpl(
+    () => ({
+      IS_DEV: false,
+      MOVE_FOCUS_DEBOUNCE_MS: 0,
+      activeTabStore: { getActiveTabId: () => 'session-1' },
+      addConnectionLogRef: { current: noop },
+      closeSession: noop,
+      closeTabInFlightRef: { current: false },
+      closeWorkspace: noop,
+      collectSessionIds: () => [],
+      confirmIfBusyLocalTerminal: async () => true,
+      createLocalTerminalWithCurrentShell: noop,
+      editorTabs: [],
+      fromEditorTabId: () => null,
+      handleOpenSettingsRef: { current: noop },
+      handleRequestCloseEditorTabRef: { current: noop },
+      isEditorTabId: () => false,
+      isQuickSwitcherOpen: false,
+      lastMoveFocusTimeRef: { current: 0 },
+      moveFocusInWorkspace: noop,
+      orderedTabs: ['session-1'],
+      resolveCloseIntent: () => ({ kind: 'noop' }),
+      resolveSnippetsShortcutIntent: () => ({ kind: 'noop' }),
+      sessions: [{ id: 'session-1' }],
+      setActiveTabId: noop,
+      setAddToWorkspaceDialog: noop,
+      setIsQuickSwitcherOpen: noop,
+      setNavigateToSection: noop,
+      settings: { showSftpTab: true, shellOnlyTabNumberShortcuts: false },
+      splitSessionWithCurrentShell: noop,
+      systemInfoRef: { current: { username: 'user', hostname: 'host' } },
+      toEditorTabId: (id: string) => `editor:${id}`,
+      toggleBroadcast: noop,
+      toggleHistorySidePanelRef: { current: () => { opened += 1; } },
+      toggleScriptsSidePanelRef: { current: noop },
+      toggleSidePanelRef: { current: noop },
+      toggleWorkspaceViewMode: noop,
+      workspaces: [],
+    }),
+    'openHistory',
+    { key: 'H', ctrlKey: true, shiftKey: true } as KeyboardEvent,
+  );
+
+  assert.equal(opened, 1);
 });
 
 test('next tab includes pinned tabs when shell-only shortcut mode is disabled', () => {
@@ -207,6 +258,7 @@ test('next tab includes pinned tabs when shell-only shortcut mode is disabled', 
       systemInfoRef: { current: { username: 'user', hostname: 'host' } },
       toEditorTabId: (id: string) => `editor:${id}`,
       toggleBroadcast: noop,
+      toggleHistorySidePanelRef: { current: noop },
       toggleScriptsSidePanelRef: { current: noop },
       toggleSidePanelRef: { current: noop },
       toggleWorkspaceViewMode: noop,
@@ -256,6 +308,7 @@ test('next tab skips pinned tabs when shell-only shortcut mode is enabled', () =
       systemInfoRef: { current: { username: 'user', hostname: 'host' } },
       toEditorTabId: (id: string) => `editor:${id}`,
       toggleBroadcast: noop,
+      toggleHistorySidePanelRef: { current: noop },
       toggleScriptsSidePanelRef: { current: noop },
       toggleSidePanelRef: { current: noop },
       toggleWorkspaceViewMode: noop,

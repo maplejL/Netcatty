@@ -40,3 +40,17 @@ export function resolveScriptsSidePanelShortcutIntent(
 
   return { kind: 'openTerminalScripts' };
 }
+
+export type HistorySidePanelShortcutIntent =
+  | { kind: 'closeTerminalSidePanel' }
+  | { kind: 'openTerminalHistory' };
+
+export function resolveHistorySidePanelShortcutIntent(
+  activePanel: string | null,
+): HistorySidePanelShortcutIntent {
+  if (activePanel === 'history') {
+    return { kind: 'closeTerminalSidePanel' };
+  }
+
+  return { kind: 'openTerminalHistory' };
+}

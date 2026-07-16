@@ -66,6 +66,7 @@ export const terminalLayerAreEqual = (
   prev.updateNoteGroups === next.updateNoteGroups &&
   prev.toggleScriptsSidePanelRef === next.toggleScriptsSidePanelRef &&
   prev.toggleSidePanelRef === next.toggleSidePanelRef &&
+  prev.toggleHistorySidePanelRef === next.toggleHistorySidePanelRef &&
   prev.identities === next.identities &&
   prev.shellHistory === next.shellHistory
 );

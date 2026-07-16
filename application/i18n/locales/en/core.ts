@@ -594,6 +594,8 @@ export const enCoreMessages: Messages = {
   'settings.shortcuts.recording': 'Press keys...',
   'settings.shortcuts.none': 'None',
   'settings.shortcuts.setDisabled': 'Set to disabled',
+  'settings.shortcuts.conflict.title': 'Shortcut already in use',
+  'settings.shortcuts.conflict.message': '“{key}” is already used by “{action}”. Choose another shortcut or free it first.',
   'settings.shortcuts.category.tabs': 'Tabs',
   'settings.shortcuts.category.terminal': 'Terminal',
   'settings.shortcuts.category.navigation': 'Navigation',

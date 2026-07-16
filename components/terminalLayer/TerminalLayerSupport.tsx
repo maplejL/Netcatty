@@ -678,6 +678,7 @@ export interface TerminalLayerProps {
   showHostTreeSidebar?: boolean;
   toggleScriptsSidePanelRef?: React.MutableRefObject<(() => void) | null>;
   toggleSidePanelRef?: React.MutableRefObject<(() => void) | null>;
+  toggleHistorySidePanelRef?: React.MutableRefObject<(() => void) | null>;
   // Session rename
   onStartSessionRename?: (sessionId: string) => void;
   onSubmitSessionRename?: (sessionId?: string, name?: string) => void;
