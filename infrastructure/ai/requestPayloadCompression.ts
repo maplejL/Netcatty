@@ -134,15 +134,36 @@ function compressContentPartForRequestRetry(part: unknown): unknown {
     }
   }
 
-  if (type === "image" && typeof record.image === "string") {
-    return omittedAttachmentTextPart("image", record.image, record);
+  // Vision payloads must survive step pruning and 413 typed compression. Catty
+  // attaches screenshots as file parts (image/*); stripping them leaves only the
+  // "attachment omitted" placeholder and the model cannot see the image.
+  if (type === "image") {
+    return part;
   }
 
   if (type === "file" && typeof record.data === "string") {
+    if (isImageMediaType(record.mediaType, record.filename, record.mimeType)) {
+      return part;
+    }
     return omittedAttachmentTextPart("file", record.data, record);
   }
 
   return part;
+}
+
+function isImageMediaType(
+  mediaType: unknown,
+  filename: unknown,
+  mimeType: unknown = undefined,
+): boolean {
+  const mime = typeof mediaType === "string"
+    ? mediaType
+    : typeof mimeType === "string"
+      ? mimeType
+      : "";
+  if (/^image\//i.test(mime.trim())) return true;
+  if (typeof filename !== "string") return false;
+  return /\.(png|jpe?g|gif|webp|bmp|svg|ico|avif)$/i.test(filename.trim());
 }
 
 function compressAndTruncateText(value: string, maxChars: number): string {
