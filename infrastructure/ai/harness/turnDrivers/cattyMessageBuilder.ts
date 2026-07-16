@@ -49,6 +49,19 @@ function modelMessageHasToolCall(message: ModelMessage): boolean {
   return message.content.some((part) => part && typeof part === 'object' && (part as { type?: string }).type === 'tool-call');
 }
 
+/**
+ * Normalize chat image payloads for OpenAI-compatible vision endpoints.
+ * AI SDK chat conversion assigns the value to image_url.url; gateways often require
+ * `data:image/...;base64,...` (or an http URL), not raw base64 alone.
+ */
+export function toVisionImageUrl(mediaType: string, base64OrUrl: string): string {
+  const value = typeof base64OrUrl === 'string' ? base64OrUrl.trim() : '';
+  if (!value) return value;
+  if (/^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
+  const mime = (mediaType || 'image/png').trim() || 'image/png';
+  return `data:${mime};base64,${value}`;
+}
+
 export function collectOpenAIChatAssistantFieldsForMessages(
   messages: ModelMessage[],
   fieldsByMessage: Map<ModelMessage, OpenAIChatAssistantFields | undefined>,
@@ -210,7 +223,14 @@ export function buildCattySdkMessages(input: BuildCattySdkMessagesInput): ModelM
         parts.push({ type: 'text', text: modelText });
         for (const att of modelAttachments) {
           if (att.mediaType.startsWith('image/')) {
-            parts.push({ type: 'file', data: att.base64Data, mediaType: att.mediaType });
+            // OpenAI-compatible chat path puts file data into image_url.url. Many
+            // gateways reject bare base64 and require a data URL or http(s) URL.
+            parts.push({
+              type: 'file',
+              data: toVisionImageUrl(att.mediaType, att.base64Data),
+              mediaType: att.mediaType,
+              filename: att.filename,
+            });
           } else {
             parts.push({ type: 'file', data: att.base64Data, mediaType: att.mediaType, filename: att.filename });
           }
