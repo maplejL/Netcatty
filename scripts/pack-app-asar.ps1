@@ -26,6 +26,13 @@ if (-not $SourceAsar) {
     $SourceAsar = $targetAsar
 }
 
+# Always re-apply the WebGL atlas isolation patch before packaging. Incremental
+# deploys often skip postinstall; without this patch multi-pane terminals share
+# one texture atlas and sporadically show garbled glyphs (#1063).
+Write-Host ">> patch xterm webgl atlas isolation"
+node scripts/patch-xterm-webgl-atlas.cjs
+if ($LASTEXITCODE -ne 0) { throw "patch-xterm-webgl-atlas failed" }
+
 if (-not $SkipBuild) {
     Write-Host ">> vite build"
     npm run build

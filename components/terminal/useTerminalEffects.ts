@@ -1510,7 +1510,15 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
     );
 
     const recoverWebglRendererOnAppResume = () => {
+      // Context loss while the window was backgrounded leaves a live addon that
+      // still paints corrupted glyphs. Re-ensure WebGL, then force a full atlas
+      // rebuild + sync repaint so resume does not show lasting mojibake.
       xtermRuntimeRef.current?.ensureWebglRenderer();
+      xtermRuntimeRef.current?.clearTextureAtlas();
+      const term = termRef.current;
+      if (term) {
+        forceSyncRenderAfterResize(term);
+      }
     };
 
     const handleVisibilityChange = () => {

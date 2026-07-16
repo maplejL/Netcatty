@@ -51,6 +51,7 @@ import { terminalAltKeyOptions } from "./altKeyOptions";
 import { optionArrowWordJumpSequence } from "./optionArrowWordJump";
 import { watchDevicePixelRatio } from "./rendererDprWatch";
 import { shouldDeferWebglUntilVisible } from "./webglRendererPolicy";
+import { forceSyncRenderAfterResize } from "../terminalHelpers";
 import {
   captureMiddleClickTerminalMouseEvent,
   markMiddleClickContextMenuEvent,
@@ -457,15 +458,34 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
 
   let webglAddon: WebglAddon | null = null;
   let webglLoaded = false;
+  let webglContextLossRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   const scopedWindow = window as Window & {
     __xtermWebGLLoaded?: boolean;
     __xtermRendererPreference?: string;
+  };
+
+  // The WebGL renderer caches rasterized glyphs in a texture atlas. Heavy TUIs
+  // (claude code / gemini cli / opencode and other full-screen agents), font
+  // changes, and device pixel ratio changes can leave that atlas in a corrupted
+  // state that persists for the life of the terminal — the "garbled / 花屏"
+  // report in issue #1049 where only opening a brand-new terminal helps. Clearing
+  // the atlas forces glyphs to re-rasterize at the correct scale on the next
+  // frame. No-op for the DOM renderer.
+  const clearWebglTextureAtlas = () => {
+    if (!webglAddon) return;
+    try {
+      webglAddon.clearTextureAtlas();
+    } catch (err) {
+      logger.warn("[XTerm] clearTextureAtlas failed", err);
+    }
   };
 
   // Idempotent: creates the WebGL renderer on first call and no-ops afterwards
   // (or when WebGL is disabled for this device). Panes that mount hidden defer
   // this until they first become visible — see shouldDeferWebglUntilVisible —
   // so batch-connecting many hosts doesn't spin up every WebGL context at once.
+  // After GPU context loss, recreate the addon so the terminal does not stay
+  // permanently garbled until the user opens a new session (issue #1049/#1063).
   const loadWebglRenderer = () => {
     if (webglLoaded || !performanceConfig.useWebGLAddon) return;
     try {
@@ -474,10 +494,31 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
       // preserveDrawingBuffer and can cause sporadic glyph artifacts/ghosting.
       webglAddon = new WebglAddon();
       webglAddon.onContextLoss(() => {
-        logger.warn("[XTerm] WebGL context loss detected, disposing addon");
-        webglAddon?.dispose();
+        logger.warn("[XTerm] WebGL context loss detected, recreating renderer");
+        try {
+          webglAddon?.dispose();
+        } catch {
+          // Ignore dispose races during context loss.
+        }
         webglAddon = null;
         webglLoaded = false;
+        scopedWindow.__xtermWebGLLoaded = false;
+        if (webglContextLossRecoveryTimer) {
+          clearTimeout(webglContextLossRecoveryTimer);
+        }
+        // Defer one turn so the browser finishes tearing down the lost context
+        // before we allocate a new WebGL surface.
+        webglContextLossRecoveryTimer = setTimeout(() => {
+          webglContextLossRecoveryTimer = null;
+          loadWebglRenderer();
+          try {
+            clearWebglTextureAtlas();
+            forceSyncRenderAfterResize(term);
+            fitAddon.fit();
+          } catch (err) {
+            logger.warn("[XTerm] WebGL context-loss recovery refit failed", err);
+          }
+        }, 0);
       });
       term.loadAddon(webglAddon);
       webglLoaded = true;
@@ -525,22 +566,6 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   scopedWindow.__xtermRendererPreference = performanceConfig.preferDOMRenderer
     ? "dom"
     : "webgl";
-
-  // The WebGL renderer caches rasterized glyphs in a texture atlas. Heavy TUIs
-  // (claude code / gemini cli / opencode and other full-screen agents), font
-  // changes, and device pixel ratio changes can leave that atlas in a corrupted
-  // state that persists for the life of the terminal — the "garbled / 花屏"
-  // report in issue #1049 where only opening a brand-new terminal helps. Clearing
-  // the atlas forces glyphs to re-rasterize at the correct scale on the next
-  // frame. No-op for the DOM renderer.
-  const clearWebglTextureAtlas = () => {
-    if (!webglAddon) return;
-    try {
-      webglAddon.clearTextureAtlas();
-    } catch (err) {
-      logger.warn("[XTerm] clearTextureAtlas failed", err);
-    }
-  };
 
   // Recover the renderer when the device pixel ratio changes (moving the window
   // between monitors with different DPI, or changing OS display scaling — a
@@ -1381,6 +1406,10 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
     ensureWebglRenderer: loadWebglRenderer,
     suspendWebglRenderer,
     dispose: () => {
+      if (webglContextLossRecoveryTimer) {
+        clearTimeout(webglContextLossRecoveryTimer);
+        webglContextLossRecoveryTimer = null;
+      }
       ctx.container.removeEventListener(
         "wheel",
         handleForcedHistoryScrollWheel,
