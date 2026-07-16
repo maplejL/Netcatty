@@ -9,7 +9,7 @@
 文档涵盖：
 
 - [上游核心能力](README.zh-CN.md#上游核心能力)（SSH / SFTP / Workspace / Catty）
-- [本 fork 增强](README.zh-CN.md#本-fork-增强功能)（FinalShell、运维首页与批量、WorkBuddy、高吞吐终端、Windows 托盘）
+- [本 fork 增强](README.zh-CN.md#本-fork-增强功能)（FinalShell、运维首页与批量、主机备注、WorkBuddy / 模型列表、命令历史与计时调试、SFTP 追随终端目录、主窗口默认最大化、WebGL 乱码防护、高吞吐终端、Windows 托盘）
 - [快速开始与 pack:asar](README.zh-CN.md#快速开始)
 
 本仓库基于上游 [binaricat/Netcatty](https://github.com/binaricat/Netcatty)（GPL-3.0）定制维护。

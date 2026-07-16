@@ -44,8 +44,13 @@
 | SSH / SFTP / 分屏 / Catty AI | ✅ 完整继承 | ✅ |
 | FinalShell 导入、IPv4 树分组 | — | ✅ |
 | 运维首页、多选工作区 / 批量命令 | — | ✅ |
+| 主机备注列表摘要、会话/布局恢复 | 部分上游能力 | ✅ 列表可见 + 恢复完善 |
 | WorkBuddy 等外部 Agent、同会话切换 Agent | — | ✅ |
+| 外部 Agent 模型列表与真实可用同步 | — | ✅ |
+| 命令历史浮层、终端命令计时调试 | — | ✅ |
+| SFTP 追随 / 定位终端目录 | 有基础能力 | ✅ 链路与 loading 加固 |
 | 长时间 `tail` 输出性能默认策略 | 上游有流控 | ✅ 进一步默认收紧 |
+| WebGL 多窗格乱码防护 | 上游有恢复 | ✅ atlas 隔离 + 丢失重建 |
 
 ---
 
@@ -75,6 +80,7 @@
 
 - 双窗格 SFTP 浏览、拖拽传输、传输队列
 - 内置 Monaco 编辑器，可在外部编辑远程文件
+- 可追随终端当前目录、一键定位到终端 CWD（本 fork 强化，见下文）
 
 ### AI（Catty 与外部 Agent）
 
@@ -86,6 +92,7 @@
 ### 体验与其它
 
 - 主题 / 终端配色 / 字体 / 高亮规则自定义
+- 可配置全局快捷键（含终端相关动作）
 - 可选 GitHub Gist 同步配置
 - 系统托盘：关闭到托盘、快捷恢复主窗口
 - 跨平台：macOS、Windows、Linux（Electron）
@@ -94,7 +101,7 @@
 
 ## 本 fork 增强功能
 
-在继承上述能力之外，本仓库针对 **FinalShell 迁移**、**多机批量运维**、**外部 AI Agent** 与 **高吞吐终端** 做了增量（上游暂无或本仓库默认策略不同）。
+在继承上述能力之外，本仓库针对 **FinalShell 迁移**、**多机批量运维**、**外部 AI Agent**、**终端效率 / 可观测** 与 **高吞吐稳定性** 做了增量（上游暂无或本仓库默认策略不同）。
 
 ### FinalShell 主机导入
 
@@ -129,17 +136,48 @@
 
 **批量命令 v1 限制：** 仅 SSH 直连主机；暂不支持跳板链（`hostChain`）。
 
+### 主机备注与会话恢复
+
+| 能力 | 说明 |
+|------|------|
+| **主机备注摘要** | Vault 列表 / 树形 / 运维首页卡片展示备注纯文本摘要（Markdown 去噪），便于扫一眼识别用途 |
+| **会话与布局恢复** | 重启后可恢复工作区与会话布局（本 fork 已打通并验收相关路径） |
+
 ### AI 与外部 Agent（本 fork）
 
 | 能力 | 说明 |
 |------|------|
 | **WorkBuddy** | 可作为托管外部 Agent 使用；自动解析桌面版内嵌 CLI 路径，SDK 默认走 skills 集成（避免 MCP 冷启动超时） |
-| **CodeBuddy 族路径** | 改进 CLI / SDK 可执行文件发现与环境注入（含 `CODEBUDDY_CODE_PATH`） |
+| **CodeBuddy 族路径** | 改进 CLI / SDK 可执行文件发现与环境注入（含 `CODEBUDDY_CODE_PATH`）；CLI 短暂不可用时更稳妥的错误分类与重试 |
+| **模型列表同步** | 打开侧栏时强制刷新 SDK 模型目录；按模型 ID 去重；刷新中显示「正在刷新列表…」；空列表不写缓存，避免假列表 |
 | **同会话切换 Agent** | 同一 scope 下切换 Agent 时**保留消息历史**，清除 `externalSessionId`，下一轮按 Netcatty 消息回放，避免误续旧 CLI 会话 |
 | **跨 Agent 历史清洗** | 回放前剥离易冲突的 tool-call 标记文本，降低换 Agent 后上下文污染 |
-| **侧栏打开稳定性** | 打包环境下 AI 面板与终端层协同加载，避免懒加载大 chunk 导致白屏/卡死 |
+| **侧栏打开稳定性** | 打包环境下 AI 面板与终端层协同加载；draft/session 结构规范化，避免附件/消息字段异常导致侧栏崩溃或卡死 |
 
-设置中可配置多个外部 Agent（Claude Code、Codex、Copilot、CodeBuddy、WorkBuddy、OpenCode 等，以当前版本托管列表为准）。
+设置中可配置多个外部 Agent（Claude Code、Codex、Copilot、Cursor、CodeBuddy、WorkBuddy、OpenCode 等，以当前版本托管列表为准）。
+
+### 终端效率：命令历史与计时调试
+
+| 能力 | 入口 | 说明 |
+|------|------|------|
+| **命令历史浮层** | 可配置快捷键（默认 `Ctrl+Shift+H` / macOS `⌘+Shift+H`；支持录制为单独 `Alt` 等修饰键） | FinalShell 风格浮层：搜索过滤、↑↓ 选择；**Enter / 双击只填入终端，不自动执行**；Esc 关闭 |
+| **快捷键冲突检测** | 设置 → 快捷键 | 录制或重置绑定时检测占用并提示，避免两个动作抢同一组合键 |
+| **命令计时调试** | 设置 → 系统 → Terminal Command Timing（默认关） | 记录命令输入 → 发往后端 → 首包输出 → 首帧渲染 → 结束等关键节点，便于分析「敲回车后卡一下」；面板支持按主机/IP 筛选与关键字搜索 |
+
+### SFTP 与终端目录联动
+
+| 能力 | 说明 |
+|------|------|
+| **追随终端目录** | 打开追随后，随终端 `cd` / OSC 7 同步 SFTP 路径；路径比较做规范化，减少误跳 `/root` 或「目录变了但面板不动」 |
+| **定位到当前目录** | 工具栏一键跳转；优先新鲜后端探测，过程中显示 loading |
+| **会话绑定** | SFTP 与对应终端会话正确关联（含用户名等维度），避免多标签下取错 CWD |
+
+### 主窗口默认行为
+
+| 行为 | 说明 |
+|------|------|
+| **启动最大化** | 默认以最大化打开主窗口 |
+| **窗口化尺寸** | 从最大化还原时，默认约为当前显示器工作区 **75%**，并**水平 + 垂直居中**，避免宽高超出屏幕 |
 
 ### 终端高吞吐与默认性能
 
@@ -153,6 +191,19 @@
 | **旁路减负** | flood 时跳过连接日志捕获；Activity 标记先做廉价判断再过滤 |
 
 已保存的个人设置不会被覆盖：若本地 scrollback 仍很大，请到 **设置 → 终端** 自行调低。
+
+### WebGL 稳定性（多窗格乱码）
+
+多窗格 / 广播 / 切焦点时若出现整屏「花屏」乱码（含本地连接日志也变乱），通常是 **WebGL 字形纹理图集损坏**，而非 SSH 编码错误。本 fork：
+
+| 策略 | 说明 |
+|------|------|
+| **atlas 隔离补丁** | 安装与打包时对 `@xterm/addon-webgl` 打补丁，禁止多终端共享同一纹理图集 |
+| **失焦挂起 WebGL** | 工作区非焦点窗格回退 DOM，减少多上下文争用 |
+| **context loss 重建** | GPU 上下文丢失后自动重建渲染器并强制重绘 |
+| **前台恢复清图集** | 窗口重新可见 / 获焦时清 atlas 并同步刷新 |
+
+临时规避：设置 → 终端 → 渲染改为 **DOM**。`npm run pack:asar` 会在打包前再次应用 atlas 隔离补丁。
 
 ### Windows 托盘
 
@@ -170,9 +221,10 @@ PuTTY、MobaXterm、CSV、SecureCRT、`ssh_config` 等与上游一致。
 **Netcatty** 是一款跨平台 SSH 客户端和终端管理器，适合需要同时维护多台服务器的开发者与运维人员。
 
 - 现代化替代 PuTTY、Termius、SecureCRT 等工具
-- 双窗格 SFTP、内置编辑器、拖拽传输
-- 分屏终端、多标签工作区、Vault 多视图与运维首页
-- 内置 Catty，并可接入 WorkBuddy 等外部 Agent
+- 双窗格 SFTP（可追随终端目录）、内置编辑器、拖拽传输
+- 分屏终端、多标签工作区、Vault 多视图与运维首页、主机备注摘要
+- 命令历史浮层、可配置快捷键
+- 内置 Catty，并可接入 WorkBuddy / Cursor 等外部 Agent（模型列表与真实可用同步）
 
 更完整的能力列表见上文 **[上游核心能力](#上游核心能力)** 与 **[本 fork 增强功能](#本-fork-增强功能)**。
 
@@ -239,10 +291,15 @@ npm run pack:asar
 npm run pack:asar -- -SkipBuild
 
 # 指定安装根目录（默认见 scripts/pack-app-asar.ps1）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -InstallRoot "D:\work\Netcatty"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -InstallPath "D:\work\Netcatty"
 ```
 
-部署前会备份原 `resources\app.asar` 为 `app.asar.bak`。**需完全退出再启动** Netcatty 后新代码才会生效。
+说明：
+
+- 部署前会备份原 `resources\app.asar` 为 `app.asar.bak`
+- 打包脚本会**再次应用** WebGL atlas 隔离补丁，避免增量部署后多窗格乱码回潮
+- **需完全退出再启动** Netcatty 后新代码才会生效
+- 这是内测/本地热更路径：只换业务 asar，**不**升级 Electron 壳与原生模块；正式发版仍建议 `npm run pack`
 
 **常见打包注意：**
 
@@ -257,6 +314,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -I
    - **连接**：每台主机独立标签页
    - **工作区**：≥2 台时同一 Workspace 分屏（4 台时 2×2），默认开启广播；**仅 1 台则直接连接**
    - **批量命令**：输入一条命令，查看各机输出与退出码
+3. 列表中可直接看到主机备注摘要；备注可在主机详情中编辑
+
+### 命令历史与终端调试
+
+1. 打开终端后按快捷键呼出**命令历史浮层**（默认 `Ctrl+Shift+H`，可在 **设置 → 快捷键** 修改）
+2. 输入关键字过滤，↑↓ 选择后 **Enter 或双击** 将命令填入终端（不会自动执行）
+3. 若需分析输入延迟：打开 **设置 → 系统 → Terminal Command Timing**，执行命令后在面板中按 IP / 关键字查看轨迹
 
 ### FinalShell 导入步骤
 
@@ -268,10 +332,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -I
 
 ### 外部 Agent 快速验证
 
-1. 安装 WorkBuddy / CodeBuddy 等桌面或 CLI（路径可自动发现，也可在设置中手动指定）
+1. 安装 WorkBuddy / CodeBuddy / Cursor 等桌面或 CLI（路径可自动发现，也可在设置中手动指定）
 2. 打开任意终端侧栏 **AI**，在 Agent 列表中选择对应外部 Agent
-3. 发送一条消息确认 CLI 可启动；切换回 Catty 时同一会话消息应仍在
-4. 长时间 `tail` 大日志时，若仍卡顿：在 **设置 → 终端** 调低 scrollback、必要时关闭关键词高亮
+3. 打开模型选择时应注意「正在刷新列表…」；列表应与 CLI/SDK 实际可用模型一致且无大量重复
+4. 发送一条消息确认 CLI 可启动；切换回 Catty 时同一会话消息应仍在
+5. 长时间 `tail` 大日志时，若仍卡顿：在 **设置 → 终端** 调低 scrollback、必要时关闭关键词高亮；多窗格乱码时可改用 DOM 渲染
 
 ---
 
@@ -296,7 +361,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-app-asar.ps1 -I
 2. 创建功能分支（如 `feature/xxx`）
 3. 提交并推送后发起 Pull Request
 
-功能分支示例：`feature/finalshell_import_support`。
+功能分支示例：`feature/ops_ai_enhancements`。
 
 ---
 
