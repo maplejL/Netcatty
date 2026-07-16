@@ -1,0 +1,42 @@
+feature: 2026-07-10-host-notes-visibility
+created: 2026-07-10
+
+steps:
+  - action: "Domain：新增 summarizeHostNotes 与单测"
+    exit_signal: "hostNotes.test.ts 覆盖空值/Markdown/截断并通过"
+    status: done
+  - action: "UI：统一备注摘要展示小组件"
+    exit_signal: "列表与首页可复用同一组件/API 渲染一行摘要"
+    status: done
+  - action: "Vault 网格/列表接入摘要"
+    exit_signal: "VaultHostListSection 各主机卡/行在有 notes 时显示摘要"
+    status: done
+  - action: "树形视图接入摘要"
+    exit_signal: "HostTreeView 主机行有 notes 时显示摘要"
+    status: done
+  - action: "运维首页 HostQuickTile 接入摘要"
+    exit_signal: "置顶/最近磁贴有 notes 时多一行纯文本摘要"
+    status: done
+  - action: "回归与 backlog 更新"
+    exit_signal: "相关测试通过；highlights-backlog 主机备注标 done"
+    status: done
+
+checks:
+  - item: "不合并 Vault Notes 与 Host.notes，不新增持久化字段"
+    source: 范围守护
+    status: done
+  - item: "不改 AI 上下文、终端标题、FinalShell 导入映射"
+    source: 范围守护
+    status: done
+  - item: "summarizeHostNotes 对空/Markdown/截断行为符合契约示例"
+    source: 接口契约
+    status: done
+  - item: "无备注时不渲染空摘要行"
+    source: 接口契约
+    status: done
+  - item: "domain/hostNotes 可按挂载点清单完整拔除且无 schema 残留"
+    source: 挂载点
+    status: done
+  - item: "hostNotes 单元测试覆盖主要路径"
+    source: 测试约束
+    status: done

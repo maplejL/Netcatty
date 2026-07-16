@@ -164,6 +164,18 @@ export const zhCNAiMessages: Messages = {
   'ai.codebuddy.envVars.placeholder': 'CODEBUDDY_API_KEY=...\nCODEBUDDY_AUTH_TOKEN=...\nOTHER_VAR=...',
   'ai.codebuddy.envVars.hint': '每行一个 KEY=VALUE，传给 CodeBuddy agent。可在此设置 CODEBUDDY_API_KEY 或 CODEBUDDY_AUTH_TOKEN 完成认证。明文存在本地。',
 
+  // AI WorkBuddy
+  'ai.workbuddy.title': 'WorkBuddy',
+  'ai.workbuddy.description': '使用 WorkBuddy 桌面安装包内嵌的 Agent CLI（与 CodeBuddy 同源 SDK）。检测到后即可作为外部编程 Agent，在侧栏下拉中切换。',
+  'ai.workbuddy.detecting': '检测中...',
+  'ai.workbuddy.detected': '已检测到',
+  'ai.workbuddy.notFound': '未找到',
+  'ai.workbuddy.path': '路径：',
+  'ai.workbuddy.notFoundHint': '未找到 WorkBuddy。请安装 WorkBuddy，或在下方指定 WorkBuddy.exe / 内嵌 cli/bin/codebuddy 路径。',
+  'ai.workbuddy.customPathPlaceholder': '例如 %LOCALAPPDATA%\\Programs\\WorkBuddy\\WorkBuddy.exe',
+  'ai.workbuddy.check': '检查',
+  'ai.workbuddy.resetPath': '重置',
+
   // AI OpenCode
   'ai.opencode.title': 'OpenCode',
   'ai.opencode.description': '通过官方 SDK 接入 OpenCode。先在 OpenCode 里配置 provider 和密钥，检测到后即可作为外部编程 Agent 使用。',

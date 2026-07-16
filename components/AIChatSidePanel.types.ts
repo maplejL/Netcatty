@@ -40,6 +40,7 @@ export interface AIChatSidePanelProps {
   deleteSession: (sessionId: string, scopeKey?: string) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   updateSessionExternalSessionId: (sessionId: string, externalSessionId: string | undefined) => void;
+  updateSessionAgentId: (sessionId: string, agentId: string) => void;
   addMessageToSession: (sessionId: string, message: ChatMessage) => void;
   updateLastMessage: (
     sessionId: string,

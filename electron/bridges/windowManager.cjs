@@ -75,6 +75,8 @@ const DEFAULT_WINDOW_HEIGHT = 900;
 // host list + the 420px host details / new-host aside panel without overflow.
 const MIN_WINDOW_WIDTH = 1100;
 const MIN_WINDOW_HEIGHT = 640;
+/** Restored (non-maximized) size as a fraction of the display work area. */
+const WINDOW_NORMAL_SIZE_RATIO = 0.75;
 
 function debugLog(...args) {
   if (!DEBUG_WINDOWS) return;
@@ -171,6 +173,200 @@ function loadWindowState() {
     debugLog("Failed to load window state:", err?.message || err);
     return null;
   }
+}
+
+/**
+ * Pick a display work area for main-window placement.
+ * Prefers the display that contains the saved bounds when available.
+ */
+function resolveDisplayWorkArea(screen, preferredBounds) {
+  try {
+    if (
+      preferredBounds &&
+      typeof preferredBounds.x === "number" &&
+      typeof preferredBounds.y === "number" &&
+      typeof screen?.getDisplayMatching === "function"
+    ) {
+      const matched = screen.getDisplayMatching({
+        x: preferredBounds.x,
+        y: preferredBounds.y,
+        width: Math.max(1, preferredBounds.width || 1),
+        height: Math.max(1, preferredBounds.height || 1),
+      });
+      if (matched?.workArea) return matched.workArea;
+    }
+    const primary = screen?.getPrimaryDisplay?.();
+    if (primary?.workArea) return primary.workArea;
+    const first = screen?.getAllDisplays?.()?.[0];
+    return first?.workArea || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Place a sized window at the horizontal + vertical center of a work area.
+ */
+function centerBoundsInWorkArea(workArea, width, height) {
+  if (!workArea || !(workArea.width > 0) || !(workArea.height > 0)) {
+    return { width, height };
+  }
+  const w = Math.min(Math.max(1, Math.floor(width)), workArea.width);
+  const h = Math.min(Math.max(1, Math.floor(height)), workArea.height);
+  return {
+    width: w,
+    height: h,
+    x: Math.round(workArea.x + (workArea.width - w) / 2),
+    y: Math.round(workArea.y + (workArea.height - h) / 2),
+  };
+}
+
+/**
+ * Windowed (restored) size: 75% of the display work area, never larger than
+ * the work area, and not below the app minimums when the screen allows it.
+ * Always centered both horizontally and vertically in the work area.
+ */
+function resolveDefaultNormalWindowBounds(workArea, options = {}) {
+  const minWidth = options.minWidth ?? MIN_WINDOW_WIDTH;
+  const minHeight = options.minHeight ?? MIN_WINDOW_HEIGHT;
+  const ratio = options.ratio ?? WINDOW_NORMAL_SIZE_RATIO;
+  const fallbackWidth = options.fallbackWidth ?? DEFAULT_WINDOW_WIDTH;
+  const fallbackHeight = options.fallbackHeight ?? DEFAULT_WINDOW_HEIGHT;
+
+  if (!workArea || !(workArea.width > 0) || !(workArea.height > 0)) {
+    return {
+      width: fallbackWidth,
+      height: fallbackHeight,
+    };
+  }
+
+  const width = Math.min(
+    workArea.width,
+    Math.max(Math.min(minWidth, workArea.width), Math.round(workArea.width * ratio)),
+  );
+  const height = Math.min(
+    workArea.height,
+    Math.max(Math.min(minHeight, workArea.height), Math.round(workArea.height * ratio)),
+  );
+
+  return centerBoundsInWorkArea(workArea, width, height);
+}
+
+function isWindowPositionVisibleOnDisplays(screen, state) {
+  if (!state || typeof state.x !== "number" || typeof state.y !== "number") {
+    return false;
+  }
+  try {
+    const displays = screen?.getAllDisplays?.() || [];
+    return displays.some((display) => {
+      const { x, y, width, height } = display.bounds || {};
+      if (!(width > 0) || !(height > 0)) return false;
+      return (
+        state.x < x + width &&
+        state.x + (state.width || 0) > x &&
+        state.y < y + height &&
+        state.y + (state.height || 0) > y
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve open bounds for the main window.
+ * - Default (no saved state): maximized, restored size = 75% of work area.
+ * - Saved maximized: restore maximized; keep a valid 75%/clamped normal size.
+ * - Saved windowed: restore size/position when it fits the work area; oversized
+ *   saved sizes fall back to 75% of the work area (never larger than the screen).
+ */
+function resolveMainWindowOpenState(screen, savedState, options = {}) {
+  const minWidth = options.minWidth ?? MIN_WINDOW_WIDTH;
+  const minHeight = options.minHeight ?? MIN_WINDOW_HEIGHT;
+  const preferred =
+    savedState && typeof savedState.x === "number" && typeof savedState.y === "number"
+      ? savedState
+      : null;
+  const workArea = resolveDisplayWorkArea(screen, preferred);
+  const defaults = resolveDefaultNormalWindowBounds(workArea, {
+    minWidth,
+    minHeight,
+    ratio: options.ratio ?? WINDOW_NORMAL_SIZE_RATIO,
+    fallbackWidth: options.fallbackWidth ?? DEFAULT_WINDOW_WIDTH,
+    fallbackHeight: options.fallbackHeight ?? DEFAULT_WINDOW_HEIGHT,
+  });
+
+  if (!savedState) {
+    return {
+      bounds: defaults,
+      isMaximized: true,
+      isFullScreen: false,
+    };
+  }
+
+  // First-run / missing flag → maximized. Keep explicit false so users can stay windowed.
+  const isMaximized =
+    savedState.isMaximized === false
+      ? false
+      : savedState.isMaximized === true || savedState.isMaximized == null;
+  const willMaximize = Boolean(isMaximized) && !savedState.isFullScreen;
+
+  // Maximized sessions use a centered 75% restore size so unmaximize is
+  // dual-axis centered (Windows restores the pre-maximize create bounds).
+  if (willMaximize) {
+    return {
+      bounds: defaults,
+      isMaximized: true,
+      isFullScreen: false,
+    };
+  }
+
+  const maxWidth = workArea?.width > 0 ? workArea.width : defaults.width;
+  const maxHeight = workArea?.height > 0 ? workArea.height : defaults.height;
+  const savedWidth = Math.floor(savedState.width);
+  const savedHeight = Math.floor(savedState.height);
+  const oversized =
+    savedWidth > maxWidth ||
+    savedHeight > maxHeight ||
+    savedWidth <= 0 ||
+    savedHeight <= 0;
+
+  let width;
+  let height;
+  if (oversized) {
+    // Size changed from saved → use centered defaults (H + V).
+    return {
+      bounds: defaults,
+      isMaximized: false,
+      isFullScreen: Boolean(savedState.isFullScreen),
+    };
+  }
+
+  width = Math.min(maxWidth, Math.max(Math.min(minWidth, maxWidth), savedWidth));
+  height = Math.min(maxHeight, Math.max(Math.min(minHeight, maxHeight), savedHeight));
+  const sizeChanged = width !== savedWidth || height !== savedHeight;
+
+  // After min/max clamp, re-center so a small saved window lifted to min size
+  // does not stay pinned to a corner. Otherwise keep a still-visible position.
+  let bounds;
+  if (sizeChanged && workArea) {
+    bounds = centerBoundsInWorkArea(workArea, width, height);
+  } else {
+    bounds = { width, height };
+    if (isWindowPositionVisibleOnDisplays(screen, { ...savedState, width, height })) {
+      bounds.x = savedState.x;
+      bounds.y = savedState.y;
+    } else if (typeof defaults.x === "number" && typeof defaults.y === "number") {
+      bounds.x = defaults.x;
+      bounds.y = defaults.y;
+    }
+  }
+
+  return {
+    bounds,
+    isMaximized: false,
+    isFullScreen: Boolean(savedState.isFullScreen),
+  };
 }
 
 /**
@@ -862,6 +1058,11 @@ const mainWindowApi = createMainWindowApi({
   DEFAULT_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
   MIN_WINDOW_HEIGHT,
+  WINDOW_NORMAL_SIZE_RATIO,
+  resolveDisplayWorkArea,
+  centerBoundsInWorkArea,
+  resolveDefaultNormalWindowBounds,
+  resolveMainWindowOpenState,
   V8_CACHE_OPTIONS,
   THEME_COLORS,
   unhealthyWebContentsIds,
@@ -1317,6 +1518,14 @@ module.exports = {
   openFallbackBrowser,
   tryOpenExternalWithFallback,
   resolveSettingsWindowBounds,
+  centerBoundsInWorkArea,
+  resolveDefaultNormalWindowBounds,
+  resolveMainWindowOpenState,
+  WINDOW_NORMAL_SIZE_RATIO,
+  DEFAULT_WINDOW_WIDTH,
+  DEFAULT_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+  MIN_WINDOW_HEIGHT,
   THEME_COLORS,
   clampWindowOpacity,
   applyWindowOpacity,

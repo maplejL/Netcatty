@@ -223,7 +223,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
   }, [activeSessionId]);
 
   const visibleMessages = useMemo(
-    () => messages.filter((message) => message.role !== 'system'),
+    () => (Array.isArray(messages) ? messages : []).filter((message) => message?.role !== 'system'),
     [messages],
   );
 
@@ -396,8 +396,11 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
                 {/* User attachments (images, files) — fallback to legacy `images` field */}
                 {isUser && !hideAttachments && (message.attachments ?? message.images)?.length && (
                   <div className="flex gap-1.5 flex-wrap mb-1">
-                    {(message.attachments ?? message.images)!.map((att, i) => (
-                      att.terminalSelection ? (
+                    {(message.attachments ?? message.images)!.map((att, i) => {
+                      if (!att || typeof att !== 'object') return null;
+                      const mediaType = typeof att.mediaType === 'string' ? att.mediaType : '';
+                      const base64Data = typeof att.base64Data === 'string' ? att.base64Data : '';
+                      return att.terminalSelection ? (
                         <div
                           key={att.filename ? `${att.filename}-${i}` : `att-${message.id}-${i}`}
                           className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md bg-muted/20 border border-border/20 text-[11px] text-foreground/70"
@@ -405,13 +408,13 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
                           <SquareTerminal size={12} className="text-muted-foreground/60 shrink-0" />
                           <span className="truncate max-w-[150px]">{att.filename || 'terminal selection'}</span>
                         </div>
-                      ) : att.mediaType.startsWith('image/') ? (
+                      ) : mediaType.startsWith('image/') && base64Data ? (
                         <img
                           key={att.filename ? `${att.filename}-${i}` : `att-${message.id}-${i}`}
-                          src={`data:${att.mediaType};base64,${att.base64Data}`}
+                          src={`data:${mediaType};base64,${base64Data}`}
                           alt={att.filename || 'image'}
                           className="max-h-[120px] max-w-[200px] rounded-md object-contain border border-border/20 cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => openPreview(`data:${att.mediaType};base64,${att.base64Data}`, att.filename || 'image')}
+                          onClick={() => openPreview(`data:${mediaType};base64,${base64Data}`, att.filename || 'image')}
                         />
                       ) : (
                         <div
@@ -421,8 +424,8 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
                           <FileText size={12} className="text-muted-foreground/60 shrink-0" />
                           <span className="truncate max-w-[120px]">{att.filename || 'file'}</span>
                         </div>
-                      )
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -711,16 +714,18 @@ function areMessagesEqual(prev: ChatMessageListProps, next: ChatMessageListProps
   if (prev.onOpenVaultHost !== next.onOpenVaultHost) return false;
   if (prev.onOpenVaultSnippet !== next.onOpenVaultSnippet) return false;
   if (prev.onOpenVaultSection !== next.onOpenVaultSection) return false;
-  if (prev.messages.length !== next.messages.length) return false;
+  const prevMessages = Array.isArray(prev.messages) ? prev.messages : [];
+  const nextMessages = Array.isArray(next.messages) ? next.messages : [];
+  if (prevMessages.length !== nextMessages.length) return false;
   if (prev.messages === next.messages) return true;
 
   // Shallow-compare each message by reference
-  for (let i = 0; i < prev.messages.length; i++) {
-    if (prev.messages[i] !== next.messages[i]) {
+  for (let i = 0; i < prevMessages.length; i++) {
+    if (prevMessages[i] !== nextMessages[i]) {
       // For the last message during streaming, compare by content to avoid
       // re-renders when only the array reference changed but content is the same
-      const p = prev.messages[i];
-      const n = next.messages[i];
+      const p = prevMessages[i];
+      const n = nextMessages[i];
       if (
         p.id !== n.id ||
         p.content !== n.content ||

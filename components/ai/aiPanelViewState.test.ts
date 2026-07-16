@@ -75,6 +75,52 @@ test("missing session target normalizes back to draft view", () => {
   assert.deepEqual(normalizePanelView(panelView, sessions), { mode: "draft" });
 });
 
+test("resolveDisplayedSession falls back to known sessions when scoped history lags", () => {
+  const selectedSession = createSession("session-live");
+  const panelView: AIPanelView = { mode: "session", sessionId: selectedSession.id };
+  const historySessions = [createSession("session-1")];
+  const allSessions = [selectedSession, ...historySessions];
+
+  assert.equal(
+    resolveDisplayedSession(panelView, historySessions, allSessions),
+    selectedSession,
+  );
+});
+
+test("resolveDisplayedPanelView keeps session mode when only knownSessions has the id", () => {
+  const live = createSession("session-live");
+  const historySessions = [createSession("session-1")];
+
+  assert.deepEqual(
+    resolveDisplayedPanelView(
+      { mode: "session", sessionId: live.id },
+      true,
+      historySessions,
+      live.id,
+      "terminal",
+      [live, ...historySessions],
+    ),
+    { mode: "session", sessionId: live.id },
+  );
+});
+
+test("resolveDisplayedPanelView accepts a known session id set", () => {
+  const live = createSession("session-live");
+  const historySessions = [createSession("session-1")];
+
+  assert.deepEqual(
+    resolveDisplayedPanelView(
+      { mode: "session", sessionId: live.id },
+      false,
+      historySessions,
+      live.id,
+      "workspace",
+      new Set([live.id, "session-1"]),
+    ),
+    { mode: "session", sessionId: live.id },
+  );
+});
+
 test("missing explicit panel view resumes the most recent matching history when no draft exists", () => {
   const sessions = [createSession("session-2"), createSession("session-1")];
 

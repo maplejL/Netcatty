@@ -9,7 +9,13 @@ import {
 export { buildVaultHostMergeKey } from "./vaultHostCreate";
 import { parseQuickConnectInput } from "./quickConnect";
 import { findHeaderIndex, parseCsv } from "./vaultImport/csvUtils";
+import {
+  importFromFinalShell,
+  isFinalShellConnectJson,
+  isFinalShellConfigJson,
+} from "./vaultImport/finalshell";
 export { exportHostsToCsvWithStats, getVaultCsvTemplate } from "./vaultImport/csvExport";
+export type { FinalShellImportCrypto } from "./vaultImport/finalshell";
 
 interface ParsedJumpHost {
   hostname: string;
@@ -91,7 +97,8 @@ export type VaultImportFormat =
   | "mobaxterm"
   | "csv"
   | "securecrt"
-  | "ssh_config";
+  | "ssh_config"
+  | "finalshell";
 
 export const VAULT_IMPORT_FORMATS: VaultImportFormat[] = [
   "csv",
@@ -99,7 +106,15 @@ export const VAULT_IMPORT_FORMATS: VaultImportFormat[] = [
   "mobaxterm",
   "securecrt",
   "ssh_config",
+  "finalshell",
 ];
+
+export type VaultImportTextOptions = {
+  fileName?: string;
+  finalshellFiles?: Array<{ text: string; fileName?: string }>;
+  finalshellSecretKeyMap?: Record<string, string>;
+  finalshellCrypto?: import("./vaultImport/finalshell").FinalShellImportCrypto;
+};
 
 type VaultImportIssueLevel = "warning" | "error";
 
@@ -917,8 +932,10 @@ const importFromMobaXterm = (text: string): VaultImportResult => {
 export const importVaultHostsFromText = (
   format: VaultImportFormat,
   text: string,
-  options?: { fileName?: string },
-): VaultImportResult => {
+  options?: VaultImportTextOptions,
+): VaultImportResult & {
+  keyAttachments?: Array<{ hostKey: string; label: string; privateKeyPem: string }>;
+} => {
   const input = text ?? "";
   switch (format) {
     case "csv":
@@ -931,6 +948,22 @@ export const importVaultHostsFromText = (
       return importFromSecureCrt(input, options?.fileName);
     case "mobaxterm":
       return importFromMobaXterm(input);
+    case "finalshell": {
+      const files = options?.finalshellFiles?.length
+        ? options.finalshellFiles
+        : [{ text: input, fileName: options?.fileName }];
+      const result = importFromFinalShell(files, {
+        secretKeyMap: options?.finalshellSecretKeyMap,
+        crypto: options?.finalshellCrypto,
+      });
+      return {
+        hosts: result.hosts,
+        groups: result.groups,
+        issues: result.issues,
+        stats: result.stats,
+        keyAttachments: result.keyAttachments,
+      };
+    }
     default: {
       const _exhaustive: never = format;
       return _exhaustive;
@@ -959,6 +992,10 @@ export function detectVaultImportFormat(text: string): VaultImportFormat | null 
 
   if (/S:"Hostname"/m.test(input) && (/S:"Username"/m.test(input) || /D:"\[Sessions\]/i.test(input))) {
     return "securecrt";
+  }
+
+  if (isFinalShellConnectJson(input) || isFinalShellConfigJson(input)) {
+    return "finalshell";
   }
 
   const firstLine = input.split(/\r?\n/, 1)[0] ?? "";

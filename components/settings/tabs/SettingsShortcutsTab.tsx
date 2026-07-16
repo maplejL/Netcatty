@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, RotateCcw } from "lucide-react";
 import type { HotkeyScheme, KeyBinding } from "../../../domain/models";
-import { keyEventToString } from "../../../domain/models";
+import {
+  DEFAULT_KEY_BINDINGS,
+  findKeyBindingConflict,
+  isModifierKeyName,
+  keyEventToString,
+} from "../../../domain/models";
 import { useI18n } from "../../../application/i18n/I18nProvider";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
+import { toast } from "../../ui/toast";
 import { SectionHeader, Select, SettingsTabContent, SettingRow, Toggle } from "../settings-ui";
 
 export default function SettingsShortcutsTab(props: {
@@ -60,6 +66,38 @@ export default function SettingsShortcutsTab(props: {
 
     const specialSuffix = getSpecialSuffix(recordingBindingId);
 
+    // Track whether a non-modifier was pressed while holding a modifier so that
+    // releasing bare Alt/Ctrl can be recorded as FinalShell-style single-key binds.
+    let chordUsed = false;
+
+    const commitBinding = (keyString: string) => {
+      if (!keyString) return;
+
+      const conflict = findKeyBindingConflict(
+        keyBindings,
+        recordingBindingId,
+        recordingScheme,
+        keyString,
+      );
+      if (conflict) {
+        const conflictLabelKey = `settings.shortcuts.binding.${conflict.bindingId}`;
+        const conflictLabel =
+          t(conflictLabelKey) !== conflictLabelKey ? t(conflictLabelKey) : conflict.label;
+        toast.warning(
+          t("settings.shortcuts.conflict.message", {
+            key: keyString,
+            action: conflictLabel,
+          }),
+          t("settings.shortcuts.conflict.title"),
+        );
+        // Keep recording so the user can try another combination.
+        return;
+      }
+
+      updateKeyBinding?.(recordingBindingId, recordingScheme, keyString);
+      cancelRecording();
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -69,9 +107,14 @@ export default function SettingsShortcutsTab(props: {
         return;
       }
 
-      if (specialSuffix) {
-        if (["Meta", "Control", "Alt", "Shift"].includes(e.key)) return;
+      if (isModifierKeyName(e.key)) {
+        // Wait for keyup for pure modifiers (or a later non-modifier keydown).
+        return;
+      }
 
+      chordUsed = true;
+
+      if (specialSuffix) {
         const parts: string[] = [];
         if (recordingScheme === "mac") {
           if (e.metaKey) parts.push("⌘");
@@ -86,17 +129,39 @@ export default function SettingsShortcutsTab(props: {
         }
 
         const modifierString = parts.length > 0 ? `${parts.join(" + ")} + ` : "";
-        const fullKeyString = modifierString + specialSuffix;
-
-        updateKeyBinding?.(recordingBindingId, recordingScheme, fullKeyString);
-        cancelRecording();
+        commitBinding(modifierString + specialSuffix);
         return;
       }
 
-      if (["Meta", "Control", "Alt", "Shift"].includes(e.key)) return;
-      const keyString = keyEventToString(e, recordingScheme === "mac");
-      updateKeyBinding?.(recordingBindingId, recordingScheme, keyString);
-      cancelRecording();
+      commitBinding(keyEventToString(e, recordingScheme === "mac"));
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!isModifierKeyName(e.key)) return;
+      if (chordUsed) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Special bindings (arrows / 1-9) still need a real key, not a bare modifier.
+      if (specialSuffix) return;
+
+      const isMacScheme = recordingScheme === "mac";
+      if (e.key === "Alt") {
+        commitBinding(isMacScheme ? "⌥" : "Alt");
+        return;
+      }
+      if (e.key === "Control") {
+        commitBinding(isMacScheme ? "⌃" : "Ctrl");
+        return;
+      }
+      if (e.key === "Shift") {
+        commitBinding("Shift");
+        return;
+      }
+      if (e.key === "Meta" || e.key === "OS") {
+        commitBinding(isMacScheme ? "⌘" : "Win");
+      }
     };
 
     const handleClick = () => {
@@ -108,12 +173,22 @@ export default function SettingsShortcutsTab(props: {
     }, 100);
 
     window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
     return () => {
       clearTimeout(timer);
       window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("click", handleClick, true);
     };
-  }, [recordingBindingId, recordingScheme, updateKeyBinding, cancelRecording, getSpecialSuffix]);
+  }, [
+    recordingBindingId,
+    recordingScheme,
+    updateKeyBinding,
+    cancelRecording,
+    getSpecialSuffix,
+    keyBindings,
+    t,
+  ]);
 
   useEffect(() => {
     const isRecording = Boolean(recordingBindingId && recordingScheme);
@@ -262,7 +337,36 @@ export default function SettingsShortcutsTab(props: {
                             </button>
                           )}
                           <button
-                            onClick={() => resetKeyBinding?.(binding.id, scheme)}
+                            onClick={() => {
+                              const defaults = DEFAULT_KEY_BINDINGS.find((b) => b.id === binding.id);
+                              const defaultKey = defaults
+                                ? (scheme === "mac" ? defaults.mac : defaults.pc)
+                                : null;
+                              if (defaultKey) {
+                                const conflict = findKeyBindingConflict(
+                                  keyBindings,
+                                  binding.id,
+                                  scheme,
+                                  defaultKey,
+                                );
+                                if (conflict) {
+                                  const conflictLabelKey = `settings.shortcuts.binding.${conflict.bindingId}`;
+                                  const conflictLabel =
+                                    t(conflictLabelKey) !== conflictLabelKey
+                                      ? t(conflictLabelKey)
+                                      : conflict.label;
+                                  toast.warning(
+                                    t("settings.shortcuts.conflict.message", {
+                                      key: defaultKey,
+                                      action: conflictLabel,
+                                    }),
+                                    t("settings.shortcuts.conflict.title"),
+                                  );
+                                  return;
+                                }
+                              }
+                              resetKeyBinding?.(binding.id, scheme);
+                            }}
                             className="p-1 hover:bg-muted rounded"
                             aria-label={t("settings.shortcuts.resetToDefault")}
                           >

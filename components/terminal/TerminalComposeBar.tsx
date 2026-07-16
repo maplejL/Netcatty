@@ -3,7 +3,7 @@
  * An immersive prompt bar below the terminal with a quick-snippet strip,
  * user-resizable height, and terminal-matched chrome.
  */
-import { GripHorizontal, Pin, Plus, Radio, Search, X } from 'lucide-react';
+import { GripHorizontal, Pin, Plus, Radio, Search, TerminalSquare, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useComposeBarHeight } from '../../application/state/useComposeBarHeight';
 import { useComposeBarPinnedSnippets } from '../../application/state/useComposeBarPinnedSnippets';
@@ -12,6 +12,7 @@ import { resolveSnippetCommand } from '../SnippetExecutionProvider';
 import { Snippet } from '../../types';
 import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import {
   buildSnippetIdKey,
@@ -272,6 +273,7 @@ export interface TerminalComposeBarProps {
   onSnippetClick?: (snippet: Snippet) => void;
   snippets?: Snippet[];
   isBroadcastEnabled?: boolean;
+  onOpenBatchExec?: () => void;
   themeColors?: {
     background: string;
     foreground: string;
@@ -284,6 +286,7 @@ export const TerminalComposeBar: React.FC<TerminalComposeBarProps> = ({
   onSnippetClick,
   snippets = [],
   isBroadcastEnabled,
+  onOpenBatchExec,
   themeColors,
 }) => {
   const { t } = useI18n();
@@ -468,6 +471,23 @@ export const TerminalComposeBar: React.FC<TerminalComposeBarProps> = ({
 
       <div className="flex-1 min-h-0 px-3 pt-1.5 pb-2 flex flex-col">
         <div className="flex flex-1 min-h-0 items-start gap-1.5">
+          {onOpenBatchExec && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 flex-shrink-0 p-0"
+                  onClick={onOpenBatchExec}
+                  aria-label={t('batchExec.openFromWorkspace')}
+                >
+                  <TerminalSquare size={14} style={{ color: theme.mutedFg }} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('batchExec.openFromWorkspace')}</TooltipContent>
+            </Tooltip>
+          )}
           {isBroadcastEnabled && (
             <Tooltip>
               <TooltipTrigger asChild>

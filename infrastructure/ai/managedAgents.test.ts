@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getExternalAgentSdkBackend, matchesManagedAgentConfig } from './managedAgents';
+import { getExternalAgentSdkBackend, getManualAgentCommand, getSdkAgentCommand, matchesManagedAgentConfig } from './managedAgents';
 
 test('managed Claude matching ignores legacy adapter command-only configs', () => {
   assert.equal(
@@ -59,9 +59,63 @@ test('claude managed config matches by sdk backend value', () => {
   );
 });
 
+test('workbuddy managed config matches by sdk backend and discovered id', () => {
+  assert.equal(
+    matchesManagedAgentConfig(
+      { id: 'discovered_workbuddy', command: 'workbuddy', sdkBackend: 'workbuddy' },
+      'workbuddy',
+    ),
+    true,
+  );
+  assert.equal(
+    matchesManagedAgentConfig(
+      {
+        id: 'discovered_workbuddy',
+        command:
+          'C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy',
+        sdkBackend: 'workbuddy',
+      },
+      'workbuddy',
+    ),
+    true,
+  );
+});
+
 test('legacy backend field is still accepted for saved settings', () => {
   assert.equal(
     getExternalAgentSdkBackend({ acpCommand: 'codex' }),
     'codex',
+  );
+});
+
+test('getSdkAgentCommand returns manual path when commandSource is manual', () => {
+  assert.equal(
+    getSdkAgentCommand({
+      command: 'C:\\tools\\codebuddy.cmd',
+      commandSource: 'manual',
+    }),
+    'C:\\tools\\codebuddy.cmd',
+  );
+});
+
+test('getSdkAgentCommand returns auto-discovered path-like command', () => {
+  const embedded =
+    'C:\\Users\\u\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy';
+  assert.equal(
+    getSdkAgentCommand({
+      command: embedded,
+      commandSource: 'auto',
+    }),
+    embedded,
+  );
+});
+
+test('getSdkAgentCommand ignores non-path auto command names', () => {
+  assert.equal(
+    getSdkAgentCommand({
+      command: 'workbuddy',
+      commandSource: 'auto',
+    }),
+    undefined,
   );
 });

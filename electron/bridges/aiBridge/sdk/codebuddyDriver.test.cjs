@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const {
   buildCodebuddyQueryOptions,
   buildCodebuddyPromptInput,
+  classifyCodebuddySpawnError,
   codebuddyBuiltinTools,
+  formatCodebuddyCliMissingError,
   mapCodebuddyModels,
   runCodebuddyTurn,
   translateCodebuddyMessage,
@@ -139,7 +141,7 @@ test("runCodebuddyTurn does not duplicate assistant text after streamed text", a
     queryFn: () => fakeQuery(),
   });
 
-  assert.deepEqual(result, { sessionId: "sess-1" });
+  assert.deepEqual(result, { sessionId: "sess-1", resumeInvalidated: false });
   assert.deepEqual(events, [
     { k: "sessionId", s: "sess-1" },
     { k: "text", t: "hello" },
@@ -184,7 +186,7 @@ test("runCodebuddyTurn interrupts the SDK query as soon as abort is signaled", a
   ac.abort();
   const result = await turn;
 
-  assert.deepEqual(result, { sessionId: "sess-1" });
+  assert.deepEqual(result, { sessionId: "sess-1", resumeInvalidated: false });
   assert.ok(interruptCount >= 1);
   assert.deepEqual(events, [
     { k: "sessionId", s: "sess-1" },
@@ -225,4 +227,103 @@ test("mapCodebuddyModels maps model ids and drops invalid entries", () => {
     { id: "cb-2", name: "CodeBuddy 2", description: undefined },
   ]);
   assert.deepEqual(mapCodebuddyModels(null), []);
+});
+
+test("classifyCodebuddySpawnError does not treat bare 'not found' as missing CLI", () => {
+  const modelMiss = classifyCodebuddySpawnError(new Error("Model glm-x not found"));
+  assert.equal(modelMiss.isSpawnEnoent, false);
+  assert.equal(modelMiss.isStaleResume, false);
+
+  const mcpMiss = classifyCodebuddySpawnError(new Error("SDK MCP server not found: netcatty"));
+  assert.equal(mcpMiss.isSpawnEnoent, false);
+
+  const enoent = new Error("spawn node ENOENT");
+  enoent.code = "ENOENT";
+  assert.equal(classifyCodebuddySpawnError(enoent).isSpawnEnoent, true);
+
+  const cliMiss = classifyCodebuddySpawnError(new Error("CodeBuddy CLI not found.\n\nPossible solutions"));
+  assert.equal(cliMiss.isSpawnEnoent, true);
+
+  const stale = classifyCodebuddySpawnError(new Error("Session not found: abc-123"));
+  assert.equal(stale.isSpawnEnoent, false);
+  assert.equal(stale.isStaleResume, true);
+});
+
+test("formatCodebuddyCliMissingError distinguishes WorkBuddy paths", () => {
+  assert.match(
+    formatCodebuddyCliMissingError(
+      "C:\\\\Users\\\\u\\\\AppData\\\\Local\\\\Programs\\\\WorkBuddy\\\\resources\\\\app.asar.unpacked\\\\cli\\\\dist\\\\codebuddy.js",
+    ),
+    /WorkBuddy agent CLI/,
+  );
+  assert.match(formatCodebuddyCliMissingError("/opt/codebuddy/dist/codebuddy.js"), /CodeBuddy CLI/);
+});
+
+test("runCodebuddyTurn retries once without resume when session is stale", async () => {
+  const { events, emitter } = collector();
+  let calls = 0;
+  const fakeQuery = ({ options }) => {
+    calls += 1;
+    if (calls === 1) {
+      assert.equal(options.resume, "stale-session");
+      return {
+        async *[Symbol.asyncIterator]() {
+          throw new Error("Session not found: stale-session");
+        },
+      };
+    }
+    assert.equal(options.resume, undefined);
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: "assistant",
+          session_id: "fresh-1",
+          message: { content: [{ type: "text", text: "ok after retry" }] },
+        };
+      },
+    };
+  };
+
+  const result = await runCodebuddyTurn({
+    prompt: "continue",
+    options: {
+      resume: "stale-session",
+      pathToCodebuddyCode: "/opt/codebuddy/dist/codebuddy.js",
+    },
+    emitter,
+    queryFn: fakeQuery,
+  });
+
+  assert.equal(calls, 2);
+  assert.deepEqual(result, { sessionId: "fresh-1", resumeInvalidated: true });
+  assert.ok(events.some((e) => e.k === "status"));
+  assert.ok(events.some((e) => e.k === "text" && e.t === "ok after retry"));
+  assert.ok(events.some((e) => e.k === "done"));
+  assert.ok(!events.some((e) => e.k === "error"));
+});
+
+test("runCodebuddyTurn keeps real CLI-missing errors after classification", async () => {
+  const { events, emitter } = collector();
+  const err = new Error("spawn C:\\\\missing\\\\codebuddy ENOENT");
+  err.code = "ENOENT";
+  const fakeQuery = () => ({
+    async *[Symbol.asyncIterator]() {
+      throw err;
+    },
+  });
+
+  const result = await runCodebuddyTurn({
+    prompt: "hi",
+    options: {
+      pathToCodebuddyCode:
+        "C:\\\\Users\\\\u\\\\AppData\\\\Local\\\\Programs\\\\WorkBuddy\\\\resources\\\\app.asar.unpacked\\\\cli\\\\dist\\\\codebuddy.js",
+    },
+    emitter,
+    queryFn: fakeQuery,
+  });
+
+  assert.equal(result.sessionId, null);
+  const errorEvent = events.find((e) => e.k === "error");
+  assert.ok(errorEvent);
+  assert.match(errorEvent.m, /WorkBuddy agent CLI not found/);
 });

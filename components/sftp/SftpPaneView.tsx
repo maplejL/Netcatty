@@ -77,6 +77,8 @@ interface SftpPaneViewProps {
   showEmptyHeader?: boolean;
   onToggleShowHiddenFiles?: () => void;
   onGoToTerminalCwd?: () => void;
+  /** True while resolving terminal cwd / navigating after "go to terminal directory". */
+  goToTerminalCwdLoading?: boolean;
   followTerminalCwd?: boolean;
   onToggleFollowTerminalCwd?: () => void;
   /** When true, treat this pane as always active (used by SftpSidePanel which manages visibility itself) */
@@ -93,6 +95,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
   showEmptyHeader = true,
   onToggleShowHiddenFiles,
   onGoToTerminalCwd,
+  goToTerminalCwdLoading = false,
   followTerminalCwd,
   onToggleFollowTerminalCwd,
   forceActive,
@@ -530,6 +533,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
         showHiddenFiles={pane.showHiddenFiles}
         onToggleShowHiddenFiles={onToggleShowHiddenFiles}
         onGoToTerminalCwd={onGoToTerminalCwd}
+        goToTerminalCwdLoading={goToTerminalCwdLoading}
         followTerminalCwd={followTerminalCwd}
         onToggleFollowTerminalCwd={onToggleFollowTerminalCwd}
         viewMode={viewMode}
@@ -702,6 +706,7 @@ const sftpPaneViewAreEqual = (
   if (prev.followTerminalCwd !== next.followTerminalCwd) return false;
   if (prev.onToggleFollowTerminalCwd !== next.onToggleFollowTerminalCwd) return false;
   if (prev.onGoToTerminalCwd !== next.onGoToTerminalCwd) return false;
+  if (prev.goToTerminalCwdLoading !== next.goToTerminalCwdLoading) return false;
   if (prev.onToggleShowHiddenFiles !== next.onToggleShowHiddenFiles) return false;
 
   return true;

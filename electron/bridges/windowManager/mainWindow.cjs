@@ -29,44 +29,24 @@ function createMainWindowApi(ctx) {
       const backgroundColor = frontendBackground || "#1a1a1a";
       const themeConfig = THEME_COLORS[effectiveTheme] || THEME_COLORS.light;
     
-      // Load saved window state
+      // Load saved window state. Default open is maximized with a 75% restore size.
       const savedState = persistWindowState ? loadWindowState() : null;
-      let windowBounds = {
-        width: DEFAULT_WINDOW_WIDTH,
-        height: DEFAULT_WINDOW_HEIGHT,
-      };
-    
-      if (savedState) {
-        // Use saved dimensions, but clamp to the minimum so a previously
-        // shrunk window from an older build cannot start below the minimum.
-        windowBounds.width = Math.max(savedState.width, MIN_WINDOW_WIDTH);
-        windowBounds.height = Math.max(savedState.height, MIN_WINDOW_HEIGHT);
-    
-        // Only use saved position if the screen is available at that location
-        if (typeof savedState.x === "number" && typeof savedState.y === "number") {
-          try {
-            // Check if the saved position is within any available display
-            const displays = screen?.getAllDisplays?.() || [];
-            const isPositionVisible = displays.some((display) => {
-              const { x, y, width, height } = display.bounds;
-              // Check if at least part of the window would be visible on this display
-              return (
-                savedState.x < x + width &&
-                savedState.x + savedState.width > x &&
-                savedState.y < y + height &&
-                savedState.y + savedState.height > y
-              );
-            });
-    
-            if (isPositionVisible) {
-              windowBounds.x = savedState.x;
-              windowBounds.y = savedState.y;
-            }
-          } catch {
-            // Ignore screen check errors, just don't set position
-          }
-        }
-      }
+      const openState = typeof resolveMainWindowOpenState === "function"
+        ? resolveMainWindowOpenState(screen, savedState, {
+            minWidth: MIN_WINDOW_WIDTH,
+            minHeight: MIN_WINDOW_HEIGHT,
+            fallbackWidth: DEFAULT_WINDOW_WIDTH,
+            fallbackHeight: DEFAULT_WINDOW_HEIGHT,
+          })
+        : {
+            bounds: {
+              width: DEFAULT_WINDOW_WIDTH,
+              height: DEFAULT_WINDOW_HEIGHT,
+            },
+            isMaximized: true,
+            isFullScreen: false,
+          };
+      const windowBounds = openState.bounds;
     
       const win = new BrowserWindow({
         ...windowBounds,
@@ -186,8 +166,10 @@ function createMainWindowApi(ctx) {
         win.webContents.setIgnoreMenuShortcuts(false);
       });
     
-      // Restore maximized state if it was saved
-      if (savedState?.isMaximized && !savedState?.isFullScreen) {
+      // Maximize by default (and when the last session was maximized).
+      // Create with the restored (75% / clamped) bounds first so unmaximize
+      // does not expand larger than the display.
+      if (openState.isMaximized && !openState.isFullScreen) {
         win.once("ready-to-show", () => {
           try {
             win.maximize();
@@ -198,7 +180,7 @@ function createMainWindowApi(ctx) {
       }
     
       // Track window bounds for saving (use last non-maximized/non-fullscreen bounds)
-      let lastNormalBounds = null;
+      let lastNormalBounds = { ...windowBounds };
       let saveStateTimer = null;
       let thisWindowCloseRequested = false;
       let dirtyEditorCloseConfirmed = false;
@@ -231,6 +213,26 @@ function createMainWindowApi(ctx) {
     
       win.on("maximize", scheduleSaveState);
       win.on("unmaximize", () => {
+        // Windows restores pre-maximize bounds which may sit in a corner.
+        // Re-center H + V inside the current display work area while keeping size.
+        try {
+          if (!win.isDestroyed()) {
+            const current = win.getBounds();
+            const display = typeof screen?.getDisplayMatching === "function"
+              ? screen.getDisplayMatching(current)
+              : screen?.getPrimaryDisplay?.();
+            const workArea = display?.workArea || null;
+            if (typeof centerBoundsInWorkArea === "function" && workArea) {
+              const centered = centerBoundsInWorkArea(workArea, current.width, current.height);
+              if (typeof centered.x === "number" && typeof centered.y === "number") {
+                win.setBounds(centered);
+                lastNormalBounds = { ...centered };
+              }
+            }
+          }
+        } catch {
+          // ignore centering failures
+        }
         updateNormalBounds();
         scheduleSaveState();
       });

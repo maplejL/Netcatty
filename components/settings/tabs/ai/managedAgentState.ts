@@ -60,16 +60,16 @@ export function buildManagedAgentState(
         defaultAgentId: existingManaged.id === defaultAgentId ? "catty" : defaultAgentId,
       };
     }
-    if (agentKey === "codebuddy") {
+    if (agentKey === "codebuddy" || agentKey === "workbuddy") {
       if (existingManaged?.env && Object.keys(existingManaged.env).length > 0) {
         return {
           agents: [
             ...otherAgents,
             {
               ...existingManaged,
-              ...AGENT_DEFAULTS.codebuddy,
+              ...AGENT_DEFAULTS[agentKey],
               id: managedId,
-              command: existingManaged.command || "codebuddy",
+              command: existingManaged.command || agentKey,
               enabled: false,
             },
           ],
@@ -97,6 +97,13 @@ export function buildManagedAgentState(
       ? { ...(existingManaged?.env ?? {}), CLAUDE_CODE_EXECUTABLE: pathInfo.path }
       : agentKey === "codebuddy"
         ? { ...(existingManaged?.env ?? {}), CODEBUDDY_CODE_PATH: pathInfo.path }
+        : agentKey === "workbuddy"
+          ? {
+            ...(existingManaged?.env ?? {}),
+            WORKBUDDY_CODE_PATH: pathInfo.path,
+            // SDK driver reuses CodeBuddy path option / env.
+            CODEBUDDY_CODE_PATH: pathInfo.path,
+          }
         : agentKey === "opencode"
           ? { ...(existingManaged?.env ?? {}), OPENCODE_BIN: pathInfo.path }
           : existingManaged?.env;
@@ -109,7 +116,11 @@ export function buildManagedAgentState(
     ...(managedEnv ? { env: managedEnv } : {}),
     available: true,
     enabled: managedAgents.length === 0
-      || (agentKey === "codebuddy" && existingManaged && !isPathLikeCommand(existingManaged.command))
+      || (
+        (agentKey === "codebuddy" || agentKey === "workbuddy")
+        && existingManaged
+        && !isPathLikeCommand(existingManaged.command)
+      )
       ? true
       : managedAgents.some((agent) => agent.enabled) || managedAgents.every((agent) => agent.available === false),
   };
@@ -163,6 +174,7 @@ export function getInitialManagedAgentPaths(agents: ExternalAgentConfig[]) {
     copilot: getAutoManagedAgentStoredPath(agents, "copilot") ?? "",
     cursor: getAutoManagedAgentStoredPath(agents, "cursor") ?? "",
     codebuddy: getAutoManagedAgentStoredPath(agents, "codebuddy") ?? "",
+    workbuddy: getAutoManagedAgentStoredPath(agents, "workbuddy") ?? "",
     opencode: getAutoManagedAgentStoredPath(agents, "opencode") ?? "",
   };
 }

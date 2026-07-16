@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from "react";
 
+import { deriveIpGroupPath } from "../../domain/hostIpGroup";
 import { upsertKnownHost } from "../../domain/knownHosts";
 import { sortByVaultOrder, sortVaultStringsByOrder } from "../../domain/vaultOrder";
 import { matchesHostSearchQuery, matchesSearchQuery } from "../../lib/searchMatcher";
@@ -21,7 +22,7 @@ interface UseVaultHostCollectionsOptions {
   showOnlyUngroupedHostsInRoot: boolean;
   showRecentHosts: boolean;
   sortMode: SortMode;
-  viewMode: "grid" | "list" | "tree";
+  viewMode: "home" | "grid" | "list" | "tree";
 }
 
 export function useVaultHostCollections({
@@ -295,8 +296,14 @@ export function useVaultHostCollections({
       orderedCustomGroups.forEach((path) => insertPath(path));
       // Use filtered hosts (treeViewHosts) instead of all hosts to respect search/tag filters
       treeViewHosts.forEach((host) => {
-        if (host.group && host.group.trim() !== "") {
-          insertPath(host.group, host);
+        const explicitGroup = host.group?.trim();
+        if (explicitGroup) {
+          insertPath(explicitGroup, host);
+          return;
+        }
+        const ipGroup = deriveIpGroupPath(host.hostname);
+        if (ipGroup) {
+          insertPath(ipGroup, host);
         }
       });
   
@@ -311,6 +318,13 @@ export function useVaultHostCollections({
       if (sortMode === "manual") return sortGroupNodes(nodes);
       return nodes.sort((a, b) => a.name.localeCompare(b.name));
     }, [buildTreeViewGroupTree, sortGroupNodes, sortMode]);
+
+  const treeViewUngroupedHosts = useMemo(() => {
+    return treeViewHosts.filter((host) => {
+      if (host.group?.trim()) return false;
+      return !deriveIpGroupPath(host.hostname);
+    });
+  }, [treeViewHosts]);
   
   // Compute all unique tags across all hosts
     const allTags = useMemo(() => {
@@ -475,6 +489,7 @@ export function useVaultHostCollections({
     shouldHideEmptyRootHostsSection,
     treeViewGroupTree,
     treeViewHosts,
+    treeViewUngroupedHosts,
     visibleDisplayedHosts,
   };
 }

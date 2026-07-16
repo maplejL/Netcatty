@@ -10,12 +10,32 @@
  * need a renderer yet — it buffers output via xterm's default DOM renderer and
  * upgrades to WebGL the moment it becomes visible.
  *
- * Visible panes (single connect, the active tab of a batch) keep the current
- * behavior: WebGL is created immediately.
+ * In a workspace split, every pane is layout-visible at once but only the focused
+ * pane should hold WebGL; background panes stay on the DOM renderer until focused.
  */
+export function shouldCreateWebglOnMount(opts: {
+  isVisible: boolean;
+  inWorkspace: boolean;
+  isFocusMode: boolean;
+  isFocused: boolean;
+}): boolean {
+  if (!opts.isVisible) return false;
+  if (opts.inWorkspace && !opts.isFocusMode && !opts.isFocused) return false;
+  return true;
+}
+
 export function shouldDeferWebglUntilVisible(opts: {
   useWebGLAddon: boolean;
   initiallyVisible: boolean;
 }): boolean {
   return opts.useWebGLAddon && !opts.initiallyVisible;
+}
+
+/** Drop WebGL when a workspace split pane loses focus so at most one context stays live. */
+export function shouldSuspendWebglOnWorkspaceBlur(opts: {
+  inWorkspace: boolean;
+  isFocusMode: boolean;
+  isFocused: boolean;
+}): boolean {
+  return opts.inWorkspace && !opts.isFocusMode && !opts.isFocused;
 }

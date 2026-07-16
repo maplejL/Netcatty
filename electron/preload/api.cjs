@@ -646,6 +646,16 @@ function createPreloadApi(ctx) {
     ipcRenderer.invoke("netcatty:dialog:confirmCloseBusy", payload),
   getVaultBackupCapabilities: () =>
     ipcRenderer.invoke("netcatty:vaultBackups:capabilities"),
+  finalshell: {
+    decodePassword: async (encrypted) => {
+      const result = await ipcRenderer.invoke("netcatty:finalshell:decodePassword", encrypted);
+      return result?.ok ? (result.password ?? null) : null;
+    },
+    decodePrivateKey: async (keyData) => {
+      const result = await ipcRenderer.invoke("netcatty:finalshell:decodePrivateKey", keyData);
+      return result?.ok ? (result.privateKey ?? null) : null;
+    },
+  },
   createVaultBackup: (payload) =>
     ipcRenderer.invoke("netcatty:vaultBackups:create", payload),
   listVaultBackups: () =>

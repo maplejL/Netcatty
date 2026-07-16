@@ -8,7 +8,7 @@ import { getTerminalSidePanelShellWidth } from './TerminalLayerSidePanelSection'
 type TerminalLayerEffectsContext = Record<string, any>;
 
 export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
-  const { activeSidePanelTab, activeTabId, activeTabIdRef, activeWorkspace, activityTrackedSessions, cancelAnimationFrame, ChunkedEscapeFilter, clearTimeout, clearTopTabsPreviewVars, document, dropHint, filterTabsMap, focusedSessionId, getSessionActivityIdsToClear, handleToggleAiFromTopBar, handleToggleScriptsSidePanel, handleToggleSidePanel, hasNotifiableTerminalOutput, isComposeBarOpen, isFocusMode, isTerminalLayerVisible, lastSidePanelTabRef, Map, onSessionData, onSplitSessionRef, onToggleBroadcastRef, onToggleWorkspaceViewModeRef, prevFocusedSessionIdRef, refocusActiveTerminalSession, requestAnimationFrame, ResizeObserver, sessionActivityStore, sessions, Set, setAiMountedTabIds, setDropHint, setNotesMountedTabIds, setScriptsMountedTabIds, setSystemMountedTabIds, setSftpHostForTab, setSftpInitialLocationForTab, setSftpPendingUploadsForTab, setSidePanelOpenTabs, setThemeMountedTabIds, setTimeout, setupMcpApprovalBridge, setWorkspaceArea, sidePanelPosition, sidePanelWidth, sftpActiveHost, sftpHostForTab, shouldMarkSessionActivity, sidePanelOpenTabs, splitHorizontalHandlersRef, splitVerticalHandlersRef, terminalRendererCwdBySessionRef, toggleScriptsSidePanelRef, toggleSidePanelRef, validAIScopeTargetIds, validSessionActivityIds, window, workspaceBroadcastHandlersRef, workspaceFocusHandlersRef, workspaceInnerRef, workspaces } = ctx;
+  const { activeSidePanelTab, activeTabId, activeTabIdRef, activeWorkspace, activityTrackedSessions, cancelAnimationFrame, ChunkedEscapeFilter, clearTimeout, clearTopTabsPreviewVars, document, dropHint, filterTabsMap, focusedSessionId, getSessionActivityIdsToClear, handleToggleAiFromTopBar, handleToggleHistorySidePanel, handleToggleScriptsSidePanel, handleToggleSidePanel, hasNotifiableTerminalOutput, isComposeBarOpen, isFocusMode, isTerminalLayerVisible, lastSidePanelTabRef, Map, onSessionData, onSplitSessionRef, onToggleBroadcastRef, onToggleWorkspaceViewModeRef, prevFocusedSessionIdRef, refocusActiveTerminalSession, requestAnimationFrame, ResizeObserver, sessionActivityStore, sessions, Set, setAiMountedTabIds, setDropHint, setNotesMountedTabIds, setScriptsMountedTabIds, setSystemMountedTabIds, setSftpHostForTab, setSftpInitialLocationForTab, setSftpPendingUploadsForTab, setSidePanelOpenTabs, setThemeMountedTabIds, setTimeout, setupMcpApprovalBridge, setWorkspaceArea, sidePanelPosition, sidePanelWidth, sftpActiveHost, sftpHostForTab, shouldMarkSessionActivity, sidePanelOpenTabs, splitHorizontalHandlersRef, splitVerticalHandlersRef, terminalRendererCwdBySessionRef, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, validAIScopeTargetIds, validSessionActivityIds, window, workspaceBroadcastHandlersRef, workspaceFocusHandlersRef, workspaceInnerRef, workspaces } = ctx;
 
   const activeWorkspaceId = activeWorkspace?.id;
   const activeWorkspaceViewMode = activeWorkspace?.viewMode;
@@ -223,10 +223,15 @@ export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
       if (!activeTabId || !sftpActiveHost) return;
       if (sidePanelOpenTabs.get(activeTabId) !== 'sftp') return;
       const stored = sftpHostForTab.get(activeTabId);
+      // Include username so su/different-user session overrides refresh the
+      // stored host used for follow-cwd and endpoint matching. Also refresh when
+      // follow-cwd host setting changes so command probes re-enable after toggle.
       if (stored?.id === sftpActiveHost.id
         && stored?.hostname === sftpActiveHost.hostname
         && stored?.port === sftpActiveHost.port
-        && stored?.protocol === sftpActiveHost.protocol) return;
+        && stored?.protocol === sftpActiveHost.protocol
+        && (stored?.username || 'root') === (sftpActiveHost.username || 'root')
+        && stored?.sftpFollowTerminalCwd === sftpActiveHost.sftpFollowTerminalCwd) return;
       setSftpHostForTab(prev => {
         const next = new Map(prev);
         next.set(activeTabId, sftpActiveHost);
@@ -249,6 +254,14 @@ export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
         toggleSidePanelRef.current = null;
       };
     }, [toggleSidePanelRef, handleToggleSidePanel]);
+
+  useEffect(() => {
+      if (!toggleHistorySidePanelRef) return;
+      toggleHistorySidePanelRef.current = handleToggleHistorySidePanel;
+      return () => {
+        toggleHistorySidePanelRef.current = null;
+      };
+    }, [toggleHistorySidePanelRef, handleToggleHistorySidePanel]);
   
   // Listen for global AI panel toggle (from TopTabs button). Uses the toggle
     // handler so a second click on an already-open AI panel closes it.
@@ -284,15 +297,16 @@ export function useTerminalLayerEffects(ctx: TerminalLayerEffectsContext) {
           activityEscapeFiltersRef.current.set(session.id, filter);
         }
         return onSessionData(session.id, (chunk) => {
-          const hasNotifiableOutput = hasNotifiableTerminalOutput(filter, chunk);
-          if (!shouldMarkSessionActivity(activeTabIdRef.current, session)) {
-            return;
-          }
+          // Cheap exits first: already-badged or active-tab sessions must not pay
+          // escape-filter cost on every high-rate output chunk (e.g. tail -f).
           if (sessionActivityStore.getSnapshot()[session.id]) {
             return;
           }
-          if (!hasNotifiableOutput) return;
-  
+          if (!shouldMarkSessionActivity(activeTabIdRef.current, session)) {
+            return;
+          }
+          if (!hasNotifiableTerminalOutput(filter, chunk)) return;
+
           sessionActivityStore.setTabActive(session.id, true);
         });
       });

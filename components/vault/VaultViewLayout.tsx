@@ -18,7 +18,7 @@ const VaultSectionLoading = () => (
 );
 
 export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
-  const { Activity, allGroupPaths, allTags, AppLogo, Array, Badge, BookMarked, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ChevronDown, clearHostSelection, ClipboardCopy, Clock, cn, commitInlineGroupRename, connectionLogs, connectSelectedHosts, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, currentSection, customGroups, deleteGroupPath, deleteGroupWithHosts, deleteSelectedHosts, deleteTargetPath, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, displayedGroups, displayedHosts, DistroAvatar, Download, Dropdown, DropdownContent, DropdownTrigger, Edit2, editingGroupPath, editingHost, editingHostGroupDefaults, FileCode, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, Globe, groupConfigs, GroupDetailsPanel, groupedDisplayHosts, handleConnectClick, handleCopyCredentials, handleDeleteTag, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleEditTag, handleExportHosts, handleHostConnect, handleImportFileSelected, handleNewHost, handleProtocolSelect, handleQuickConnect, handleQuickConnectSaveHost, handleSaveGroupConfig, handleSearchKeyDown, handleUnmanageGroup, handleSidebarWidthCommit, hasHostsSidePanel, HostDetailsPanel, hostListScrollRef, hosts, HostTreeView, hotkeyScheme, identities, ImportVaultDialog, Input, isDeleteGroupOpen, isGroupPanelOpen, isHostPanelOpen, isHostsSectionActive, isImportOpen, isMultiSelectMode, isNewFolderOpen, isQuickConnectOpen, isRenameGroupOpen, isSearchQuickConnect, isSerialModalOpen, Key, keyBindings, KeychainManager, keys, knownHostsManagerElement, Label, lastPinnedId, LayoutGrid, LazyConnectionLogsManager, LazyProtocolSelectDialog, List, managedGroupPaths, managedSources, moveGroup, moveHostToGroup, Network, newFolderName, newHostGroupPath, onClearUnsavedConnectionLogs, onConnectSerial, onCreateLocalTerminal, onDeleteConnectionLog, onDeleteHost, onImportOrReuseKey, onOpenLogView, onOpenSettings, onRunSnippet, onToggleConnectionLogSaved, onUpdateCustomGroups, onUpdateGroupConfigs, onUpdateHosts, onUpdateIdentities, onUpdateKeys, onUpdateProxyProfiles, onUpdateSnippetPackages, onUpdateSnippets, Pin, pinnedHosts, pinnedRecentIds, Plug, Plus, PortForwarding, protocolSelectHost, proxyProfiles, ProxyProfilesManager, quickConnectTarget, quickConnectWarnings, QuickConnectWizard, recentHosts, renameGroupError, renameGroupName, renameTargetPath, reorderGroup, reorderHost, RippleButton, rootRef, sanitizeHost, search, selectedGroupPath, selectedHostIds, selectedTags, SerialConnectModal, SerialHostDetailsPanel, sessionCount, Set, setCurrentSection, setDeleteGroupWithHosts, setDeleteTargetPath, setDragOverDropTarget, setEditingGroupPath, setEditingHost, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsGroupPanelOpen, setIsHostPanelOpen, setIsImportOpen, setIsMultiSelectMode, setIsNewFolderOpen, setIsQuickConnectOpen, setIsRenameGroupOpen, setIsSerialModalOpen, setLastPinnedId, setNewFolderName, setNewHostGroupPath, setProtocolSelectHost, setQuickConnectTarget, setQuickConnectWarnings, setRenameGroupError, setRenameGroupName, setRenameTargetPath, setSearch, setSelectedGroupPath, setSelectedHostIds, setSelectedTags, setSidebarCollapsed, setSidebarWidth, setSortMode, setTargetParentPath, Settings, setViewMode, shellHistory, shouldHideEmptyRootHostsSection, showRecentHosts, sidebarCollapsed, sidebarWidth, snippetPackages, snippets, SnippetsManager, SortDropdown, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, submitNewFolder, submitRenameGroup, Suspense, t, TagFilterDropdown, targetParentPath, terminalFontSize, terminalSettings, TerminalSquare, terminalThemeId, toggleHostPinned, toggleHostSelection, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, Upload, upsertHostById, Usb, viewMode, visibleDisplayedHosts, X, Zap } = ctx;
+  const { Activity, allGroupPaths, allTags, AppLogo, Array, Badge, BookMarked, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ChevronDown, clearHostSelection, ClipboardCopy, Clock, cn, commitInlineGroupRename, connectionLogs, connectSelectedHosts, connectSelectedHostsAsWorkspace, openBatchExecForSelection, onCreateWorkspaceWithHosts, onOpenBatchExec, onActivateTab, sessions, workspaces, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, currentSection, customGroups, deleteGroupPath, deleteGroupWithHosts, deleteSelectedHosts, deleteTargetPath, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, displayedGroups, displayedHosts, DistroAvatar, Download, Dropdown, DropdownContent, DropdownTrigger, Edit2, editingGroupPath, editingHost, editingHostGroupDefaults, FileCode, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, Globe, groupConfigs, GroupDetailsPanel, groupedDisplayHosts, handleConnectClick, handleCopyCredentials, handleDeleteTag, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleEditTag, handleExportHosts, handleHostConnect, handleImportFilesSelected, handleNewHost, handleProtocolSelect, handleQuickConnect, handleQuickConnectSaveHost, handleSaveGroupConfig, handleSearchKeyDown, handleUnmanageGroup, handleSidebarWidthCommit, hasHostsSidePanel, Home, HostDetailsPanel, hostListScrollRef, hosts, HostTreeView, hotkeyScheme, identities, ImportVaultDialog, Input, isDeleteGroupOpen, isGroupPanelOpen, isHostPanelOpen, isHostsSectionActive, isImportOpen, isMultiSelectMode, isNewFolderOpen, isQuickConnectOpen, isRenameGroupOpen, isSearchQuickConnect, isSerialModalOpen, Key, keyBindings, KeychainManager, keys, knownHostsManagerElement, Label, lastPinnedId, LayoutGrid, LazyConnectionLogsManager, LazyProtocolSelectDialog, List, managedGroupPaths, managedSources, moveGroup, moveHostToGroup, Network, newFolderName, newHostGroupPath, onClearUnsavedConnectionLogs, onConnectSerial, onCreateLocalTerminal, onDeleteConnectionLog, onDeleteHost, onImportOrReuseKey, onOpenLogView, onOpenSettings, onRunSnippet, onToggleConnectionLogSaved, onUpdateCustomGroups, onUpdateGroupConfigs, onUpdateHosts, onUpdateIdentities, onUpdateKeys, onUpdateProxyProfiles, onUpdateSnippetPackages, onUpdateSnippets, Pin, pinnedHosts, pinnedRecentIds, Plug, Plus, PortForwarding, protocolSelectHost, proxyProfiles, ProxyProfilesManager, quickConnectTarget, quickConnectWarnings, QuickConnectWizard, recentHosts, renameGroupError, renameGroupName, renameTargetPath, reorderGroup, reorderHost, RippleButton, rootRef, sanitizeHost, search, selectedGroupPath, selectedHostIds, selectedTags, SerialConnectModal, SerialHostDetailsPanel, sessionCount, Set, setCurrentSection, setDeleteGroupWithHosts, setDeleteTargetPath, setDragOverDropTarget, setEditingGroupPath, setEditingHost, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsGroupPanelOpen, setIsHostPanelOpen, setIsImportOpen, setIsMultiSelectMode, setIsNewFolderOpen, setIsQuickConnectOpen, setIsRenameGroupOpen, setIsSerialModalOpen, setLastPinnedId, setNewFolderName, setNewHostGroupPath, setProtocolSelectHost, setQuickConnectTarget, setQuickConnectWarnings, setRenameGroupError, setRenameGroupName, setRenameTargetPath, setSearch, setSelectedGroupPath, setSelectedHostIds, setSelectedTags, setSidebarCollapsed, setSidebarWidth, setSortMode, setTargetParentPath, Settings, setViewMode, shellHistory, shouldHideEmptyRootHostsSection, showRecentHosts, sidebarCollapsed, sidebarWidth, snippetPackages, snippets, SnippetsManager, SortDropdown, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, submitNewFolder, submitRenameGroup, Suspense, t, TagFilterDropdown, targetParentPath, terminalFontSize, terminalSettings, TerminalSquare, terminalThemeId, toggleHostPinned, toggleHostSelection, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, treeViewUngroupedHosts, Upload, upsertHostById, Usb, viewMode, visibleDisplayedHosts, X, Zap } = ctx;
   const { knownHosts, noteGroups, NotebookText, notes, NotesManager, onOpenHostFromNote, onOpenNoteIdHandled, onOpenSnippetIdHandled, onUpdateNoteGroups, onUpdateNotes, openNoteId, openSnippetId } = ctx;
   const vaultHostPanelResizeProps = {
     resizable: true as const,
@@ -88,14 +88,14 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
       <TooltipProvider delayDuration={100}>
         <div
           className={cn(
-            "relative shrink-0 bg-secondary flex flex-col",
+            "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-secondary",
             isSidebarResizing ? "transition-none" : "transition-[width] duration-200",
           )}
           style={{ width: effectiveSidebarWidth }}
           data-section="vault-sidebar"
         >
           <div className={cn(
-            "pt-5 pb-6 flex items-center",
+            "shrink-0 pt-5 pb-6 flex items-center",
             sidebarCollapsed ? "px-2 justify-center" : "px-4"
           )}>
             <Tooltip delayDuration={500}>
@@ -118,7 +118,10 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
             </Tooltip>
           </div>
 
-          <div className={cn("space-y-1", sidebarCollapsed ? "px-1.5" : "px-2.5")}>
+          <div className={cn(
+            "min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain",
+            sidebarCollapsed ? "px-1.5" : "px-2.5",
+          )}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <RippleButton
@@ -276,14 +279,17 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
             </Tooltip>
           </div>
 
-          <div className={cn("mt-auto pb-4 space-y-2", sidebarCollapsed ? "px-1.5" : "px-2.5")}>
+          <div className={cn(
+            "shrink-0 border-t border-border/40 bg-secondary pb-4 pt-2 space-y-2",
+            sidebarCollapsed ? "px-1.5" : "px-2.5",
+          )}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full",
-                    sidebarCollapsed ? "justify-center p-0" : "justify-start gap-3"
+                    "w-full h-10",
+                    sidebarCollapsed ? "justify-center px-0" : "justify-start gap-3 px-3",
                   )}
                   onClick={onOpenSettings}
                 >
@@ -309,7 +315,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
         </div>
       </TooltipProvider>
 
-      <div className="flex min-w-0 flex-1 py-0 pr-2 pb-2 pl-0" data-section="vault-stage">
+      <div className="flex min-h-0 min-w-0 flex-1 py-0 pr-2 pb-2 pl-0" data-section="vault-stage">
         <div
           className="relative flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background shadow-sm"
           data-section="vault-surface"
@@ -355,7 +361,9 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
               <Dropdown>
                 <DropdownTrigger asChild>
                   <Button variant="ghost" size="icon" className={vaultHeaderIconButtonClass}>
-                    {viewMode === "grid" ? (
+                    {viewMode === "home" ? (
+                      <Home size={16} />
+                    ) : viewMode === "grid" ? (
                       <LayoutGrid size={16} />
                     ) : viewMode === "list" ? (
                       <List size={16} />
@@ -365,7 +373,14 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                     <ChevronDown size={10} className="ml-0.5" />
                   </Button>
                 </DropdownTrigger>
-                <DropdownContent className="w-32" align="end">
+                <DropdownContent className="w-36" align="end">
+                  <Button
+                    variant={viewMode === "home" ? "secondary" : "ghost"}
+                    className="w-full justify-start gap-2 h-9"
+                    onClick={() => setViewMode("home")}
+                  >
+                    <Home size={14} /> {t("vault.view.home")}
+                  </Button>
                   <Button
                     variant={viewMode === "grid" ? "secondary" : "ghost"}
                     className="w-full justify-start gap-2 h-9"
@@ -389,6 +404,8 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                   </Button>
                 </DropdownContent>
               </Dropdown>
+              {viewMode !== "home" && (
+                <>
               <TagFilterDropdown
                 allTags={allTags}
                 selectedTags={selectedTags}
@@ -402,6 +419,9 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                 onChange={setSortMode}
                 className={vaultHeaderIconButtonClass}
               />
+                </>
+              )}
+              {viewMode !== "home" && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -421,6 +441,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                 </TooltipTrigger>
                 <TooltipContent>{t("vault.hosts.multiSelect")}</TooltipContent>
               </Tooltip>
+              )}
             </div>
             {/* New Host split button — collapses with an animation when the
                 host details / new-host aside panel is open, since the button
@@ -557,6 +578,30 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
               <Plug size={12} className="mr-1" />
               {t("vault.hosts.connectSelected", { count: selectedHostIds.size })}
             </Button>
+            {onCreateWorkspaceWithHosts && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={selectedHostIds.size === 0}
+                onClick={connectSelectedHostsAsWorkspace}
+              >
+                <LayoutGrid size={12} className="mr-1" />
+                {t("vault.hosts.connectWorkspace", { count: selectedHostIds.size })}
+              </Button>
+            )}
+            {openBatchExecForSelection && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={selectedHostIds.size === 0}
+                onClick={openBatchExecForSelection}
+              >
+                <TerminalSquare size={12} className="mr-1" />
+                {t("vault.hosts.batchExec", { count: selectedHostIds.size })}
+              </Button>
+            )}
             <Button
               variant="destructive"
               size="sm"
@@ -580,7 +625,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
 
         {/* Keep hosts mounted so switching sections does not reset scroll or remount the list. */}
         
-        <VaultHostListSection ctx={{ Badge, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ClipboardCopy, Clock, cn, commitInlineGroupRename, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, displayedGroups, displayedHosts, DistroAvatar, Edit2, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, groupConfigs, groupedDisplayHosts, handleCopyCredentials, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleHostConnect, handleUnmanageGroup, hasHostsSidePanel, hostListScrollRef, HostTreeView, isHostsSectionActive, isMultiSelectMode, lastPinnedId, LayoutGrid, managedGroupPaths, moveGroup, moveHostToGroup, onDeleteHost, Pin, pinnedHosts, pinnedRecentIds, Plug, recentHosts, reorderGroup, reorderHost, sanitizeHost, selectedGroupPath, selectedHostIds, sessionCount, setDeleteTargetPath, setDragOverDropTarget, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsNewFolderOpen, setLastPinnedId, setNewFolderName, setSelectedGroupPath, setTargetParentPath, shouldHideEmptyRootHostsSection, showRecentHosts, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, t, toggleHostPinned, toggleHostSelection, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, viewMode, visibleDisplayedHosts }} />
+        <VaultHostListSection ctx={{ Badge, Boolean, Button, cancelInlineGroupEdit, CheckSquare, ClipboardCopy, Clock, cn, commitInlineGroupRename, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, Copy, displayedGroups, displayedHosts, DistroAvatar, Edit2, FileSymlink, FolderPlus, FolderTree, getDropTargetClasses, getEffectiveHostDistro, groupConfigs, groupedDisplayHosts, handleCopyCredentials, handleDuplicateHost, handleEditGroupConfig, handleEditHost, handleHostConnect, handleUnmanageGroup, hasHostsSidePanel, hostListScrollRef, HostTreeView, isHostsSectionActive, isMultiSelectMode, lastPinnedId, LayoutGrid, managedGroupPaths, moveGroup, moveHostToGroup, onActivateTab, onCreateWorkspaceWithHosts, onDeleteHost, onOpenBatchExec, Pin, pinnedHosts, pinnedRecentIds, Plug, recentHosts, reorderGroup, reorderHost, sanitizeHost, selectedGroupPath, selectedHostIds, sessionCount, sessions, setDeleteTargetPath, setDragOverDropTarget, setGroupDragOverDropTarget, setIsDeleteGroupOpen, setIsNewFolderOpen, setLastPinnedId, setNewFolderName, setSelectedGroupPath, setTargetParentPath, setViewMode, shouldHideEmptyRootHostsSection, showRecentHosts, sortMode, splitViewGridStyle, Square, Star, startInlineDeleteGroup, startInlineNewGroup, startInlineRenameGroup, t, toggleHostPinned, toggleHostSelection, Trash2, treeExpandedState, treeViewGroupTree, treeViewHosts, treeViewUngroupedHosts, viewMode, visibleDisplayedHosts, workspaces }} />
 
         {currentSection === "snippets" && (
           <LazyLoadBoundary name="Snippets" resetKey="snippets">
@@ -1008,7 +1053,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
       <ImportVaultDialog
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
-        onFileSelected={handleImportFileSelected}
+        onFilesSelected={handleImportFilesSelected}
       />
 
       {/* Quick Connect Wizard */}

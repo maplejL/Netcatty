@@ -42,7 +42,7 @@ const ConversationExport: React.FC<ConversationExportProps> = ({
     [onExport],
   );
 
-  const hasMessages = session && session.messages.length > 0;
+  const hasMessages = Boolean(session && (session.messages?.length ?? 0) > 0);
 
   return (
     <Dropdown>

@@ -10,6 +10,8 @@ import {
   ensureDraftForScopeState,
   getDraftMutationVersionState,
   getDraftUploadGenerationState,
+  hasDraftContent,
+  normalizeAIDraft,
   pruneStaleSessionPanelViews,
   pruneTerminalScopeState,
   pruneTerminalTransientState,
@@ -205,6 +207,56 @@ test("ensureDraftForScopeState returns the original ref when the scope already e
   );
 
   assert.equal(next, draftsByScope);
+});
+
+test("ensureDraftForScopeState heals partial drafts missing attachment/skill arrays", () => {
+  const draftsByScope = {
+    "terminal:1": {
+      text: "keep me",
+      agentId: "agent-alpha",
+      updatedAt: 42,
+    } as any,
+  };
+
+  const next = ensureDraftForScopeState(
+    draftsByScope,
+    "terminal:1",
+    "agent-beta",
+  );
+
+  assert.notEqual(next, draftsByScope);
+  assert.equal(next["terminal:1"].text, "keep me");
+  assert.equal(next["terminal:1"].agentId, "agent-alpha");
+  assert.deepEqual(next["terminal:1"].attachments, []);
+  assert.deepEqual(next["terminal:1"].selectedUserSkillSlugs, []);
+});
+
+test("normalizeAIDraft fills missing arrays so partial drafts cannot crash the panel", () => {
+  const partial = normalizeAIDraft({
+    text: "hello",
+    agentId: "cursor",
+  } as any);
+
+  assert.equal(partial.text, "hello");
+  assert.equal(partial.agentId, "cursor");
+  assert.deepEqual(partial.attachments, []);
+  assert.deepEqual(partial.selectedUserSkillSlugs, []);
+  assert.equal(hasDraftContent({ text: "x" } as any), true);
+  assert.equal(hasDraftContent({ text: "", attachments: undefined } as any), false);
+  assert.equal(hasDraftContent(null), false);
+});
+
+test("selectDraftForAgentSwitch tolerates drafts missing attachment/skill arrays", () => {
+  const next = selectDraftForAgentSwitch(
+    { text: "keep", agentId: "agent-alpha", updatedAt: 1 } as any,
+    "agent-beta",
+    true,
+  );
+
+  assert.equal(next.agentId, "agent-beta");
+  assert.equal(next.text, "keep");
+  assert.deepEqual(next.attachments, []);
+  assert.deepEqual(next.selectedUserSkillSlugs, []);
 });
 
 test("selectDraftForAgentSwitch preserves hidden draft content when leaving a populated chat session", () => {

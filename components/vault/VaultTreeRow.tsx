@@ -161,14 +161,16 @@ export const VaultTreeGroupRow: React.FC<VaultTreeGroupRowProps> = ({
           className="flex-1 font-semibold"
         />
       ) : (
-        <span className="flex h-5 min-w-0 flex-1 translate-y-px items-center truncate leading-none">{name}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          <span className="truncate leading-none translate-y-px">{name}</span>
+          {typeof count === "number" && count > 0 && (
+            <span className="shrink-0 rounded-full border border-border bg-background/50 px-1.5 py-0 text-[10px] opacity-70">
+              {count}
+            </span>
+          )}
+        </div>
       )}
       {meta}
-      {typeof count === "number" && count > 0 && (
-        <span className="shrink-0 rounded-full border border-border bg-background/50 px-1.5 py-0 text-[10px] opacity-70">
-          {count}
-        </span>
-      )}
       {actions}
     </div>
   );

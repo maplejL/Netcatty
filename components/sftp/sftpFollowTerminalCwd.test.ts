@@ -29,6 +29,24 @@ test("shouldFollowTerminalCwdNavigate returns false when paths already match", (
   );
 });
 
+test("shouldFollowTerminalCwdNavigate treats trailing slash as the same path", () => {
+  assert.equal(
+    shouldFollowTerminalCwdNavigate({
+      ...base,
+      terminalCwd: "/home/user/project/",
+      currentPath: "/home/user/project",
+    }),
+    false,
+  );
+});
+
+test("shouldFollowTerminalCwdNavigate allows first jump when SFTP has no current path yet", () => {
+  assert.equal(
+    shouldFollowTerminalCwdNavigate({ ...base, currentPath: null }),
+    true,
+  );
+});
+
 test("shouldFollowTerminalCwdNavigate returns false when follow is disabled", () => {
   assert.equal(shouldFollowTerminalCwdNavigate({ ...base, followEnabled: false }), false);
 });
@@ -170,6 +188,18 @@ test("shouldClearBlockedFollowOnReach clears when the active connection reaches 
   assert.equal(
     shouldClearBlockedFollowOnReach(
       { connectionId: "conn-1", terminalCwd: "/home/user/project" },
+      "conn-1",
+      "/home/user/project",
+      false,
+    ),
+    true,
+  );
+});
+
+test("shouldClearBlockedFollowOnReach treats trailing slash as the same path", () => {
+  assert.equal(
+    shouldClearBlockedFollowOnReach(
+      { connectionId: "conn-1", terminalCwd: "/home/user/project/" },
       "conn-1",
       "/home/user/project",
       false,

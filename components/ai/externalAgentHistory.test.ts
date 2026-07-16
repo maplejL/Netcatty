@@ -677,3 +677,22 @@ test("buildExternalAgentHistoryMessages preserves assistant-only compact context
   assert.equal(result[0].role, "user");
   assert.match(result[0].content, /Move parser setup into a dedicated hook\./);
 });
+
+test("buildExternalAgentHistoryMessages strips Cursor-style tool_call markup from replay", () => {
+  const messages: ChatMessage[] = [
+    message(
+      "a1",
+      "assistant",
+      '<tool_call>get_environment({"providerIdentifier":"netcatty-remote-hosts","toolName":"get_environment","args":{}})',
+    ),
+    message("u1", "user", "继续分析 sub2api 部署"),
+    message("a2", "assistant", "好的，我先看安装步骤。"),
+  ];
+
+  const result = buildExternalAgentHistoryMessages(messages);
+  const flat = result.map((entry) => entry.content).join("\n");
+
+  assert.doesNotMatch(flat, /<tool_call>/);
+  assert.doesNotMatch(flat, /providerIdentifier/);
+  assert.match(flat, /继续分析 sub2api 部署/);
+});

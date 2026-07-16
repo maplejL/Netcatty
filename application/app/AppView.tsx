@@ -10,6 +10,7 @@ import { VaultView } from '../../components/VaultView';
 import { QuickAddSnippetDialog } from '../../components/QuickAddSnippetDialog';
 import { QuickScriptEditorDialog } from '../../components/scripts/QuickScriptEditorDialog';
 import { AddToWorkspaceDialog } from '../../components/workspace/AddToWorkspaceDialog';
+import { BatchExecDialog } from '../../components/batch/BatchExecDialog';
 import { KeyboardInteractiveModal } from '../../components/KeyboardInteractiveModal';
 import { PassphraseModal } from '../../components/PassphraseModal';
 import { UnsavedChangesProvider } from '../../components/editor/UnsavedChangesDialog';
@@ -86,12 +87,12 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
   useMainWindowInputFocusRecovery({ onPageHidden: dismissTransientOverlays });
 
   const {
-    accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace,
+    accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace, batchExecDialogHosts, setBatchExecDialogHosts,
     clearAndRemoveSource, clearAndRemoveSources, clearUnsavedConnectionLogs, closeLogView, closeSession, closeTabsBatch, closeWorkspace, copySessionToNewWindowWithCurrentShell, copySessionWithCurrentShell,
     connectionLogs, convertKnownHostToHost, createWorkspaceFromSessions, createWorkspaceFromTargets, createWorkspaceWithHosts, customAccent,
     customGroups, currentTerminalTheme, deepLinkHostDraft, deleteConnectionLog, draggingSessionId, effectiveKnownHosts, editorTabs, editorWordWrap, emptyVaultConflict,
     followAppTerminalTheme,
-    groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost,
+    groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateWorkspaceWithHostsFromVault, handleOpenBatchExec, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost,
     handleEndSessionDrag, handleFollowAppTerminalThemeChange, handleHostConnectWithProtocolCheck, handleHotkeyAction, handleKeyboardInteractiveCancel, handleKeyboardInteractiveSubmit,
     handleOpenHostFromVaultNote, handleOpenQuickSwitcher, handleOpenSettings, handleOpenVaultHostFromChat, handleOpenVaultNoteFromChat, handleOpenVaultSectionFromChat, handleOpenVaultSnippetFromChat, handleRootContextMenu, handlePassphraseCancel, handlePassphraseSkip, handlePassphraseSubmit, handleProtocolSelect,
     handleRequestCloseEditorTabRef, handleSessionStatusChange, handleSyncNowManual, handleTerminalDataCapture, handleToggleTheme, handleUpdateHostFromTerminal,
@@ -104,7 +105,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
     setWorkspaceFocusedSession, setWorkspaceRenameValue, settings, sftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoSync, sftpDefaultViewMode, sftpDoubleClickBehavior,
     sftpShowHiddenFiles, sftpUseCompressedUpload, shellHistory, snippetPackages, snippets, splitSessionWithCurrentShell, startSessionRename,
     startWorkspaceRename, submitSessionRename, submitWorkspaceRename, t, terminalFontFamilyId, terminalFontSize, terminalSettings, terminalThemeId, themeById,
-    toggleBroadcast, toggleConnectionLogSaved, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog,
+    toggleBroadcast, toggleConnectionLogSaved, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog,
     updateCustomGroups, updateGroupConfigs, updateHostDistro, updateHosts, updateIdentities, updateKeys, updateKnownHosts, updateManagedSources,
     updateNoteGroups, updateNotes, updateProxyProfiles, updateSnippetPackages, updateSnippets, updateSplitSizes, updateTerminalSetting, vaultFocusRequest, workspaceRenameTarget, workspaceRenameValue, workspaces,
     VaultViewContainer, SftpViewMount, TerminalLayerMount, LogViewWrapper,
@@ -247,6 +248,9 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
             connectionLogs={connectionLogs}
             managedSources={managedSources}
             sessionCount={sessions.length}
+            sessions={sessions}
+            workspaces={workspaces}
+            onActivateTab={setActiveTabId}
             hotkeyScheme={hotkeyScheme}
             keyBindings={keyBindings}
             terminalThemeId={terminalThemeId}
@@ -257,6 +261,8 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
             onConnectSerial={handleConnectSerial}
             onDeleteHost={handleDeleteHost}
             onConnect={handleConnectToHost}
+            onCreateWorkspaceWithHosts={handleCreateWorkspaceWithHostsFromVault}
+            onOpenBatchExec={handleOpenBatchExec}
             onOpenHostFromNote={handleOpenHostFromVaultNote}
             groupConfigs={groupConfigs}
             onUpdateGroupConfigs={updateGroupConfigs}
@@ -381,6 +387,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           onCopySession={copySessionWithCurrentShell}
           onCopySessionToNewWindow={copySessionToNewWindowWithCurrentShell}
           onSplitSession={splitSessionWithCurrentShell}
+          onOpenBatchExec={handleOpenBatchExec}
           onConnectToHost={handleConnectToHost}
           openNoteRequest={openNoteRequest}
           onOpenVaultNoteFromChat={handleOpenVaultNoteFromChat}
@@ -415,6 +422,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           showHostTreeSidebar={settings.showHostTreeSidebar}
           toggleScriptsSidePanelRef={toggleScriptsSidePanelRef}
           toggleSidePanelRef={toggleSidePanelRef}
+          toggleHistorySidePanelRef={toggleHistorySidePanelRef}
           onStartSessionRename={startSessionRename}
           onSubmitSessionRename={submitSessionRename}
           onRemoveSessionFromWorkspace={removeSessionFromWorkspace}
@@ -523,6 +531,16 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
               createWorkspaceFromTargets(targets);
             }
           }}
+        />
+      )}
+
+      {batchExecDialogHosts && (
+        <BatchExecDialog
+          open
+          onOpenChange={(open) => { if (!open) setBatchExecDialogHosts(null); }}
+          hosts={batchExecDialogHosts}
+          keys={keys}
+          identities={identities}
         />
       )}
 

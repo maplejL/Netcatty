@@ -56,6 +56,7 @@ interface AIChatPanelContentProps {
   providerDisplayName?: string;
   modelDisplayName?: string;
   agentModelPresets: AgentModelPreset[];
+  isLoadingAgentModels?: boolean;
   selectedAgentModel: string;
   handleAgentModelSelect: (modelId: string) => void;
   cattyConfiguredProviders: ProviderConfig[];
@@ -110,6 +111,7 @@ export const AIChatPanelContent: React.FC<AIChatPanelContentProps> = ({
   providerDisplayName,
   modelDisplayName,
   agentModelPresets,
+  isLoadingAgentModels = false,
   selectedAgentModel,
   handleAgentModelSelect,
   cattyConfiguredProviders,
@@ -267,6 +269,7 @@ export const AIChatPanelContent: React.FC<AIChatPanelContentProps> = ({
                 modelName={modelDisplayName}
                 agentName={currentAgentId === 'catty' ? 'Catty Agent' : externalAgents.find(a => a.id === currentAgentId)?.name}
                 modelPresets={agentModelPresets}
+                modelsLoading={isLoadingAgentModels}
                 selectedModelId={selectedAgentModel}
                 onModelSelect={handleAgentModelSelect}
                 providerSwitcher={

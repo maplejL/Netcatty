@@ -1,4 +1,4 @@
-import React, { createContext, lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { activeTabStore } from '../../application/state/activeTabStore';
 import { useTerminalLayoutSuppressActive } from '../../application/state/terminalLayoutSuppressStore';
@@ -28,18 +28,9 @@ import {
 } from '../terminalPaneVisibility';
 import type { ResolvedAppearance, TerminalAppearanceHostScope } from '../../domain/terminalAppearanceRuntime';
 import type { TerminalSidePanelAutoOpenTab } from '../../domain/terminalSidePanelAutoOpen';
+import { AIChatSidePanel } from '../AIChatSidePanel';
 
 export type SidePanelTab = 'sftp' | 'scripts' | 'history' | 'theme' | 'ai' | 'system' | 'notes';
-
-const LazyAIChatSidePanel = lazy(() =>
-  import('../AIChatSidePanel').then((module) => ({ default: module.AIChatSidePanel })),
-);
-
-const AIChatSidePanelFallback = memo(function AIChatSidePanelFallback() {
-  return (
-    <div className="netcatty-lazy-fade-in h-full min-h-0 bg-background" aria-hidden="true" />
-  );
-});
 
 export type WorkspaceRect = { x: number; y: number; w: number; h: number };
 
@@ -490,7 +481,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
     }
     updateDraft(scopeKey, defaultAgentId, (draft) => ({
       ...draft,
-      attachments: [...draft.attachments, attachment],
+      attachments: [...(Array.isArray(draft.attachments) ? draft.attachments : []), attachment],
     }));
     onPendingTerminalSelectionConsumed?.(pendingTerminalSelection.requestId);
   }, [
@@ -518,8 +509,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
             className={cn("absolute inset-0 z-10", !isVisible && "hidden")}
           >
             <LazyLoadBoundary name="AI side panel" resetKey={tabId}>
-              <Suspense fallback={<AIChatSidePanelFallback />}>
-                <LazyAIChatSidePanel
+              <AIChatSidePanel
                     sessions={aiState.sessions}
                     activeSessionIdMap={aiState.activeSessionIdMap}
                     draftsByScope={aiState.draftsByScope}
@@ -536,6 +526,7 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
                     deleteSession={aiState.deleteSession}
                     updateSessionTitle={aiState.updateSessionTitle}
                     updateSessionExternalSessionId={aiState.updateSessionExternalSessionId}
+                    updateSessionAgentId={aiState.updateSessionAgentId}
                     addMessageToSession={aiState.addMessageToSession}
                     updateLastMessage={aiState.updateLastMessage}
                     updateMessageById={aiState.updateMessageById}
@@ -572,7 +563,6 @@ const AIChatPanelsHostInner: React.FC<AIChatPanelsHostProps> = ({
                     onOpenVaultSection={onOpenVaultSectionFromChat}
                     onOpenVaultSnippet={onOpenVaultSnippetFromChat}
                   />
-              </Suspense>
             </LazyLoadBoundary>
           </div>
         );
@@ -660,6 +650,7 @@ export interface TerminalLayerProps {
   // Broadcast mode
   isBroadcastEnabled?: (workspaceId: string) => boolean;
   onToggleBroadcast?: (workspaceId: string) => void;
+  onOpenBatchExec?: (hosts: Host[]) => void;
   // SFTP side panel
   updateHosts: (hosts: Host[]) => void;
   updateSnippets?: (snippets: Snippet[]) => void;
@@ -687,6 +678,7 @@ export interface TerminalLayerProps {
   showHostTreeSidebar?: boolean;
   toggleScriptsSidePanelRef?: React.MutableRefObject<(() => void) | null>;
   toggleSidePanelRef?: React.MutableRefObject<(() => void) | null>;
+  toggleHistorySidePanelRef?: React.MutableRefObject<(() => void) | null>;
   // Session rename
   onStartSessionRename?: (sessionId: string) => void;
   onSubmitSessionRename?: (sessionId?: string, name?: string) => void;

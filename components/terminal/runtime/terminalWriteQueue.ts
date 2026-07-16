@@ -1,6 +1,9 @@
 import type { Terminal as XTerm } from "@xterm/xterm";
 
-import { MAX_TERMINAL_WRITE_QUEUE_DRAIN_BYTES } from "./terminalFlowConstants";
+import {
+  MAX_TERMINAL_WRITE_QUEUE_DRAIN_BYTES,
+  MAX_TERMINAL_WRITE_QUEUE_DRAIN_BYTES_FLOOD,
+} from "./terminalFlowConstants";
 
 export const MAX_WRITE_QUEUE_ITEMS = 32;
 export const MAX_WRITE_QUEUE_BYTES = 512 * 1024;
@@ -226,13 +229,17 @@ const mergePendingWrites = (queue: TerminalWriteQueue): void => {
     bytes += item.bytes;
     steps.push(...item.steps.slice(item.nextIndex));
   }
+  const mergedMaxDrain = Math.min(
+    MAX_TERMINAL_WRITE_QUEUE_DRAIN_BYTES_FLOOD,
+    ...queue.pending.map((item) => item.maxDrainBytes),
+  );
   queue.pending = [{
     bytes,
     steps,
     nextIndex: 0,
     cancelled: false,
     yieldAfter: true,
-    maxDrainBytes: Math.min(...queue.pending.map((item) => item.maxDrainBytes)),
+    maxDrainBytes: mergedMaxDrain,
   }];
   queue.pendingBytes = bytes;
   queue.floodMode = true;
@@ -310,13 +317,22 @@ export const enqueueTerminalWrite = (
 
   updateFloodMode(queue, bytes);
 
+  // Under flood, force smaller drain slices and yield between items so React UI
+  // (sidebar, clicks) can interleave on the same renderer thread as xterm.
+  const flood = queue.floodMode;
+  const yieldAfter = Boolean(options.yieldAfter) || flood;
+  const maxDrainBytes = resolveMaxDrainBytes(
+    options.maxDrainBytes
+      ?? (flood ? MAX_TERMINAL_WRITE_QUEUE_DRAIN_BYTES_FLOOD : undefined),
+  );
+
   queue.pending.push({
     bytes,
-    steps: [{ bytes, write, yieldAfter: Boolean(options.yieldAfter) }],
+    steps: [{ bytes, write, yieldAfter }],
     nextIndex: 0,
     cancelled: false,
-    yieldAfter: Boolean(options.yieldAfter),
-    maxDrainBytes: resolveMaxDrainBytes(options.maxDrainBytes),
+    yieldAfter,
+    maxDrainBytes,
   });
   queue.pendingBytes += bytes;
   if (
@@ -328,7 +344,9 @@ export const enqueueTerminalWrite = (
   }
 
   if (!queue.writing) {
-    scheduleQueueDrain(term, queue, Boolean(options.deferStart));
+    // Always defer the first drain tick during flood so the current event loop
+    // turn can finish UI work before painting more terminal output.
+    scheduleQueueDrain(term, queue, Boolean(options.deferStart) || flood);
   }
 };
 

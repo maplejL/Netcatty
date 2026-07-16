@@ -20,7 +20,14 @@ type SdkRuntimeModelRefreshOptions = {
 };
 
 const SDK_RUNTIME_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
-const MODEL_CACHE_ENV_HINTS = ['CLAUDE_CODE_EXECUTABLE', 'CODEBUDDY_CODE_PATH', 'OPENCODE_BIN'] as const;
+const MODEL_CACHE_ENV_HINTS = [
+  'CLAUDE_CODE_EXECUTABLE',
+  'CODEBUDDY_CODE_PATH',
+  'WORKBUDDY_CODE_PATH',
+  'OPENCODE_BIN',
+  // Presence only — value is redacted in callers; still changes cache identity when set/cleared.
+  'CURSOR_API_KEY',
+] as const;
 
 function cloneCatalog(catalog: SdkRuntimeModelCatalog): SdkRuntimeModelCatalog {
   return {
@@ -44,9 +51,18 @@ export function buildSdkRuntimeModelCacheKey(agent: {
   sdkBackend?: string;
   acpCommand?: string;
   env?: Record<string, string>;
+  /** Encrypted or plaintext cursor key presence (value never put in the key). */
+  apiKey?: string;
 }): string {
   const sdkBackend = agent.sdkBackend || agent.acpCommand || '';
-  const envHints = MODEL_CACHE_ENV_HINTS.map((key) => `${key}=${agent.env?.[key] ?? ''}`);
+  const envHints = MODEL_CACHE_ENV_HINTS.map((key) => {
+    const raw = agent.env?.[key] ?? '';
+    // Never put secrets into cache keys — presence is enough for invalidation.
+    if (key === 'CURSOR_API_KEY') {
+      return `${key}=${raw || agent.apiKey ? '1' : ''}`;
+    }
+    return `${key}=${raw}`;
+  });
   return [agent.id, sdkBackend, agent.command ?? '', ...envHints].join('\u0000');
 }
 
@@ -110,9 +126,13 @@ export function modelPresetsContainId(presets: AgentModelPreset[], modelId: stri
 
 export function shouldLoadSdkRuntimeModels(agent?: ExternalAgentConfig): boolean {
   const sdkBackend = getExternalAgentSdkBackend(agent);
+  // Cursor has Cursor.models.list(); without this gate the UI forever shows
+  // hardcoded CURSOR_MODEL_PRESETS and drifts from the account catalog.
   return sdkBackend === 'claude'
     || sdkBackend === 'copilot'
+    || sdkBackend === 'cursor'
     || sdkBackend === 'codebuddy'
+    || sdkBackend === 'workbuddy'
     || sdkBackend === 'opencode';
 }
 
@@ -131,7 +151,16 @@ export function normalizeSdkRuntimeModelPresets(
   models: AgentModelPreset[],
   currentModelId: string | null | undefined,
 ): AgentModelPreset[] {
-  if (models.length > 0) return models;
+  if (models.length > 0) {
+    const seen = new Set<string>();
+    const deduped: AgentModelPreset[] = [];
+    for (const model of models) {
+      if (!model?.id || seen.has(model.id)) continue;
+      seen.add(model.id);
+      deduped.push(model);
+    }
+    return deduped;
+  }
   if (!currentModelId) return [];
   return [{ id: currentModelId, name: currentModelId }];
 }

@@ -56,6 +56,11 @@ export class LazyLoadBoundary extends Component<LazyLoadBoundaryProps, LazyLoadB
           role="alert"
         >
           <div className="font-medium text-foreground">{label} could not load.</div>
+          {this.state.error?.message ? (
+            <div className="max-w-full break-all text-[11px] text-muted-foreground/80" title={this.state.error.message}>
+              {this.state.error.message}
+            </div>
+          ) : null}
           <button
             type="button"
             className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"

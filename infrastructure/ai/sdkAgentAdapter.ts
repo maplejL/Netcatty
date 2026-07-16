@@ -6,7 +6,7 @@
  */
 
 import type { AIToolIntegrationMode, ExternalAgentConfig } from './types';
-import { getExternalAgentSdkBackend, getManualAgentCommand } from './managedAgents';
+import { getExternalAgentSdkBackend, getSdkAgentCommand } from './managedAgents';
 import { encodeSdkSessionIdentity } from './harness/sdkSessionIdentity';
 import { globalTraceStore, mapSdkStreamEventToAgentEvents } from './harness';
 import { decryptField } from '../persistence/secureFieldAdapter';
@@ -72,9 +72,14 @@ export interface FileAttachment {
   filePath?: string;
 }
 
-async function buildAgentEnvWithStoredApiKey(
+/**
+ * Merge agent env with stored secrets needed by SDK drivers (e.g. Cursor API key).
+ * Shared by stream turns and runtime model-catalog fetches so list-models sees the
+ * same credentials as chat.
+ */
+export async function buildAgentEnvWithStoredApiKey(
   sdkBackend: string,
-  config: ExternalAgentConfig,
+  config: Pick<ExternalAgentConfig, 'env' | 'apiKey'>,
 ): Promise<Record<string, string> | undefined> {
   const env = { ...(config.env ?? {}) };
   if (sdkBackend === 'cursor' && config.apiKey) {
@@ -186,7 +191,7 @@ export async function runSdkAgentTurn(
   };
 
   const agentEnv = await buildAgentEnvWithStoredApiKey(sdkBackend, config);
-  const agentCommand = getManualAgentCommand(config);
+  const agentCommand = getSdkAgentCommand(config);
 
   // Set up event listeners before starting stream
   if (!harnessOptions?.skipHarnessTrace) {

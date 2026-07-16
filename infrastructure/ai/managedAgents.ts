@@ -3,7 +3,14 @@ import { getCommandBasename, isPathLikeCommand } from './shared/pathLikeCommand'
 
 export { isPathLikeCommand, getCommandBasename };
 
-export type ManagedAgentKey = 'codex' | 'claude' | 'copilot' | 'cursor' | 'codebuddy' | 'opencode';
+export type ManagedAgentKey =
+  | 'codex'
+  | 'claude'
+  | 'copilot'
+  | 'cursor'
+  | 'codebuddy'
+  | 'workbuddy'
+  | 'opencode';
 
 const MANAGED_AGENT_META: Record<ManagedAgentKey, { commandNames: string[]; sdkBackend: string }> = {
   codex: { commandNames: ['codex'], sdkBackend: 'codex' },
@@ -11,6 +18,8 @@ const MANAGED_AGENT_META: Record<ManagedAgentKey, { commandNames: string[]; sdkB
   copilot: { commandNames: ['copilot'], sdkBackend: 'copilot' },
   cursor: { commandNames: ['cursor'], sdkBackend: 'cursor' },
   codebuddy: { commandNames: ['codebuddy'], sdkBackend: 'codebuddy' },
+  // WorkBuddy desktop embeds the CodeBuddy CLI as `bin/codebuddy` (not workbuddy.exe).
+  workbuddy: { commandNames: ['workbuddy'], sdkBackend: 'workbuddy' },
   opencode: { commandNames: ['opencode'], sdkBackend: 'opencode' },
 };
 
@@ -27,6 +36,7 @@ export function isSettingsManagedDiscoveredAgent(
     || agent.command === 'copilot'
     || agent.command === 'cursor'
     || agent.command === 'codebuddy'
+    || agent.command === 'workbuddy'
     || agent.command === 'opencode';
 }
 
@@ -61,11 +71,19 @@ export function getManagedAgentStoredPath(
   agentKey: ManagedAgentKey,
 ): string | null {
   const managedId = `discovered_${agentKey}`;
+  // WorkBuddy's real agent entry is the embedded CodeBuddy CLI (`.../bin/codebuddy`),
+  // so basename matching on "workbuddy" would reject valid paths.
+  const basenameOk = (command: string | undefined) => (
+    agentKey === 'workbuddy'
+      ? isPathLikeCommand(command)
+      : matchesPrimaryCliBasename(command, agentKey)
+  );
+
   const preferredAgent = agents.find(
     (agent) =>
       agent.id === managedId &&
       isPathLikeCommand(agent.command) &&
-      matchesPrimaryCliBasename(agent.command, agentKey),
+      basenameOk(agent.command),
   );
   if (preferredAgent) {
     return preferredAgent.command;
@@ -75,7 +93,7 @@ export function getManagedAgentStoredPath(
     (agent) =>
       matchesManagedAgentConfig(agent, agentKey) &&
       isPathLikeCommand(agent.command) &&
-      matchesPrimaryCliBasename(agent.command, agentKey),
+      basenameOk(agent.command),
   );
   return fallbackAgent?.command ?? null;
 }
@@ -85,4 +103,14 @@ export function getManualAgentCommand(
 ): string | undefined {
   const command = String(config?.command || '').trim();
   return config?.commandSource === 'manual' && command ? command : undefined;
+}
+
+/** CLI path for SDK turns: explicit manual path, or auto-discovered path-like command. */
+export function getSdkAgentCommand(
+  config: Pick<ExternalAgentConfig, 'command' | 'commandSource'> | null | undefined,
+): string | undefined {
+  const manual = getManualAgentCommand(config);
+  if (manual) return manual;
+  const command = String(config?.command || '').trim();
+  return isPathLikeCommand(command) ? command : undefined;
 }

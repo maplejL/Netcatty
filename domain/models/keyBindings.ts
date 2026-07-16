@@ -16,9 +16,206 @@ export type CustomKeyBindings = Record<string, { mac?: string; pc?: string }>;
 // Parse a key string like "⌘ + Shift + K" or "Ctrl + Alt + T" into normalized form
 export const parseKeyCombo = (keyStr: string): { modifiers: string[]; key: string } | null => {
   if (!keyStr || keyStr === 'Disabled') return null;
-  const parts = keyStr.split('+').map(p => p.trim());
+  const parts = keyStr.split('+').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
   const key = parts.pop() || '';
   return { modifiers: parts, key };
+};
+
+const MODIFIER_TOKEN_ALIASES: Record<string, string> = {
+  control: 'Ctrl',
+  ctrl: 'Ctrl',
+  alt: 'Alt',
+  option: 'Alt',
+  '⌥': 'Alt',
+  shift: 'Shift',
+  win: 'Win',
+  meta: 'Win',
+  cmd: '⌘',
+  command: '⌘',
+  '⌘': '⌘',
+  '⌃': 'Ctrl',
+};
+
+const MODIFIER_SORT_ORDER = ['⌘', 'Ctrl', 'Alt', 'Shift', 'Win'] as const;
+
+/**
+ * Normalize a binding string so "Alt", "alt", "⌥" and "Ctrl + Alt + H" /
+ * "Alt + Ctrl + H" compare as the same shortcut for conflict checks.
+ */
+export const normalizeKeyBindingString = (keyStr: string): string | null => {
+  if (!keyStr || keyStr === 'Disabled') return null;
+  const parts = keyStr.split('+').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const modifiers: string[] = [];
+  let key = '';
+
+  for (let i = 0; i < parts.length; i++) {
+    const raw = parts[i]!;
+    const alias = MODIFIER_TOKEN_ALIASES[raw.toLowerCase()] ?? MODIFIER_TOKEN_ALIASES[raw];
+    const isLast = i === parts.length - 1;
+    if (alias && (!isLast || parts.length === 1)) {
+      // Pure-modifier binds (e.g. "Alt") keep the alias as the sole token.
+      if (parts.length === 1) {
+        key = alias;
+      } else {
+        modifiers.push(alias);
+      }
+      continue;
+    }
+    if (isLast) {
+      key = /^[A-Za-z]$/.test(raw) ? raw.toUpperCase() : raw;
+    } else if (alias) {
+      modifiers.push(alias);
+    } else {
+      // Unknown middle token — keep as-is so equality stays strict.
+      modifiers.push(raw);
+    }
+  }
+
+  if (!key) return null;
+
+  const orderedModifiers = MODIFIER_SORT_ORDER.filter((token) => modifiers.includes(token));
+  const extras = modifiers.filter(
+    (token) => !(MODIFIER_SORT_ORDER as readonly string[]).includes(token),
+  );
+  const allMods = [...orderedModifiers, ...extras];
+  return allMods.length > 0 ? `${allMods.join(' + ')} + ${key}` : key;
+};
+
+export interface KeyBindingConflict {
+  bindingId: string;
+  action: string;
+  label: string;
+  key: string;
+}
+
+/**
+ * Find another binding that already uses the same shortcut for the scheme.
+ * Returns null when free (or when the key is Disabled / empty).
+ */
+export const findKeyBindingConflict = (
+  bindings: KeyBinding[],
+  bindingId: string,
+  scheme: 'mac' | 'pc',
+  newKey: string,
+): KeyBindingConflict | null => {
+  const normalized = normalizeKeyBindingString(newKey);
+  if (!normalized) return null;
+
+  for (const binding of bindings) {
+    if (binding.id === bindingId) continue;
+    const existing = scheme === 'mac' ? binding.mac : binding.pc;
+    if (normalizeKeyBindingString(existing) === normalized) {
+      return {
+        bindingId: binding.id,
+        action: binding.action,
+        label: binding.label,
+        key: existing,
+      };
+    }
+  }
+  return null;
+};
+
+/** Standalone modifier bindings (e.g. FinalShell-style Alt for command history). */
+const MODIFIER_ONLY_BINDING_KEYS = new Set([
+  'Alt',
+  'Ctrl',
+  'Control',
+  'Shift',
+  'Win',
+  'Meta',
+  '⌘',
+  '⌃',
+  '⌥',
+]);
+
+export const isModifierOnlyKeyBinding = (keyStr: string): boolean => {
+  if (!keyStr || keyStr === 'Disabled') return false;
+  const parts = keyStr.split('+').map((part) => part.trim()).filter(Boolean);
+  return parts.length === 1 && MODIFIER_ONLY_BINDING_KEYS.has(parts[0]!);
+};
+
+export const isModifierKeyName = (key: string): boolean =>
+  ['Meta', 'Control', 'Alt', 'Shift', 'OS'].includes(key);
+
+/**
+ * Pure modifier shortcuts must fire on keyup so chords like Alt+H are not stolen
+ * by a bare "Alt" binding on the initial keydown.
+ *
+ * Track whether any non-modifier was pressed while a modifier was held, so
+ * Alt+H then releasing Alt does not fire a bare "Alt" binding.
+ */
+let modifierOnlyChordDirty = false;
+
+export const trackModifierOnlyHotkeyEvent = (
+  e: Pick<KeyboardEvent, 'type' | 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+): void => {
+  if (e.type !== 'keydown') return;
+
+  if (isModifierKeyName(e.key)) {
+    const otherModsHeld =
+      (e.key !== 'Alt' && e.altKey)
+      || (e.key !== 'Control' && e.ctrlKey)
+      || ((e.key !== 'Meta' && e.key !== 'OS') && e.metaKey)
+      || (e.key !== 'Shift' && e.shiftKey);
+    // Fresh pure-modifier press: clear dirty. Holding multiple modifiers: dirty.
+    modifierOnlyChordDirty = otherModsHeld;
+    return;
+  }
+
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
+    modifierOnlyChordDirty = true;
+  }
+};
+
+export const resetModifierOnlyHotkeyTracking = (): void => {
+  modifierOnlyChordDirty = false;
+};
+
+export const matchesModifierOnlyKeyBinding = (
+  e: Pick<KeyboardEvent, 'type' | 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+  keyStr: string,
+  isMac: boolean,
+): boolean => {
+  if (!isModifierOnlyKeyBinding(keyStr)) return false;
+  // Synthetic events (tests) may omit type; treat them as keyup-equivalent.
+  if (e.type && e.type !== 'keyup') return false;
+  if (modifierOnlyChordDirty) return false;
+
+  const token = keyStr.trim();
+  if (isMac) {
+    if (token === '⌥') {
+      return e.key === 'Alt' && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    }
+    if (token === '⌃') {
+      return e.key === 'Control' && !e.altKey && !e.metaKey && !e.shiftKey;
+    }
+    if (token === '⌘') {
+      return (e.key === 'Meta' || e.key === 'OS') && !e.altKey && !e.ctrlKey && !e.shiftKey;
+    }
+    if (token === 'Shift') {
+      return e.key === 'Shift' && !e.altKey && !e.ctrlKey && !e.metaKey;
+    }
+    return false;
+  }
+
+  if (token === 'Alt') {
+    // On keyup, altKey is typically false for the released Alt key itself.
+    return e.key === 'Alt' && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+  }
+  if (token === 'Ctrl' || token === 'Control') {
+    return e.key === 'Control' && !e.altKey && !e.metaKey && !e.shiftKey;
+  }
+  if (token === 'Shift') {
+    return e.key === 'Shift' && !e.altKey && !e.ctrlKey && !e.metaKey;
+  }
+  if (token === 'Win' || token === 'Meta') {
+    return (e.key === 'Meta' || e.key === 'OS') && !e.altKey && !e.ctrlKey && !e.shiftKey;
+  }
+  return false;
 };
 
 const PHYSICAL_SHORTCUT_KEY_NAMES: Record<string, string> = {
@@ -100,6 +297,13 @@ export const keyEventToString = (e: KeyboardEvent, isMac: boolean): string => {
 // Check if a keyboard event matches a key binding string
 export const matchesKeyBinding = (e: KeyboardEvent, keyStr: string, isMac: boolean): boolean => {
   if (!keyStr || keyStr === 'Disabled') return false;
+
+  if (isModifierOnlyKeyBinding(keyStr)) {
+    return matchesModifierOnlyKeyBinding(e, keyStr, isMac);
+  }
+
+  // Regular bindings match on keydown (default) / ignore pure keyup of modifiers.
+  if (e.type === 'keyup') return false;
 
   // Handle range patterns like "[1...9]"
   if (keyStr.includes('[1...9]')) {
@@ -207,6 +411,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
   { id: 'select-all', action: 'selectAll', label: 'Select All in Terminal', mac: '⌘ + A', pc: 'Ctrl + Shift + A', category: 'terminal' },
   { id: 'clear-buffer', action: 'clearBuffer', label: 'Clear Terminal Buffer', mac: '⌘ + ⌃ + K', pc: 'Ctrl + Shift + K', category: 'terminal' },
   { id: 'search-terminal', action: 'searchTerminal', label: 'Open Terminal Search', mac: '⌘ + F', pc: 'Ctrl + F', category: 'terminal' },
+  { id: 'open-history', action: 'openHistory', label: 'Open Command History Popup', mac: '⌘ + Shift + H', pc: 'Ctrl + Shift + H', category: 'terminal' },
   { id: 'increase-terminal-font-size', action: 'increaseTerminalFontSize', label: 'Increase Terminal Font Size', mac: '⌘ + =', pc: 'Ctrl + =', category: 'terminal' },
   { id: 'decrease-terminal-font-size', action: 'decreaseTerminalFontSize', label: 'Decrease Terminal Font Size', mac: '⌘ + -', pc: 'Ctrl + -', category: 'terminal' },
   { id: 'reset-terminal-font-size', action: 'resetTerminalFontSize', label: 'Reset Terminal Font Size', mac: '⌘ + 0', pc: 'Ctrl + 0', category: 'terminal' },

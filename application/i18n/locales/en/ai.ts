@@ -164,6 +164,18 @@ export const enAiMessages: Messages = {
   'ai.codebuddy.envVars.placeholder': 'CODEBUDDY_API_KEY=...\nCODEBUDDY_AUTH_TOKEN=...\nOTHER_VAR=...',
   'ai.codebuddy.envVars.hint': 'One KEY=VALUE per line, passed to the CodeBuddy agent. Set CODEBUDDY_API_KEY or CODEBUDDY_AUTH_TOKEN here for authentication. Stored locally in plaintext.',
 
+  // AI WorkBuddy
+  'ai.workbuddy.title': 'WorkBuddy',
+  'ai.workbuddy.description': 'Uses the agent CLI embedded in the WorkBuddy desktop app (CodeBuddy-compatible SDK). Once detected, it can be selected as an external coding agent.',
+  'ai.workbuddy.detecting': 'Detecting...',
+  'ai.workbuddy.detected': 'Detected',
+  'ai.workbuddy.notFound': 'Not found',
+  'ai.workbuddy.path': 'Path:',
+  'ai.workbuddy.notFoundHint': 'Could not find WorkBuddy. Install WorkBuddy, or specify WorkBuddy.exe / the embedded cli/bin/codebuddy path below.',
+  'ai.workbuddy.customPathPlaceholder': 'e.g. %LOCALAPPDATA%\\Programs\\WorkBuddy\\WorkBuddy.exe',
+  'ai.workbuddy.check': 'Check',
+  'ai.workbuddy.resetPath': 'Reset',
+
   // AI OpenCode
   'ai.opencode.title': 'OpenCode',
   'ai.opencode.description': 'Uses OpenCode via the official SDK. Configure providers and keys in OpenCode, then select it as an external coding agent.',

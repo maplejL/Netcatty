@@ -43,6 +43,13 @@ import {
   scheduleDeferredTerminalWriteAckFlush,
   shouldDeferTerminalWriteCallback,
 } from "./terminalWriteAckDeferral";
+import { detectPrompt } from "../autocomplete/promptDetector";
+import {
+  endTerminalCommandTiming,
+  markTerminalCommandFirstOutput,
+  markTerminalCommandFirstRender,
+  maybeEndTerminalCommandTimingOnPrompt,
+} from "./terminalCommandTiming";
 import {
   FLOW_HIGH_WATER_MARK,
   FLOW_LOW_WATER_MARK,
@@ -206,6 +213,10 @@ export const writeSessionData = (
   data: string,
   ingressBytes: number = data.length,
 ) => {
+  // First backend → renderer chunk after command submit (before coalescer / xterm).
+  if (data) {
+    markTerminalCommandFirstOutput(ctx.sessionRef.current || ctx.sessionId);
+  }
   const flow = getFlowController(ctx, term);
   const isPaneVisible = ctx.isVisibleRef?.current !== false;
   flow.received(ingressBytes);
@@ -264,10 +275,15 @@ const writeSessionDataImmediate = (
       ctx.promptLineBreakStateRef?.current,
       forcePromptNewLine,
     );
-    ctx.onTerminalLogData?.(pasteDisplayData);
+    // Connection-log capture is for close diagnostics; skip under write-queue flood
+    // so the same main-thread budget stays available for xterm + UI.
+    const captureConnectionLog = !isTerminalWriteQueueInFloodMode(term);
+    if (captureConnectionLog) {
+      ctx.onTerminalLogData?.(pasteDisplayData);
+    }
     const clearPasteResidualAndCapture = () => {
       const cleanupData = clearPasteResidualAfterTerminalWrite(term);
-      if (cleanupData) {
+      if (cleanupData && captureConnectionLog) {
         ctx.onTerminalLogData?.(cleanupData);
       }
     };
@@ -276,9 +292,20 @@ const writeSessionDataImmediate = (
         syncPromptLineBreakState(term, ctx.promptLineBreakStateRef?.current);
       }
     };
+    const maybeEndCommandTiming = () => {
+      const timingSessionId = ctx.sessionRef.current || ctx.sessionId;
+      if (!timingSessionId) return;
+      try {
+        // Detect after xterm has applied this chunk so the new prompt is visible.
+        maybeEndTerminalCommandTimingOnPrompt(timingSessionId, detectPrompt(term));
+      } catch {
+        // ignore detector / buffer errors on the hot path
+      }
+    };
     const finishQueueItem = () => {
       clearPasteResidualAndCapture();
       syncPrompt();
+      maybeEndCommandTiming();
       if (shouldScrollOnTerminalOutput(settings)) {
         handleTerminalOutputAutoScroll(ctx, term);
       }
@@ -310,6 +337,9 @@ const writeSessionDataImmediate = (
       );
 
     const writePreparedDisplayData = (callback: () => void): void => {
+      if (preparedDisplayData) {
+        markTerminalCommandFirstRender(ctx.sessionRef.current || ctx.sessionId);
+      }
       writeTerminalDataWithLineTimestamps(term, preparedDisplayData, callback);
       if (writeOptions.flushXtermWriteBuffer) {
         flushTerminalWriteBufferBypassingTimers(term);
@@ -486,6 +516,7 @@ export const attachSessionToTerminal = (
     if (evt.error) {
       ctx.setError(evt.error);
     }
+    endTerminalCommandTiming(id, "session_exit");
     const exitMessage = opts?.onExitMessage?.(evt) ?? "\r\n[session closed]";
     writeTerminalLine(ctx, term, exitMessage);
 

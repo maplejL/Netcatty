@@ -160,6 +160,18 @@ export const ruAiMessages: Messages = {
   'ai.codebuddy.envVars.placeholder': 'CODEBUDDY_API_KEY=...\nCODEBUDDY_AUTH_TOKEN=...\nOTHER_VAR=...',
   'ai.codebuddy.envVars.hint': 'По одной записи KEY=VALUE на строку, передаются агенту CodeBuddy. Укажите CODEBUDDY_API_KEY или CODEBUDDY_AUTH_TOKEN для аутентификации. Хранятся локально в открытом виде.',
 
+  // AI WorkBuddy
+  'ai.workbuddy.title': 'WorkBuddy',
+  'ai.workbuddy.description': 'Использует агентский CLI, встроенный в десктопное приложение WorkBuddy (совместим с CodeBuddy SDK). После обнаружения может быть выбран как внешний агент.',
+  'ai.workbuddy.detecting': 'Обнаружение...',
+  'ai.workbuddy.detected': 'Обнаружен',
+  'ai.workbuddy.notFound': 'Не найден',
+  'ai.workbuddy.path': 'Путь:',
+  'ai.workbuddy.notFoundHint': 'Не удалось найти WorkBuddy. Установите WorkBuddy или укажите путь к WorkBuddy.exe / встроенному cli/bin/codebuddy.',
+  'ai.workbuddy.customPathPlaceholder': 'например, %LOCALAPPDATA%\\Programs\\WorkBuddy\\WorkBuddy.exe',
+  'ai.workbuddy.check': 'Проверить',
+  'ai.workbuddy.resetPath': 'Сбросить',
+
   // AI Default Agent
   'ai.defaultAgent': 'Агент по умолчанию',
   'ai.defaultAgent.description': 'Агент, который будет использоваться при запуске новой AI-сессии',

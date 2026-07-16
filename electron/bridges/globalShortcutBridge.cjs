@@ -180,6 +180,13 @@ function openMainWindow() {
   bringMainWindowToForeground(getMainWindow());
 }
 
+function usesNativeTrayContextMenu() {
+  // Windows and Linux use Electron's native Menu for right-click. Loading the
+  // React tray panel via app:// in a separate session partition caused Windows
+  // to delegate app:// to the OS ("Get an app to open this link").
+  return process.platform === "win32" || process.platform === "linux";
+}
+
 function getTrayPanelUrl() {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -192,6 +199,7 @@ function ensureTrayPanelWindow() {
   const { BrowserWindow } = electronModule;
   if (trayPanelWindow && !trayPanelWindow.isDestroyed()) return trayPanelWindow;
 
+  const useTransparentTrayPanel = process.platform === "darwin";
   trayPanelWindow = new BrowserWindow({
     width: 360,
     height: 520,
@@ -204,7 +212,8 @@ function ensureTrayPanelWindow() {
     maximizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    transparent: true,
+    transparent: useTransparentTrayPanel,
+    backgroundColor: useTransparentTrayPanel ? undefined : "#f4f6f9",
     hasShadow: true,
     webPreferences: {
       preload: path.join(__dirname, "../preload.cjs"),
@@ -212,6 +221,10 @@ function ensureTrayPanelWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
+  });
+
+  trayPanelWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error("[TrayPanel] did-fail-load", { errorCode, errorDescription, validatedURL });
   });
 
   trayPanelWindow.webContents.on("console-message", (_event, level, message) => {
@@ -229,7 +242,9 @@ function ensureTrayPanelWindow() {
 
   const url = getTrayPanelUrl();
   console.log("[TrayPanel] loadURL", url);
-  void trayPanelWindow.loadURL(url);
+  void trayPanelWindow.loadURL(url).catch((err) => {
+    console.error("[TrayPanel] loadURL failed:", err?.message || err);
+  });
 
   trayPanelWindow.webContents.on("did-finish-load", () => {
     try {
@@ -607,12 +622,9 @@ function createTray() {
 
     // Click on tray icon behaviors depending on platform conventions
     if (process.platform === "win32") {
-      // Windows: Left-click opens/focuses main window, Right-click toggles custom tray panel
+      // Windows: left-click opens/focuses main window; right-click uses native menu.
       tray.on("click", () => {
         openMainWindow();
-      });
-      tray.on("right-click", () => {
-        toggleTrayPanel();
       });
     } else if (process.platform === "linux") {
       // Linux: GtkStatusIcon left-click can toggle the custom panel; StatusNotifier
@@ -733,13 +745,13 @@ function buildTrayMenuTemplate() {
 function updateTrayMenu() {
   if (!tray) return;
   try {
-    if (process.platform === "linux") {
+    if (usesNativeTrayContextMenu()) {
       const { Menu } = electronModule;
       const menu = Menu.buildFromTemplate(buildTrayMenuTemplate());
       tray.setContextMenu(menu);
     } else {
-      // Avoid showing a context menu on left-click; we toggle our custom panel instead.
-      // On macOS, right-click may still show a menu if one is set, so we don't set any.
+      // macOS toggles the custom React tray panel on click; avoid a native menu
+      // that would also appear on right-click.
       tray.setContextMenu(null);
     }
   } catch {

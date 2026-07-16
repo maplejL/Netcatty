@@ -204,6 +204,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   onCreateLocalTerminal,
   isBroadcastEnabled,
   onToggleBroadcast,
+  onOpenBatchExec,
   updateHosts,
   updateSnippets,
   updateSnippetPackages,
@@ -229,6 +230,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   showHostTreeSidebar = true,
   toggleScriptsSidePanelRef,
   toggleSidePanelRef,
+  toggleHistorySidePanelRef,
   // Session rename props
   onStartSessionRename,
   onSubmitSessionRename,
@@ -244,6 +246,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const focusedSessionIdRef = useRef<string | undefined>(undefined);
   const terminalCwdRevisionRef = useRef(0);
   const [terminalCwdRevision, setTerminalCwdRevision] = useState(0);
+  const [commandHistoryPopupOpen, setCommandHistoryPopupOpen] = useState(false);
   const terminalOsc7SignalBySessionRef = useRef<Map<string, number>>(new Map());
   const cwdProbeCancelersRef = useRef<Map<string, () => void>>(new Map());
   const cwdProbeGenerationRef = useRef<Map<string, number>>(new Map());
@@ -1000,16 +1003,36 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onSetWorkspaceFocusedSession?.(activeWorkspace.id, sessionId);
   }, [onSetWorkspaceFocusedSession]);
 
-  // Get the focused terminal's current working directory
-  const getTerminalCwd = useCallback(async (options?: { preferFreshBackend?: boolean }): Promise<string | null> => {
-    const sessionId = getActiveTerminalSessionId();
-    return resolvePreferredTerminalCwd({
+  // Get a terminal session's current working directory.
+  // Prefer an explicit sessionId (SFTP-linked pane) so go-to-cwd / follow do not
+  // accidentally query a different focused session after a focus race.
+  const getTerminalCwd = useCallback(async (options?: {
+    preferFreshBackend?: boolean;
+    sessionId?: string | null;
+  }): Promise<string | null> => {
+    // Prefer an explicit linked session when SFTP provides one. If the key is
+    // omitted (or null after a brief link miss), fall back to the focused
+    // terminal so go-to / follow still work on the common single-host path.
+    const explicitSessionId = options && Object.prototype.hasOwnProperty.call(options, "sessionId")
+      ? (options.sessionId ?? null)
+      : undefined;
+    const sessionId = explicitSessionId || getActiveTerminalSessionId();
+    const cwd = await resolvePreferredTerminalCwd({
       rendererCwd: sessionId ? terminalRendererCwdBySessionRef.current.get(sessionId) : undefined,
       sessionId,
-      getSessionPwd: (id, options) => terminalBackend.getSessionPwd(id, options),
+      getSessionPwd: (id, pwdOptions) => terminalBackend.getSessionPwd(id, pwdOptions),
       preferFreshBackend: options?.preferFreshBackend,
     });
-  }, [getActiveTerminalSessionId, terminalBackend]);
+    // Keep the renderer cache in sync when a fresh backend probe succeeds so
+    // subsequent follow / go-to jumps do not re-hit getSessionPwd unnecessarily.
+    if (sessionId && cwd && options?.preferFreshBackend) {
+      const existing = terminalRendererCwdBySessionRef.current.get(sessionId);
+      if (existing !== cwd) {
+        handleTerminalCwdChange(sessionId, cwd);
+      }
+    }
+    return cwd;
+  }, [getActiveTerminalSessionId, handleTerminalCwdChange, terminalBackend]);
 
   const refocusTerminalSession = useCallback((sessionId?: string | null) => {
     focusTerminalSessionInput(sessionId);
@@ -1191,6 +1214,15 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const handleOpenHistory = useCallback(() => {
     handleSwitchSidePanelTab('history');
   }, [handleSwitchSidePanelTab]);
+
+  // Hotkey: FinalShell-style floating command history over the terminal.
+  const handleToggleHistorySidePanel = useCallback(() => {
+    setCommandHistoryPopupOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseCommandHistoryPopup = useCallback(() => {
+    setCommandHistoryPopupOpen(false);
+  }, []);
 
   // Open AI chat side panel (side-panel rail button: a plain switch that is a
   // no-op when AI is already the active sub-panel, matching the other rail tabs)
@@ -1548,6 +1580,17 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     }
   }, [isBroadcastEnabled, terminalBackend]);
 
+  const handleOpenWorkspaceBatchExec = useCallback(() => {
+    const activeWorkspace = activeWorkspaceRef.current;
+    if (!activeWorkspace || !onOpenBatchExec) return;
+    const workspaceHosts = sessionsRef.current
+      .filter((session) => session.workspaceId === activeWorkspace.id)
+      .map((session) => sessionHostsMapRef.current.get(session.id))
+      .filter((host): host is Host => Boolean(host));
+    if (workspaceHosts.length === 0) return;
+    onOpenBatchExec(workspaceHosts);
+  }, [onOpenBatchExec]);
+
   const sessionLogConfig = useMemo(
     () =>
       sessionLogsEnabled && sessionLogsDir
@@ -1602,9 +1645,14 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     handleCommandExecuted,
     handleCommandSubmitted,
     handleComposeSend,
+    handleOpenWorkspaceBatchExec,
     handleHistoryPaste,
     handleHistoryRun,
     handleOpenHistory,
+    handleToggleHistorySidePanel,
+    handleCloseCommandHistoryPopup,
+    commandHistoryPopupOpen,
+    setCommandHistoryPopupOpen,
     handleOpenSftp,
     handleOpenScripts,
     handleOpenTheme,
@@ -1688,6 +1736,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onSplitSession,
     onSplitSessionRef,
     onToggleBroadcastRef,
+    onOpenBatchExec,
     onToggleWorkspaceViewMode,
     onToggleWorkspaceViewModeRef,
     onUpdateHost,
@@ -1772,6 +1821,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     ThemeSidePanel,
     toggleScriptsSidePanelRef,
     toggleSidePanelRef,
+    toggleHistorySidePanelRef,
     Tooltip,
     TooltipContent,
     TooltipTrigger,

@@ -511,8 +511,8 @@ test("tray icon event registration is platform-dependent", async () => {
     const trayInstance = bridge.getTray();
     assert.ok(trayInstance, "Tray instance should be created");
     assert.ok(trayInstance.handlers.has("click"), "win32 tray should have click handler");
-    assert.ok(trayInstance.handlers.has("right-click"), "win32 tray should have right-click handler");
-    assert.equal(trayInstance.contextMenu, null, "win32 tray should not set a context menu");
+    assert.ok(!trayInstance.handlers.has("right-click"), "win32 tray should use native context menu");
+    assert.ok(trayInstance.contextMenu, "win32 tray should have a native context menu");
     bridge.cleanup();
   });
 

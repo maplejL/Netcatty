@@ -61,9 +61,11 @@ function isScopeKeyActive(scopeKey: string, activeTargetIds: Set<string>) {
 }
 
 export function cleanupOrphanedAISessions(activeTargetIds: Set<string>) {
-  const currentSessions = latestAISessionsSnapshot
-    ?? localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS)
-    ?? [];
+  const currentSessions = sanitizeAISessions(
+    latestAISessionsSnapshot
+      ?? localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS)
+      ?? [],
+  );
 
   // Sessions shown by a still-live scope must be protected from cleanup
   // even when their own `scope.targetId` points at a closed terminal —
@@ -162,6 +164,61 @@ const MAX_STORED_SESSIONS = 50;
 const MAX_SESSION_MESSAGES = 200;
 
 /**
+ * Coerce partial / corrupted localStorage session rows into a safe AISession.
+ * Missing `messages` / `scope` previously crashed the AI side panel on open
+ * (e.g. `session.messages.length` / `session.scope.type`).
+ */
+export function normalizeAISession(raw: unknown): AISession | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Partial<AISession> & { scope?: Partial<AISession['scope']> };
+  const id = typeof record.id === 'string' ? record.id.trim() : '';
+  if (!id) return null;
+
+  const scopeType = record.scope?.type;
+  const scope: AISession['scope'] = (
+    scopeType === 'terminal' || scopeType === 'workspace' || scopeType === 'global'
+  )
+    ? {
+        type: scopeType,
+        targetId: typeof record.scope?.targetId === 'string' ? record.scope.targetId : undefined,
+        hostIds: Array.isArray(record.scope?.hostIds)
+          ? record.scope.hostIds.filter((hostId): hostId is string => typeof hostId === 'string')
+          : undefined,
+      }
+    : { type: 'global' };
+
+  const createdAt = typeof record.createdAt === 'number' && Number.isFinite(record.createdAt)
+    ? record.createdAt
+    : Date.now();
+  const updatedAt = typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt)
+    ? record.updatedAt
+    : createdAt;
+
+  return {
+    id,
+    title: typeof record.title === 'string' && record.title ? record.title : 'New Chat',
+    agentId: typeof record.agentId === 'string' && record.agentId ? record.agentId : 'catty',
+    scope,
+    messages: Array.isArray(record.messages) ? record.messages : [],
+    externalSessionId: typeof record.externalSessionId === 'string'
+      ? record.externalSessionId
+      : undefined,
+    createdAt,
+    updatedAt,
+  };
+}
+
+export function sanitizeAISessions(raw: unknown): AISession[] {
+  if (!Array.isArray(raw)) return [];
+  const sessions: AISession[] = [];
+  for (const entry of raw) {
+    const normalized = normalizeAISession(entry);
+    if (normalized) sessions.push(normalized);
+  }
+  return sessions;
+}
+
+/**
  * Prune sessions before writing to localStorage to prevent hitting the
  * ~5-10 MB storage quota. Only affects what is persisted — the in-memory
  * state retains all messages until the session is reloaded.
@@ -170,10 +227,11 @@ const MAX_SESSION_MESSAGES = 200;
  * - Trims each session's messages to the last MAX_SESSION_MESSAGES.
  */
 export function pruneSessionsForStorage(sessions: AISession[]): AISession[] {
+  const sanitized = sanitizeAISessions(sessions);
   // Sort by updatedAt descending so we keep the newest
-  const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+  const sorted = [...sanitized].sort((a, b) => b.updatedAt - a.updatedAt);
   const limited = sorted.slice(0, MAX_STORED_SESSIONS);
-  return limited.map(s => {
+  return limited.map((s) => {
     if (s.messages.length > MAX_SESSION_MESSAGES) {
       return { ...s, messages: s.messages.slice(-MAX_SESSION_MESSAGES) };
     }
@@ -199,8 +257,9 @@ export function setLatestAIActiveSessionMapSnapshot(activeSessionIdMap: Record<s
 export function prewarmAIStateStorageSnapshots() {
   try {
     if (latestAISessionsSnapshot === null) {
-      latestAISessionsSnapshot =
-        localStorageAdapter.read<AISession[]>(STORAGE_KEY_AI_SESSIONS) ?? [];
+      latestAISessionsSnapshot = sanitizeAISessions(
+        localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS),
+      );
     }
     if (latestAIActiveSessionMapSnapshot === null) {
       latestAIActiveSessionMapSnapshot =
@@ -209,6 +268,15 @@ export function prewarmAIStateStorageSnapshots() {
   } catch (error) {
     console.warn('[AIState] Failed to prewarm AI state storage snapshots:', error);
   }
+}
+
+/** Read + sanitize sessions from storage / snapshot for React state. */
+export function readSanitizedAISessions(): AISession[] {
+  return sanitizeAISessions(
+    latestAISessionsSnapshot
+      ?? localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS)
+      ?? [],
+  );
 }
 
 export function setLatestAIDraftsByScopeSnapshot(draftsByScope: DraftsByScope) {

@@ -111,14 +111,35 @@ export function handleTrayPanelConnectImpl(getCtx: AppContextGetter, hostId: str
 }
 
 export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: KeyboardEvent) {
-  const { HOTKEY_DEBUG, closeTabKeyStr, executeHotkeyAction, hotkeyScheme, keyBindings, matchesKeyBinding } = getCtx();
+  const {
+    HOTKEY_DEBUG,
+    closeTabKeyStr,
+    executeHotkeyAction,
+    hotkeyScheme,
+    keyBindings,
+    matchesKeyBinding,
+    trackModifierOnlyHotkeyEvent,
+  } = getCtx();
 {
+    trackModifierOnlyHotkeyEvent?.(e);
     const isMac = hotkeyScheme === 'mac';
     const target = e.target as HTMLElement;
+    const finishModifierOnlyTracking = () => {
+      // Always clear after a modifier keyup so a dirty Alt+letter chord cannot
+      // permanently disable bare-Alt bindings when none are configured.
+      if (
+        e.type === 'keyup'
+        && (e.key === 'Alt' || e.key === 'Control' || e.key === 'Shift' || e.key === 'Meta' || e.key === 'OS')
+      ) {
+        const reset = getCtx().resetModifierOnlyHotkeyTracking as (() => void) | undefined;
+        reset?.();
+      }
+    };
     const isCloseTabHotkey = closeTabKeyStr ? matchesKeyBinding(e, closeTabKeyStr, isMac) : false;
     const dialogHotkeyScope = target.closest?.('[data-hotkey-close-tab="true"]');
 
     if (isCloseTabHotkey && dialogHotkeyScope) {
+      finishModifierOnlyTracking();
       return;
     }
 
@@ -130,6 +151,7 @@ export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: Keybo
         e.preventDefault();
         e.stopPropagation();
         topmostDialogClose.click();
+        finishModifierOnlyTracking();
         return;
       }
     }
@@ -147,6 +169,7 @@ export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: Keybo
     const isQuickSwitchHotkey = quickSwitchKeyStr ? matchesKeyBinding(e, quickSwitchKeyStr, isMac) : false;
 
     if ((isFormElement || isMonacoElement) && !isXtermInput && e.key !== 'Escape' && !isQuickSwitchHotkey) {
+      finishModifierOnlyTracking();
       return;
     }
 
@@ -174,6 +197,7 @@ export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: Keybo
       }
       if (TERMINAL_PASSTHROUGH_ACTIONS.has(binding.action)) {
         if (isTerminalElement) {
+          finishModifierOnlyTracking();
           return;
         }
         continue;
@@ -195,8 +219,10 @@ export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: Keybo
         });
       }
       executeHotkeyAction(binding.action, e);
+      finishModifierOnlyTracking();
       return;
     }
+    finishModifierOnlyTracking();
   }
 }
 
@@ -450,7 +476,7 @@ export async function closeTabsBatchImpl(getCtx: AppContextGetter, targetIds: st
 }
 
 export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string, e: KeyboardEvent) {
-  const { IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, activeTabStore, addConnectionLogRef, closeSession, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, splitSessionWithCurrentShell, systemInfoRef, toEditorTabId, toggleBroadcast, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, workspaces } = getCtx();
+  const { IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, activeTabStore, addConnectionLogRef, closeSession, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, splitSessionWithCurrentShell, systemInfoRef, toEditorTabId, toggleBroadcast, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, workspaces } = getCtx();
 {
     const shortcutTabs = buildNumberShortcutTabTargets({
       showSftpTab: settings.showSftpTab ?? true,
@@ -639,6 +665,9 @@ export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string
         break;
       case 'toggleSidePanel':
         toggleSidePanelRef.current?.();
+        break;
+      case 'openHistory':
+        toggleHistorySidePanelRef.current?.();
         break;
       case 'broadcast': {
         // Toggle broadcast mode for the active workspace

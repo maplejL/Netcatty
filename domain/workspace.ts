@@ -217,6 +217,70 @@ export const reorderWorkspaceFocusSessionOrder = (
   return currentOrder;
 };
 
+export type WorkspacePaneLayout = 'row' | 'grid' | 'auto';
+
+const makeWorkspacePane = (sessionId: string): WorkspaceNode => ({
+  id: crypto.randomUUID(),
+  type: 'pane',
+  sessionId,
+});
+
+const makeWorkspaceSplit = (
+  direction: SplitDirection,
+  children: WorkspaceNode[],
+): WorkspaceNode => ({
+  id: crypto.randomUUID(),
+  type: 'split',
+  direction,
+  children,
+  sizes: children.map(() => 1),
+});
+
+export const resolveWorkspacePaneLayout = (
+  sessionCount: number,
+  preference: WorkspacePaneLayout = 'auto',
+): 'single' | 'row' | 'grid' => {
+  if (sessionCount <= 1) return 'single';
+  if (preference === 'row') return 'row';
+  if (preference === 'grid') return sessionCount >= 4 ? 'grid' : 'row';
+  return sessionCount === 4 ? 'grid' : 'row';
+};
+
+/**
+ * Build a workspace root node for N terminal panes.
+ * `auto` uses a 2x2 grid for exactly 4 sessions, otherwise a single row.
+ */
+export const buildWorkspaceRootFromSessionIds = (
+  sessionIds: string[],
+  layout: WorkspacePaneLayout = 'auto',
+): WorkspaceNode => {
+  if (sessionIds.length === 0) {
+    throw new Error('Cannot build workspace root with no sessions');
+  }
+  if (sessionIds.length === 1) {
+    return makeWorkspacePane(sessionIds[0]);
+  }
+
+  const resolved = resolveWorkspacePaneLayout(sessionIds.length, layout);
+  if (resolved === 'grid' && sessionIds.length === 4) {
+    return makeWorkspaceSplit('horizontal', [
+      makeWorkspaceSplit('vertical', [
+        makeWorkspacePane(sessionIds[0]),
+        makeWorkspacePane(sessionIds[1]),
+      ]),
+      makeWorkspaceSplit('vertical', [
+        makeWorkspacePane(sessionIds[2]),
+        makeWorkspacePane(sessionIds[3]),
+      ]),
+    ]);
+  }
+
+  return makeWorkspaceSplit(
+    'vertical',
+    sessionIds.map((sessionId) => makeWorkspacePane(sessionId)),
+  );
+};
+
 /**
  * Create a workspace from multiple session IDs.
  * Used for snippet runner - creates a workspace with all sessions in a horizontal split.
@@ -227,6 +291,7 @@ export const createWorkspaceFromSessionIds = (
     title: string;
     viewMode?: WorkspaceViewMode;
     snippetId?: string;
+    layout?: WorkspacePaneLayout;
   }
 ): Workspace => {
   if (sessionIds.length === 0) {
@@ -234,7 +299,6 @@ export const createWorkspaceFromSessionIds = (
   }
 
   if (sessionIds.length === 1) {
-    // Single pane workspace
     return {
       id: `ws-${crypto.randomUUID()}`,
       title: options.title,
@@ -242,20 +306,9 @@ export const createWorkspaceFromSessionIds = (
       snippetId: options.snippetId,
       focusedSessionId: sessionIds[0],
       focusSessionOrder: [sessionIds[0]],
-      root: {
-        id: crypto.randomUUID(),
-        type: 'pane',
-        sessionId: sessionIds[0],
-      },
+      root: makeWorkspacePane(sessionIds[0]),
     };
   }
-
-  // Multiple sessions - create a horizontal split
-  const children: WorkspaceNode[] = sessionIds.map(sessionId => ({
-    id: crypto.randomUUID(),
-    type: 'pane' as const,
-    sessionId,
-  }));
 
   return {
     id: `ws-${crypto.randomUUID()}`,
@@ -264,13 +317,7 @@ export const createWorkspaceFromSessionIds = (
     snippetId: options.snippetId,
     focusedSessionId: sessionIds[0],
     focusSessionOrder: sessionIds,
-    root: {
-      id: crypto.randomUUID(),
-      type: 'split',
-      direction: 'vertical', // Side by side
-      children,
-      sizes: children.map(() => 1),
-    },
+    root: buildWorkspaceRootFromSessionIds(sessionIds, options.layout ?? 'auto'),
   };
 };
 

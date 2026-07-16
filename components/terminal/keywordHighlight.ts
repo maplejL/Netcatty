@@ -105,6 +105,9 @@ export class KeywordHighlighter implements IDisposable {
   private lastWriteAt = 0;
   private lastBurstDecayAt = 0;
   private lastUserInputAt = 0;
+  /** True when highlight work was skipped under output pressure; refresh once quiet. */
+  private highlightCatchUpPending = false;
+  private highlightCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
   private scrollRefreshJob: ScrollRefreshJob | null = null;
   private scrollRefreshGeneration = 0;
   private static readonly DIRTY_SCAN_PADDING = XTERM_PERFORMANCE_CONFIG.highlighting.dirtyScanPadding;
@@ -137,16 +140,29 @@ export class KeywordHighlighter implements IDisposable {
       // When new data is written, refresh on the next frame so highlights land
       // with the freshly rendered content instead of trailing behind it.
       this.term.onWriteParsed(() => {
+        const now = performance.now();
         const pressure = getTerminalOutputPressure(this.term);
+        // Hard-skip scanning under sustained flood / long-line / background.
+        // Debounced refresh still costs mark+schedule work on every write; for
+        // `tail -f` that tax dominates. Catch up once pressure clears.
         if (
           pressure.longLine
           || pressure.largeOutput
           || pressure.background
-          || this.isInputProtectionActive(performance.now())
         ) {
+          this.updateWriteBurst();
+          this.markHighlightCatchUpPending();
+          return;
+        }
+        if (this.isInputProtectionActive(now) || this.isWriteBurstActive(now)) {
           this.updateWriteBurst();
           this.markVisibleRangeDirty();
           this.triggerRefresh("debounced", "write");
+          return;
+        }
+        if (this.consumeHighlightCatchUpPending()) {
+          this.markDirtyFromWrite();
+          this.triggerRefresh("debounced", "full");
           return;
         }
         this.markDirtyFromWrite();
@@ -212,7 +228,13 @@ export class KeywordHighlighter implements IDisposable {
     this.disposables = [];
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
+    if (this.highlightCatchUpTimer) {
+      clearTimeout(this.highlightCatchUpTimer);
+      this.highlightCatchUpTimer = null;
+    }
+    this.highlightCatchUpPending = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
@@ -961,6 +983,39 @@ export class KeywordHighlighter implements IDisposable {
     }
     this.lastWriteAt = now;
     this.lastBurstDecayAt = now;
+  }
+
+  private markHighlightCatchUpPending() {
+    this.highlightCatchUpPending = true;
+    if (this.highlightCatchUpTimer) {
+      clearTimeout(this.highlightCatchUpTimer);
+    }
+    // Wait for large-output quiet window, then scan once. Reschedule if pressure
+    // is still active so continuous tails never pay per-write highlight cost.
+    const quietMs = XTERM_PERFORMANCE_CONFIG.highlighting.largeOutputQuietMs;
+    this.highlightCatchUpTimer = setTimeout(() => {
+      this.highlightCatchUpTimer = null;
+      if (!this.enabled || !this.highlightCatchUpPending) return;
+      const pressure = getTerminalOutputPressure(this.term);
+      if (pressure.longLine || pressure.largeOutput || pressure.background) {
+        this.markHighlightCatchUpPending();
+        return;
+      }
+      this.highlightCatchUpPending = false;
+      this.markVisibleRangeDirty();
+      // Immediate catch-up: we already waited for the quiet window.
+      this.triggerRefresh("immediate", "full");
+    }, quietMs);
+  }
+
+  private consumeHighlightCatchUpPending(): boolean {
+    if (!this.highlightCatchUpPending) return false;
+    this.highlightCatchUpPending = false;
+    if (this.highlightCatchUpTimer) {
+      clearTimeout(this.highlightCatchUpTimer);
+      this.highlightCatchUpTimer = null;
+    }
+    return true;
   }
 
   private isWriteBurstActive(now: number): boolean {

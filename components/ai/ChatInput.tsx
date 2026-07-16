@@ -67,6 +67,8 @@ interface ChatInputProps {
   placeholder?: string;
   /** Available model presets for the current agent */
   modelPresets?: AgentModelPreset[];
+  /** Runtime catalog is still loading for the current external agent */
+  modelsLoading?: boolean;
   /** Currently selected model ID */
   selectedModelId?: string;
   /** Callback when user selects a model */
@@ -114,6 +116,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   agentName,
   placeholder,
   modelPresets = [],
+  modelsLoading = false,
   selectedModelId,
   onModelSelect,
   files = [],
@@ -516,11 +519,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
     ? providerSwitcherChipLabel
     : (selectedPreset
         ? selectedPreset.name + (selectedThinking ? ` / ${formatThinkingLabel(selectedThinking)}` : '')
-        : modelName || providerName || t('ai.chat.noModel'));
+        : modelsLoading
+          ? 'Refreshing…'
+          : modelName || providerName || t('ai.chat.noModel'));
   const modelChipMaxWidth = hasProviderSwitcher
     ? 'max-w-[180px]'
     : (selectedThinking ? 'max-w-[148px]' : 'max-w-[82px]');
-  const hasModelPicker = hasProviderSwitcher || (modelPresets.length > 0 && !!onModelSelect);
+  const hasModelPicker = hasProviderSwitcher
+    || ((modelPresets.length > 0 || modelsLoading) && !!onModelSelect);
   const popoverMaxWidth = hasProviderSwitcher ? PROVIDER_PICKER_MAX_WIDTH : MODEL_PICKER_MAX_WIDTH;
   const chipClassName =
     'inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[10.5px] text-foreground/72';
@@ -906,6 +912,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   ) : (
                     <div className="min-w-[260px] max-h-[320px] overflow-y-auto">
+                      {modelsLoading && (
+                        <div className="px-3 py-2 text-[11px] text-muted-foreground/70">
+                          Refreshing model list…
+                        </div>
+                      )}
+                      {!modelsLoading && modelPresets.length === 0 && (
+                        <div className="px-3 py-2 text-[11px] text-muted-foreground/55">
+                          No models available
+                        </div>
+                      )}
                       {modelPresets.map(preset => {
                     const isSelected = preset.id === selectedBaseModelId;
                     const hasThinking = preset.thinkingLevels && preset.thinkingLevels.length > 0;

@@ -50,6 +50,8 @@ function registerAgentDiscoveryHandlers(ctx) {
         description: "Cursor's coding agent via Cursor SDK", sdkBackend: "cursor", args: [] },
       { command: "codebuddy", name: "CodeBuddy Code", icon: "codebuddy",
         description: "Tencent's coding agent CLI (Agent SDK)", sdkBackend: "codebuddy", args: [] },
+      { command: "workbuddy", name: "WorkBuddy", icon: "workbuddy",
+        description: "Tencent WorkBuddy desktop agent (embedded CodeBuddy CLI)", sdkBackend: "workbuddy", args: [] },
       { command: "opencode", name: "OpenCode", icon: "opencode",
         description: "Open source coding agent via the official OpenCode SDK", sdkBackend: "opencode", args: [] },
     ];
@@ -66,9 +68,16 @@ function registerAgentDiscoveryHandlers(ctx) {
         if (!cursorSdkStatus.available) continue;
       }
 
-      const resolvedPath = agent.command === "cursor"
-        ? (await resolveCliFromPathAsync(agent.command, shellEnv) || "cursor")
-        : await resolveCliFromPathAsync(agent.command, shellEnv); // Layer-1: locate
+      let resolvedPath;
+      if (agent.command === "cursor") {
+        resolvedPath = (await resolveCliFromPathAsync(agent.command, shellEnv) || "cursor");
+      } else if (agent.command === "workbuddy") {
+        // Desktop install embeds the agent CLI; WorkBuddy.exe is not the agent entry.
+        resolvedPath = resolveWorkbuddyAgentCliPath("", { env: shellEnv })
+          || await resolveCliFromPathAsync(agent.command, shellEnv);
+      } else {
+        resolvedPath = await resolveCliFromPathAsync(agent.command, shellEnv); // Layer-1: locate
+      }
       if (!resolvedPath || seenPaths.has(resolvedPath)) continue;
 
       const probe = agent.command === "cursor" && resolvedPath === "cursor"
@@ -93,7 +102,7 @@ function registerAgentDiscoveryHandlers(ctx) {
             authenticated: cursorSdkStatus.authenticated,
             authSource: cursorSdkStatus.authSource,
           };
-        } else if (agent.command === "codebuddy") {
+        } else if (agent.command === "codebuddy" || agent.command === "workbuddy") {
           auth = probeCodebuddyAuth({ env: shellEnv });
         } else if (agent.command === "opencode") {
           auth = { authenticated: true, authSource: "opencode-config" };
@@ -141,7 +150,15 @@ function registerAgentDiscoveryHandlers(ctx) {
     const hasCustomPath = command !== "cursor" && Boolean(String(customPath || "").trim());
 
     let resolvedPath;
-    if (hasCustomPath) {
+    if (command === "workbuddy") {
+      if (hasCustomPath) {
+        resolvedPath = resolveWorkbuddyAgentCliPath(customPath, { env: shellEnv })
+          || normalizeCliPathForPlatform(customPath);
+      } else {
+        resolvedPath = resolveWorkbuddyAgentCliPath("", { env: shellEnv })
+          || await resolveCliFromPathAsync(command, shellEnv);
+      }
+    } else if (hasCustomPath) {
       // Normalize Windows shim paths like `codex` -> `codex.cmd` when present.
       // A user-supplied path must be validated as-is; falling back to PATH would
       // make Settings appear to accept one binary while actually using another.
@@ -184,7 +201,7 @@ function registerAgentDiscoveryHandlers(ctx) {
   ipcMain.handle("netcatty:ai:codex:get-integration", async (event, options) => {
     if (!validateSenderOrSettings(event)) return { ok: false, error: "Unauthorized IPC sender" };
     // When the user clicks "Refresh Status" in Settings we also want to
-    // rescan the shell env ‚Äî otherwise a newly-exported variable in
+    // rescan the shell env ù otherwise a newly-exported variable in
     // .zshrc stays invisible until they restart netcatty entirely.
     if (options && options.refreshShellEnv) {
       invalidateShellEnvCache();
@@ -284,7 +301,7 @@ function registerAgentDiscoveryHandlers(ctx) {
       const spawnSpec = prepareCommandForSpawn(codexCliPath, ["login"]);
       const child = spawn(spawnSpec.command, spawnSpec.args, {
         stdio: ["ignore", "pipe", "pipe"],
-        env: shellEnv,
+        env: spawnSpec.env ? { ...shellEnv, ...spawnSpec.env } : shellEnv,
         shell: spawnSpec.shell,
         windowsHide: true,
       });

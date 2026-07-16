@@ -17,6 +17,7 @@ type ImportOption = {
   label: string;
   iconSrc: string;
   accept: string;
+  multiple?: boolean;
 };
 
 const OPTIONS: ImportOption[] = [
@@ -50,6 +51,13 @@ const OPTIONS: ImportOption[] = [
     iconSrc: "/import/file.png",
     accept: "*",
   },
+  {
+    format: "finalshell",
+    label: "FinalShell",
+    iconSrc: "/import/file.png",
+    accept: ".json",
+    multiple: true,
+  },
 ];
 
 export type ImportOptions = {
@@ -60,13 +68,13 @@ export type ImportOptions = {
 export type ImportVaultDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onFileSelected: (format: VaultImportFormat, file: File, options?: ImportOptions) => void;
+  onFilesSelected: (format: VaultImportFormat, files: File[], options?: ImportOptions) => void;
 };
 
 export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
   open,
   onOpenChange,
-  onFileSelected,
+  onFilesSelected,
 }) => {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -86,12 +94,13 @@ export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
   }, []);
 
   const pickFile = useCallback(
-    (format: VaultImportFormat, accept: string, options?: ImportOptions) => {
+    (format: VaultImportFormat, accept: string, options?: ImportOptions, multiple = false) => {
       const input = fileInputRef.current;
       if (!input) return;
       pendingFormatRef.current = format;
       pendingOptionsRef.current = options;
       input.accept = accept;
+      input.multiple = multiple;
       input.value = "";
       input.click();
     },
@@ -103,7 +112,7 @@ export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
       if (opt.format === "ssh_config") {
         setShowManagedChoice(true);
       } else {
-        pickFile(opt.format, opt.accept);
+        pickFile(opt.format, opt.accept, undefined, opt.multiple === true);
       }
     },
     [pickFile],
@@ -112,22 +121,22 @@ export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
   const handleManagedChoice = useCallback(
     (managed: boolean) => {
       setShowManagedChoice(false);
-      pickFile("ssh_config", "*", { managed });
+      pickFile("ssh_config", "*", { managed }, false);
     },
     [pickFile],
   );
 
   const onChangeFile = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
+      const fileList = e.target.files;
       const format = pendingFormatRef.current;
       const options = pendingOptionsRef.current;
-      if (!file || !format) return;
-      onFileSelected(format, file, options);
+      if (!fileList || fileList.length === 0 || !format) return;
+      onFilesSelected(format, Array.from(fileList), options);
       e.target.value = "";
       pendingOptionsRef.current = undefined;
     },
-    [onFileSelected],
+    [onFilesSelected],
   );
 
   const handleOpenChange = useCallback(
@@ -226,7 +235,7 @@ export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
                 {t("vault.import.chooseFormat")}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {OPTIONS.map((opt) => (
                   <button
                     key={opt.format}
@@ -258,6 +267,8 @@ export const ImportVaultDialog: React.FC<ImportVaultDialogProps> = ({
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
                 <div className="text-xs text-muted-foreground">
                   {t("vault.import.csv.tip")}
+                  {" "}
+                  {t("vault.import.finalshell.tip")}
                 </div>
                 <button
                   type="button"

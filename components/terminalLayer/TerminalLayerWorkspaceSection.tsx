@@ -85,6 +85,7 @@ function TerminalLayerWorkspaceSectionInner({ ctx }: { ctx: WorkspaceContext }) 
     findSplitNode,
     focusedSessionId,
     handleComposeSend,
+    handleOpenWorkspaceBatchExec,
     handleSnippetFromPanel,
     refocusTerminalSession,
     setIsComposeBarOpen,
@@ -97,6 +98,7 @@ function TerminalLayerWorkspaceSectionInner({ ctx }: { ctx: WorkspaceContext }) 
     onReorderTabs,
     onStartSessionDrag,
     onEndSessionDrag,
+    onOpenBatchExec,
   } = ctx;
 
   return (
@@ -272,6 +274,7 @@ function TerminalLayerWorkspaceSectionInner({ ctx }: { ctx: WorkspaceContext }) 
             refocusTerminalSession(focusedSessionId);
           }}
           isBroadcastEnabled={isBroadcastEnabled?.(activeWorkspace.id)}
+          onOpenBatchExec={onOpenBatchExec ? handleOpenWorkspaceBatchExec : undefined}
           themeColors={composeBarThemeColors}
         />
       )}

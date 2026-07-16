@@ -7,7 +7,7 @@ const { createStreamEmitter } = require("./emit.cjs");
 const { buildNetcattySkillsOpenCodePathAllowlist } = require("./netcattySkillsOpenCodePermissions.cjs");
 const { getToolCliStateDir } = require("../../../cli/discoveryPath.cjs");
 const tempDirBridge = require("../../tempDirBridge.cjs");
-const { realpathSync } = require("node:fs");
+const { realpathSync, existsSync } = require("node:fs");
 
 const VALID_BACKENDS = new Set(listBackends());
 
@@ -49,7 +49,15 @@ function shouldCacheSdkRuntimeModels(backendKey) {
 function normalizeSdkListModelsResult(raw) {
   const rawModels = Array.isArray(raw) ? raw : raw?.models;
   const currentModelId = Array.isArray(raw) ? null : raw?.currentModelId || null;
-  const models = Array.isArray(rawModels) ? rawModels.filter((m) => m && m.id) : [];
+  const models = [];
+  if (Array.isArray(rawModels)) {
+    const seen = new Set();
+    for (const model of rawModels) {
+      if (!model?.id || seen.has(model.id)) continue;
+      seen.add(model.id);
+      models.push(model);
+    }
+  }
   return { currentModelId, models };
 }
 
@@ -97,6 +105,21 @@ function resolveBackendKey(value) {
   return VALID_BACKENDS.has(key) ? key : null;
 }
 
+/**
+ * Resolve tool-integration mode for an SDK backend turn.
+ * WorkBuddy's embedded CLI does not reliably settle Netcatty's injected stdio
+ * MCP server (startup waits ~30s then proceeds with zero connected tools).
+ * Skills + CLI reaches the same host via the discovery file and is stable.
+ */
+function resolveSdkToolIntegrationMode(backendKey, toolIntegrationMode, normalizeMode) {
+  const normalize = typeof normalizeMode === "function"
+    ? normalizeMode
+    : (mode) => (mode === "skills" ? "skills" : "mcp");
+  const requested = normalize(toolIntegrationMode);
+  if (backendKey === "workbuddy") return "skills";
+  return requested;
+}
+
 function normalizeHistoryMessages(historyMessages) {
   if (!Array.isArray(historyMessages)) return [];
   return historyMessages
@@ -123,6 +146,71 @@ function logCursorApiKeySummary({ requestedAgentEnv, shellEnv, env }) {
     source,
     hasEffectiveKey: Boolean(effectiveKey),
   });
+}
+
+function resolveCodebuddyFamilySdkBinPath({
+  backendKey,
+  rawPath,
+  shellEnv,
+  env,
+  realpath,
+  resolveCliFromPath,
+  resolveCodebuddyExecutableForSdk,
+  resolveWorkbuddyAgentCliPath,
+}) {
+  const mergedEnv = { ...shellEnv, ...env };
+  const pathCommand = backendKey === "workbuddy" ? "workbuddy" : "codebuddy";
+
+  const toSdkPath = (cliPath) => {
+    if (!cliPath) return undefined;
+    const realCliPath = resolveRealCliPath(cliPath, realpath);
+    return typeof resolveCodebuddyExecutableForSdk === "function"
+      ? resolveCodebuddyExecutableForSdk(realCliPath) || undefined
+      : realCliPath;
+  };
+
+  const discoverWorkbuddyCli = () => (
+    typeof resolveWorkbuddyAgentCliPath === "function"
+      ? resolveWorkbuddyAgentCliPath("", { env: mergedEnv })
+      : null
+  );
+
+  if (rawPath) {
+    let candidate = rawPath;
+    if (backendKey === "workbuddy" && typeof resolveWorkbuddyAgentCliPath === "function") {
+      const remapped = resolveWorkbuddyAgentCliPath(rawPath, { env: mergedEnv });
+      if (remapped) {
+        candidate = remapped;
+      } else if (!existsSync(rawPath)) {
+        const discovered = discoverWorkbuddyCli();
+        if (discovered) candidate = discovered;
+      }
+    }
+    const sdkPath = toSdkPath(candidate);
+    if (sdkPath) return sdkPath;
+  }
+
+  if (backendKey === "workbuddy") {
+    const sdkPath = toSdkPath(discoverWorkbuddyCli());
+    if (sdkPath) return sdkPath;
+  }
+
+  const fromPath = resolveCliFromPath?.(pathCommand, shellEnv);
+  return toSdkPath(fromPath);
+}
+
+function formatCodebuddyFamilyCliNotFoundError(backendKey) {
+  if (backendKey === "workbuddy") {
+    return (
+      "WorkBuddy agent CLI not found or not runnable. Install WorkBuddy, or set " +
+      "WORKBUDDY_CODE_PATH to the embedded CLI at " +
+      "WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy."
+    );
+  }
+  return (
+    "CodeBuddy CLI not found or not runnable. Install codebuddy and ensure it's on PATH, " +
+    "or set CODEBUDDY_CODE_PATH."
+  );
 }
 
 function resolveRealCliPath(cliPath, realpath = realpathSync) {
@@ -158,7 +246,10 @@ function resolveConfiguredSdkPath({
   if (backendKey === "codex" && typeof resolveCodexExecutableForSdk === "function") {
     return resolveCodexExecutableForSdk(realPath) || undefined;
   }
-  if (backendKey === "codebuddy" && typeof resolveCodebuddyExecutableForSdk === "function") {
+  if (
+    (backendKey === "codebuddy" || backendKey === "workbuddy")
+    && typeof resolveCodebuddyExecutableForSdk === "function"
+  ) {
     return resolveCodebuddyExecutableForSdk(realPath) || undefined;
   }
   return realPath;
@@ -167,10 +258,22 @@ function resolveConfiguredSdkPath({
 function resolveSdkBackendBinPath({
   backendKey, configuredCommand, shellEnv, env, resolveCliFromPath, normalizeCliPathForPlatform,
   resolveSdkBinPath, resolveClaudeCodeExecutableForSdk, resolveCodexExecutableForSdk,
-  resolveCodebuddyExecutableForSdk, realpath = realpathSync,
+  resolveCodebuddyExecutableForSdk, resolveWorkbuddyAgentCliPath, realpath = realpathSync,
 }) {
   const configuredPath = normalizeConfiguredCommandPath(configuredCommand, normalizeCliPathForPlatform);
   if (configuredPath) {
+    if (backendKey === "codebuddy" || backendKey === "workbuddy") {
+      return resolveCodebuddyFamilySdkBinPath({
+        backendKey,
+        rawPath: configuredPath,
+        shellEnv,
+        env,
+        realpath,
+        resolveCliFromPath,
+        resolveCodebuddyExecutableForSdk,
+        resolveWorkbuddyAgentCliPath,
+      });
+    }
     return resolveConfiguredSdkPath({
       backendKey,
       configuredPath,
@@ -181,19 +284,20 @@ function resolveSdkBackendBinPath({
     });
   }
 
-  if (backendKey === "codebuddy") {
-    const configuredEnvPath = normalizeCliPathForPlatform?.(env?.CODEBUDDY_CODE_PATH);
-    const rawPath = configuredEnvPath || resolveCliFromPath(backendKey, shellEnv) || undefined;
-    if (!rawPath) return undefined;
-    const realPath = resolveRealCliPath(rawPath, realpath);
-    // On Windows the discovered path is an npm shim (codebuddy.cmd/.ps1) that the
-    // Agent SDK can't run through `node`; resolve it to the package's JS entry so
-    // it launches like on macOS/Linux. A null result means the shim is unrunnable
-    // and unresolvable, so fall back to the SDK's bundled CLI.
-    const sdkPath = typeof resolveCodebuddyExecutableForSdk === "function"
-      ? resolveCodebuddyExecutableForSdk(realPath)
-      : realPath;
-    return sdkPath || undefined;
+  if (backendKey === "codebuddy" || backendKey === "workbuddy") {
+    const envPathKey = backendKey === "workbuddy" ? "WORKBUDDY_CODE_PATH" : "CODEBUDDY_CODE_PATH";
+    const configuredEnvPath = normalizeCliPathForPlatform?.(env?.[envPathKey])
+      || normalizeCliPathForPlatform?.(env?.CODEBUDDY_CODE_PATH);
+    return resolveCodebuddyFamilySdkBinPath({
+      backendKey,
+      rawPath: configuredEnvPath || undefined,
+      shellEnv,
+      env,
+      realpath,
+      resolveCliFromPath,
+      resolveCodebuddyExecutableForSdk,
+      resolveWorkbuddyAgentCliPath,
+    });
   }
   if (backendKey === "opencode") {
     const configuredEnvPath = normalizeCliPathForPlatform?.(env?.OPENCODE_BIN);
@@ -303,7 +407,11 @@ function registerSdkStreamHandlers(ctx) {
         const emitter = createStreamEmitter({ safeSend, sender: event.sender, requestId });
         try {
           const shellEnv = await getShellEnv();
-          const effectiveMode = normalizeToolIntegrationMode(toolIntegrationMode);
+          const effectiveMode = resolveSdkToolIntegrationMode(
+            backendKey,
+            toolIntegrationMode,
+            normalizeToolIntegrationMode,
+          );
           setToolIntegrationMode(effectiveMode);
 
           // Push terminal session metadata + build injected MCP (mcp mode only).
@@ -341,9 +449,18 @@ function registerSdkStreamHandlers(ctx) {
             resolveClaudeCodeExecutableForSdk,
             resolveCodexExecutableForSdk,
             resolveCodebuddyExecutableForSdk,
+            resolveWorkbuddyAgentCliPath,
           });
           if (backendKey === "codex") {
             env = addCodexExecutableEnvForSdk(env, binPath);
+          }
+          if ((backendKey === "codebuddy" || backendKey === "workbuddy") && binPath) {
+            env = { ...env, CODEBUDDY_CODE_PATH: binPath };
+          }
+          if ((backendKey === "codebuddy" || backendKey === "workbuddy") && !binPath) {
+            const message = formatCodebuddyFamilyCliNotFoundError(backendKey);
+            emitter.emitError(message);
+            return { ok: false, error: message };
           }
 
           const hasConfiguredCommand = isPathLikeCommand(agentCommand);
@@ -430,6 +547,11 @@ function registerSdkStreamHandlers(ctx) {
           });
 
           // Persist any new session id for resume on the next turn.
+          // Stale resume retries drop the previous id so the next turn does not
+          // keep replaying a dead WorkBuddy/CodeBuddy session.
+          if (result?.resumeInvalidated) {
+            sdkSessionIds.delete(sdkSessionKey);
+          }
           const newSessionId = result?.sessionId || result?.threadId;
           if (newSessionId) sdkSessionIds.set(sdkSessionKey, newSessionId);
 
@@ -456,7 +578,8 @@ function registerSdkStreamHandlers(ctx) {
           return { ok: true, currentModelId: null, models: [] };
         }
         const shellEnv = await getShellEnv();
-        const env = buildSdkAgentEnv({
+        // Must be `let` — codebuddy/workbuddy reassign after bin resolution.
+        let env = buildSdkAgentEnv({
           shellEnv,
           requestedAgentEnv: normalizeAgentEnv(requestedAgentEnv),
           withCliDiscoveryEnv,
@@ -473,7 +596,14 @@ function registerSdkStreamHandlers(ctx) {
           resolveClaudeCodeExecutableForSdk,
           resolveCodexExecutableForSdk,
           resolveCodebuddyExecutableForSdk,
+          resolveWorkbuddyAgentCliPath,
         });
+        if ((backendKey === "codebuddy" || backendKey === "workbuddy") && binPath) {
+          env = { ...env, CODEBUDDY_CODE_PATH: binPath };
+        }
+        if ((backendKey === "codebuddy" || backendKey === "workbuddy") && !binPath) {
+          return { ok: true, currentModelId: null, models: [] };
+        }
         // claude/copilot enumerate models via the SDK; codex has no catalog (its
         // driver returns []), so the renderer falls back to curated presets.
         // OpenCode model catalogs are user-config driven and can change outside
@@ -486,12 +616,17 @@ function registerSdkStreamHandlers(ctx) {
         }
         const raw = await withTimeout(driver.listModels({ binPath, env }), MODEL_LIST_TIMEOUT_MS);
         const { currentModelId, models } = normalizeSdkListModelsResult(raw);
-        if (shouldCacheModels) sdkModelCache.set(cacheKey, { at: Date.now(), currentModelId, models });
+        // Never cache empty catalogs — auth/env races would pin the UI on
+        // curated presets for the full TTL after a single failed probe.
+        if (shouldCacheModels && (models.length > 0 || currentModelId)) {
+          sdkModelCache.set(cacheKey, { at: Date.now(), currentModelId, models });
+        }
         return { ok: true, currentModelId, models };
       } catch (err) {
         // Degrade to [] so the renderer keeps its curated presets (never empty).
-        console.debug(`[sdk] list-models(${backendKey}) unavailable, using curated presets`);
-        return { ok: true, currentModelId: null, models: [] };
+        const message = err?.message || String(err);
+        console.warn(`[sdk] list-models(${backendKey}) unavailable, using curated presets:`, message);
+        return { ok: true, currentModelId: null, models: [], error: message };
       }
     });
 
@@ -529,6 +664,7 @@ function registerSdkStreamHandlers(ctx) {
 module.exports = {
   registerSdkStreamHandlers,
   resolveBackendKey,
+  resolveSdkToolIntegrationMode,
   resolveSdkBackendBinPath,
   buildSdkSessionKey,
   buildSdkModelCacheKey,

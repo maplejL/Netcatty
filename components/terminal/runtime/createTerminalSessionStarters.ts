@@ -27,6 +27,7 @@ import { flushTerminalWriteCoalescer } from "./terminalWriteCoalescer";
 import { isConnectionTokenCurrent, registerConnectionToken, runDistroDetection } from "./terminalDistroDetection";
 import { resolveStartupCommand, scheduleStartupCommand } from "./terminalStartupCommands";
 import { markPromptLineBreakCommandPending } from "./promptLineBreak";
+import { endTerminalCommandTiming } from "./terminalCommandTiming";
 import {
   isEncryptedCredentialPlaceholder,
   sanitizeCredentialValue,
@@ -1325,6 +1326,7 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
 
       ctx.disposeExitRef.current = ctx.terminalBackend.onSessionExit(id, (evt) => {
         ctx.updateStatus("disconnected");
+        endTerminalCommandTiming(id, "session_exit");
         const exitMessage = `\r\n[session closed${evt?.exitCode !== undefined ? ` (code ${evt.exitCode})` : ""}]`;
         writeTerminalLine(ctx, term, exitMessage);
 

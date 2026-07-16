@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  resolveHistorySidePanelShortcutIntent,
   resolveScriptsSidePanelShortcutIntent,
   resolveSnippetsShortcutIntent,
 } from "./resolveSnippetsShortcutIntent.ts";
@@ -60,5 +61,19 @@ test("scripts panel shortcut opens scripts from closed or other panel states", (
     const result = resolveScriptsSidePanelShortcutIntent(activePanel);
 
     assert.deepEqual(result, { kind: "openTerminalScripts" });
+  }
+});
+
+test("history panel shortcut closes when history is already open", () => {
+  const result = resolveHistorySidePanelShortcutIntent("history");
+
+  assert.deepEqual(result, { kind: "closeTerminalSidePanel" });
+});
+
+test("history panel shortcut opens history from closed or other panel states", () => {
+  for (const activePanel of [null, "sftp", "scripts", "theme", "ai"]) {
+    const result = resolveHistorySidePanelShortcutIntent(activePanel);
+
+    assert.deepEqual(result, { kind: "openTerminalHistory" });
   }
 });

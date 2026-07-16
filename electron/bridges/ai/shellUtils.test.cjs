@@ -13,7 +13,10 @@ const {
   resolveWindowsShimToNativeExe,
   resolveClaudeCodeExecutableForSdk,
   resolveCodexExecutableForSdk,
+  resolveCodebuddyDistEntryForSdk,
   resolveCodebuddyExecutableForSdk,
+  resolveWorkbuddyAgentCliPath,
+  resolveWorkbuddyEmbeddedCliPath,
   parseRegQueryPath,
   expandWindowsEnvRefs,
   mergeWindowsPath,
@@ -112,6 +115,22 @@ test("prepareCommandForSpawn wraps Windows cmd shims as a single shell command",
       args: ["--version"],
       shell: false,
     });
+  }
+});
+
+test("prepareCommandForSpawn runs extensionless Node bin via execPath + ELECTRON_RUN_AS_NODE", () => {
+  if (process.platform !== "win32") return;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-node-bin-"));
+  try {
+    const binPath = path.join(tmp, "codebuddy");
+    fs.writeFileSync(binPath, "#!/usr/bin/env node\nconsole.log('ok')\n", "utf8");
+    const result = prepareCommandForSpawn(binPath, ["--version"]);
+    assert.equal(result.command, process.execPath);
+    assert.deepEqual(result.args, [binPath, "--version"]);
+    assert.equal(result.shell, false);
+    assert.deepEqual(result.env, { ELECTRON_RUN_AS_NODE: "1" });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
 
@@ -354,11 +373,82 @@ function writeCodebuddyWin32BinLayout(dir) {
   return binJs;
 }
 
+test("resolveWorkbuddyAgentCliPath maps WorkBuddy.exe to embedded codebuddy CLI", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-workbuddy-"));
+  try {
+    const installRoot = path.join(tempRoot, "WorkBuddy");
+    const embeddedCli = path.join(
+      installRoot,
+      "resources",
+      "app.asar.unpacked",
+      "cli",
+      "bin",
+      "codebuddy",
+    );
+    fs.mkdirSync(path.dirname(embeddedCli), { recursive: true });
+    fs.writeFileSync(embeddedCli, "#!/usr/bin/env node\n");
+    fs.writeFileSync(path.join(installRoot, "WorkBuddy.exe"), "stub");
+
+    assert.equal(
+      resolveWorkbuddyAgentCliPath(path.join(installRoot, "WorkBuddy.exe"), { platform: "win32" }),
+      embeddedCli,
+    );
+    assert.equal(
+      resolveWorkbuddyEmbeddedCliPath({
+        platform: "win32",
+        localAppData: tempRoot,
+      }),
+      embeddedCli,
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("resolveCodebuddyExecutableForSdk leaves non-Windows CodeBuddy paths unchanged", () => {
   assert.equal(
     resolveCodebuddyExecutableForSdk("/usr/local/bin/codebuddy", "darwin"),
     "/usr/local/bin/codebuddy",
   );
+});
+
+test("resolveCodebuddyExecutableForSdk maps WorkBuddy bin to dist/codebuddy.js (no headless)", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-workbuddy-dist-"));
+  try {
+    const binJs = path.join(tmp, "cli", "bin", "codebuddy");
+    const distJs = path.join(tmp, "cli", "dist", "codebuddy.js");
+    fs.mkdirSync(path.dirname(binJs), { recursive: true });
+    fs.mkdirSync(path.dirname(distJs), { recursive: true });
+    fs.writeFileSync(binJs, "#!/usr/bin/env node\n", "utf8");
+    fs.writeFileSync(distJs, "console.log('wb')\n", "utf8");
+
+    assert.equal(resolveCodebuddyDistEntryForSdk(binJs), distJs);
+    assert.equal(resolveCodebuddyExecutableForSdk(binJs, "win32"), distJs);
+    assert.equal(resolveCodebuddyExecutableForSdk(binJs, "darwin"), distJs);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("resolveCodebuddyExecutableForSdk prefers dist/codebuddy-headless.js when present", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-codebuddy-headless-"));
+  try {
+    const binJs = path.join(tmp, "cli", "bin", "codebuddy");
+    const headless = path.join(tmp, "cli", "dist", "codebuddy-headless.js");
+    const distJs = path.join(tmp, "cli", "dist", "codebuddy.js");
+    fs.mkdirSync(path.dirname(binJs), { recursive: true });
+    fs.mkdirSync(path.dirname(headless), { recursive: true });
+    fs.writeFileSync(binJs, "#!/usr/bin/env node\n", "utf8");
+    fs.writeFileSync(headless, "console.log('headless')\n", "utf8");
+    fs.writeFileSync(distJs, "console.log('full')\n", "utf8");
+
+    assert.equal(resolveCodebuddyExecutableForSdk(binJs, "win32"), headless);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test("resolveCodebuddyExecutableForSdk maps Windows npm cmd shim to package bin/codebuddy", () => {

@@ -193,8 +193,11 @@ const SIDE_PANEL_STABLE_CTX_KEYS = [
   'themeMountedTabIds',
   'remoteHistory',
   'shellHistory',
+  'focusedHostHistoryState',
   'handleHistoryPaste',
   'handleHistoryRun',
+  'handleCloseCommandHistoryPopup',
+  'commandHistoryPopupOpen',
   'handleOpenHistory',
   'HistorySidePanel',
   'History',
@@ -356,6 +359,7 @@ const WORKSPACE_CTX_KEYS = [
   'findSplitNode',
   'focusedSessionId',
   'handleComposeSend',
+  'handleOpenWorkspaceBatchExec',
   'handleSnippetFromPanel',
   'refocusTerminalSession',
   'setIsComposeBarOpen',
@@ -395,9 +399,13 @@ export function terminalLayerWorkspaceCtxEqual(prev: Ctx, next: Ctx): boolean {
 export function terminalLayerViewCtxEqual(prev: Ctx, next: Ctx): boolean {
   if (prev.isTerminalLayerVisible !== next.isTerminalLayerVisible) return false;
   if (prev.isComposeBarOpen !== next.isComposeBarOpen) return false;
+  // Floating command-history popup lives on the root view; must re-render on toggle.
+  if (prev.commandHistoryPopupOpen !== next.commandHistoryPopupOpen) return false;
+  if (prev.handleCloseCommandHistoryPopup !== next.handleCloseCommandHistoryPopup) return false;
   if (!activeWorkspaceEqual(prev.activeWorkspace, next.activeWorkspace)) return false;
   if (prev.focusedSessionId !== next.focusedSessionId) return false;
   if (prev.handleComposeSend !== next.handleComposeSend) return false;
+  if (prev.handleOpenWorkspaceBatchExec !== next.handleOpenWorkspaceBatchExec) return false;
   if (prev.refocusTerminalSession !== next.refocusTerminalSession) return false;
   if (prev.setIsComposeBarOpen !== next.setIsComposeBarOpen) return false;
   if (prev.isBroadcastEnabled !== next.isBroadcastEnabled) return false;

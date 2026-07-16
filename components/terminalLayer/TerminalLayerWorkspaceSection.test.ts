@@ -95,6 +95,8 @@ test("workspace section passes resolved session host ids to terminal panes", () 
     findSplitNode: () => null,
     focusedSessionId: null,
     handleComposeSend: noop,
+    handleOpenWorkspaceBatchExec: noop,
+    onOpenBatchExec: undefined,
     handleSnippetFromPanel: noop,
     refocusTerminalSession: noop,
     setIsComposeBarOpen: noop,

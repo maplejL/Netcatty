@@ -22,3 +22,13 @@ test('terminal font size shortcuts are handled inside xterm', () => {
   assert.equal(actions.has('decreaseTerminalFontSize'), true);
   assert.equal(actions.has('resetTerminalFontSize'), true);
 });
+
+test('default shortcuts include open terminal command history', () => {
+  const byAction = new Map(DEFAULT_KEY_BINDINGS.map((binding) => [binding.action, binding]));
+  const binding = byAction.get('openHistory');
+
+  assert.equal(binding?.id, 'open-history');
+  assert.equal(binding?.pc, 'Ctrl + Shift + H');
+  assert.equal(binding?.mac, '⌘ + Shift + H');
+  assert.equal(binding?.category, 'terminal');
+});

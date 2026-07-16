@@ -39,6 +39,8 @@ export const getAppLevelActions = (): Set<string> => {
     'togglePaneZoom',
     'openLocal',
     'openSettings',
+    'toggleSidePanel',
+    'openHistory',
   ]);
 };
 

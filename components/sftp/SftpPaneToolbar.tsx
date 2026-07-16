@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, ClipboardCopy, Eye, EyeOff, FilePlus, Folder, FolderPlus, FolderSync, Globe, Home, Languages, List, ListTree, MoreHorizontal, RefreshCw, Search, TerminalSquare, Trash2, X } from "lucide-react";
+import { Bookmark, Check, ClipboardCopy, Eye, EyeOff, FilePlus, Folder, FolderPlus, FolderSync, Globe, Home, Languages, List, ListTree, Loader2, MoreHorizontal, RefreshCw, Search, TerminalSquare, Trash2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -126,6 +126,7 @@ interface SftpPaneToolbarProps {
   showHiddenFiles: boolean;
   onToggleShowHiddenFiles?: () => void;
   onGoToTerminalCwd?: () => void;
+  goToTerminalCwdLoading?: boolean;
   followTerminalCwd?: boolean;
   onToggleFollowTerminalCwd?: () => void;
   viewMode: SftpPaneViewMode;
@@ -237,6 +238,7 @@ export const SftpPaneToolbar: React.FC<SftpPaneToolbarProps> = React.memo(({
   showHiddenFiles,
   onToggleShowHiddenFiles,
   onGoToTerminalCwd,
+  goToTerminalCwdLoading = false,
   followTerminalCwd,
   onToggleFollowTerminalCwd,
   viewMode,
@@ -326,12 +328,27 @@ export const SftpPaneToolbar: React.FC<SftpPaneToolbarProps> = React.memo(({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
+              disabled={goToTerminalCwdLoading}
+              aria-busy={goToTerminalCwdLoading}
+              aria-label={
+                goToTerminalCwdLoading
+                  ? t("sftp.goToTerminalCwdLoading")
+                  : t("sftp.goToTerminalCwd")
+              }
               onClick={onGoToTerminalCwd}
             >
-              <TerminalSquare size={14} />
+              {goToTerminalCwdLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <TerminalSquare size={14} />
+              )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{t("sftp.goToTerminalCwd")}</TooltipContent>
+          <TooltipContent>
+            {goToTerminalCwdLoading
+              ? t("sftp.goToTerminalCwdLoading")
+              : t("sftp.goToTerminalCwd")}
+          </TooltipContent>
         </Tooltip>
       )}
       {onToggleFollowTerminalCwd && (

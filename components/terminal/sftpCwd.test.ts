@@ -114,13 +114,29 @@ test("probeBackendSessionCwdAfterCommand probes backend when OSC 7 did not repor
     sessionId: "session-1",
     osc7SignalAtCommand: 3,
     getOsc7Signal: () => 3,
-    getSessionPwd: async (sessionId) => {
+    getSessionPwd: async (sessionId, options) => {
       assert.equal(sessionId, "session-1");
+      assert.deepEqual(options, { allowHomeFallback: false });
       return { success: true, cwd: "/var/log" };
     },
   });
 
   assert.equal(cwd, "/var/log");
+});
+
+test("probeBackendSessionCwdAfterCommand rejects home fallback (no cwd written)", async () => {
+  const cwd = await probeBackendSessionCwdAfterCommand({
+    sessionId: "session-1",
+    osc7SignalAtCommand: 1,
+    getOsc7Signal: () => 1,
+    getSessionPwd: async (_sessionId, options) => {
+      assert.deepEqual(options, { allowHomeFallback: false });
+      // Simulates probe that would have returned $HOME if fallback were allowed.
+      return { success: false, error: "Could not determine cwd" };
+    },
+  });
+
+  assert.equal(cwd, null);
 });
 
 test("probeBackendSessionCwdAfterCommand skips when OSC 7 confirms unchanged cwd after command", async () => {

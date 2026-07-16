@@ -87,6 +87,7 @@ const baseProps = (overrides: Partial<AIChatSidePanelProps> = {}): AIChatSidePan
   deleteSession: () => undefined,
   updateSessionTitle: () => undefined,
   updateSessionExternalSessionId: () => undefined,
+  updateSessionAgentId: () => undefined,
   addMessageToSession: () => undefined,
   updateLastMessage: () => undefined,
   updateMessageById: () => undefined,
@@ -112,6 +113,37 @@ test('hidden empty AI side panel can release its subtree', () => {
 
   assert.equal(hasAIChatSidePanelRetainedContent(props), false);
   assert.equal(shouldKeepAIChatSidePanelMounted(props), false);
+});
+
+test('partial drafts missing arrays do not crash retained-content checks', () => {
+  const props = baseProps({
+    draftsByScope: {
+      'terminal:terminal-1': {
+        text: 'hello',
+        agentId: 'catty',
+        updatedAt: 1,
+      } as AIDraft,
+    },
+  });
+
+  assert.equal(hasAIChatSidePanelRetainedContent(props), true);
+  assert.equal(shouldKeepAIChatSidePanelMounted(props), true);
+});
+
+test('sessions missing messages do not crash retained-content checks', () => {
+  const props = baseProps({
+    sessions: [{
+      id: 'session-1',
+      title: 'Session',
+      agentId: 'catty',
+      scope: { type: 'terminal', targetId: 'terminal-1' },
+      createdAt: 1,
+      updatedAt: 1,
+    } as AISession],
+    activeSessionIdMap: { 'terminal:terminal-1': 'session-1' },
+  });
+
+  assert.equal(hasAIChatSidePanelRetainedContent(props), false);
 });
 
 test('hidden AI side panel is retained when it has draft text', () => {

@@ -5,7 +5,7 @@ import test from "node:test";
 const vaultViewLayoutSource = readFileSync(new URL("./vault/VaultViewLayout.tsx", import.meta.url), "utf8");
 
 test("vault stage aligns its content to the top tab bar", () => {
-  assert.match(vaultViewLayoutSource, /className="flex min-w-0 flex-1 py-0 pr-2 pb-2 pl-0"/);
+  assert.match(vaultViewLayoutSource, /className="flex min-h-0 min-w-0 flex-1 py-0 pr-2 pb-2 pl-0"/);
   assert.doesNotMatch(vaultViewLayoutSource, /className="flex min-w-0 flex-1 p-2 pl-0"/);
 });
 

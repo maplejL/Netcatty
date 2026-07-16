@@ -41,6 +41,7 @@ export const enVaultMessages: Messages = {
     'Transfer your connections from popular clients. Select a file format to start the migration.',
   'vault.import.chooseFormat': 'Select a file format',
   'vault.import.csv.tip': 'Bulk import: use the CSV template.',
+  'vault.import.finalshell.tip': 'FinalShell: select conn/*_connect_config.json files and include config.json for private keys.',
   'vault.import.csv.downloadTemplate': 'Download CSV template',
   'vault.import.toast.start': 'Importing from {format}...',
   'vault.import.toast.completedTitle': 'Import completed',
@@ -238,6 +239,7 @@ export const enVaultMessages: Messages = {
   'sftp.transfers.dragToResize': 'Drag to resize',
   'sftp.goUp': 'Go up',
   'sftp.goToTerminalCwd': 'Go to terminal directory',
+  'sftp.goToTerminalCwdLoading': 'Locating terminal directory…',
   'sftp.followTerminalCwd': 'Follow terminal directory',
   'sftp.followTerminalCwd.enable': 'Enable follow terminal directory',
   'sftp.followTerminalCwd.disable': 'Disable follow terminal directory',
@@ -463,6 +465,7 @@ export const enVaultMessages: Messages = {
   'selectHost.newHost': 'New Host',
   'selectHost.continue': 'Continue',
   'selectHost.continueWithCount': 'Continue ({count} selected)',
+  'selectHost.maxSelectionHint': 'Up to {max} hosts · {count} selected',
 
   // Quick Connect
   'quickConnect.knownHost.title': 'Are you sure you want to connect?',

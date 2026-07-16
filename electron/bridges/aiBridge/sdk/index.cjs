@@ -129,6 +129,30 @@ const DRIVER_REGISTRY = {
       return codebuddy.listCodebuddyModels({ pathToCodebuddyCode: ctx.binPath, env: ctx.env });
     },
   },
+  // WorkBuddy desktop embeds the CodeBuddy Agent CLI; reuse the same SDK driver.
+  workbuddy: {
+    async runTurn(ctx) {
+      const options = codebuddy.buildCodebuddyQueryOptions({
+        cwd: ctx.cwd,
+        model: ctx.model,
+        env: ctx.env,
+        injectedMcpServers: ctx.injectedMcpServers,
+        abortController: ctx.abortController,
+        resume: ctx.resumeSessionId,
+        pathToCodebuddyCode: ctx.binPath,
+        toolIntegrationMode: ctx.toolIntegrationMode,
+      });
+      return codebuddy.runCodebuddyTurn({
+        prompt: ctx.prompt,
+        attachments: ctx.attachments,
+        options,
+        emitter: ctx.emitter,
+      });
+    },
+    async listModels(ctx) {
+      return codebuddy.listCodebuddyModels({ pathToCodebuddyCode: ctx.binPath, env: ctx.env });
+    },
+  },
   opencode: {
     async runTurn(ctx) {
       return opencode.runOpenCodeTurn({

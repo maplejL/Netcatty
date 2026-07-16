@@ -17,6 +17,7 @@ import { HostTreeGroupContextMenuContent, HostTreeHostContextMenuContent } from 
 import { ContextMenu, ContextMenuTrigger } from './ui/context-menu';
 import { DistroAvatar } from './DistroAvatar';
 import { HostNotesIndicator } from './host/HostNotesIndicator';
+import { HostNotesSummaryLine } from './host/HostNotesSummaryLine';
 import { Button } from './ui/button';
 import { VaultTreeGroupRow, VaultTreeItemRow } from './vault/VaultTreeRow';
 
@@ -37,6 +38,7 @@ const hasDragType = (dataTransfer: DataTransfer, type: string) =>
 interface HostTreeViewProps {
   groupTree: GroupNode[];
   hosts: Host[];
+  ungroupedHosts?: Host[];
   sortMode?: 'manual' | 'az' | 'za' | 'newest' | 'oldest' | 'group';
   expandedPaths?: Set<string>;
   onTogglePath?: (path: string) => void;
@@ -429,7 +431,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
           label={host.label}
           depth={depth}
           selected={Boolean(isSelected)}
-          className="h-10 rounded-md py-1 pr-2 text-[13px]"
+          className="min-h-14 h-auto rounded-md py-1.5 pr-2 text-[13px]"
           data-section="host-tree-row"
           data-row-type="host"
           data-host-id={host.id}
@@ -468,6 +470,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {displayUsername}@{host.hostname}:{displayPort}
               </div>
+              <HostNotesSummaryLine notes={host.notes} />
             </div>
           )}
           actions={(
@@ -510,6 +513,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
 export const HostTreeView: React.FC<HostTreeViewProps> = ({
   groupTree,
   hosts,
+  ungroupedHosts: ungroupedHostsOverride,
   sortMode = 'az',
   expandedPaths: externalExpandedPaths,
   onTogglePath: externalOnTogglePath,
@@ -604,7 +608,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
 
   // Get ungrouped hosts (hosts without a group or with empty group) and sort them
   const ungroupedHosts = useMemo(() => {
-    const hosts_without_group = hosts.filter(host => !host.group || host.group === '');
+    const hosts_without_group = (ungroupedHostsOverride ?? hosts.filter(host => !host.group || host.group === ''));
     const sorted = hosts_without_group.sort((a, b) => {
       switch (sortMode) {
         case 'az':
@@ -623,7 +627,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
     });
     if (sortMode === 'manual') return sortByVaultOrder(sorted);
     return sorted;
-  }, [hosts, sortMode]);
+  }, [hosts, sortMode, ungroupedHostsOverride]);
 
   // Sort group tree based on sort mode
   const sortedGroupTree = useMemo(() => {
@@ -645,7 +649,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
   }, [groupTree, sortMode]);
 
   return (
-    <div className="space-y-1" onPointerDownCapture={handleTreePointerDownCapture}>
+    <div className="w-full min-w-0 space-y-1" onPointerDownCapture={handleTreePointerDownCapture}>
       {/* Expand/Collapse controls */}
       {groupTree.length > 0 && (
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/30">

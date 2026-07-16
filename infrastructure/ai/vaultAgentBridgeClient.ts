@@ -42,6 +42,7 @@ import {
   VAULT_IMPORT_FORMATS,
   type VaultImportFormat,
 } from '../../domain/vaultImport';
+import { prepareFinalShellImportText } from '../finalshellImport';
 import { resolveHostAuth } from '../../domain/sshAuth';
 import { netcattyBridge } from '../services/netcattyBridge';
 
@@ -96,7 +97,7 @@ function resolveVaultImportFormat(raw: unknown): VaultImportFormat | 'auto' | { 
     return format as VaultImportFormat;
   }
   return {
-    error: `Unsupported format "${format}". Use csv, putty, mobaxterm, securecrt, ssh_config, or auto.`,
+    error: `Unsupported format "${format}". Use csv, putty, mobaxterm, securecrt, ssh_config, finalshell, or auto.`,
   };
 }
 
@@ -399,7 +400,7 @@ export async function handleVaultAgentOp(
         if (!detected) {
           return {
             ok: false,
-            error: 'Could not detect import format. Specify csv, putty, mobaxterm, securecrt, or ssh_config.',
+            error: 'Could not detect import format. Specify csv, putty, mobaxterm, securecrt, ssh_config, finalshell, or auto.',
           };
         }
         resolvedFormat = detected;
@@ -413,7 +414,17 @@ export async function handleVaultAgentOp(
         ? params.fileName.trim()
         : undefined;
 
-      const importResult = importVaultHostsFromText(resolvedFormat, text, { fileName });
+      const preparedText =
+        resolvedFormat === 'finalshell'
+          ? await prepareFinalShellImportText(text)
+          : text;
+
+      const importResult = importVaultHostsFromText(resolvedFormat, preparedText, {
+        fileName,
+        finalshellFiles: resolvedFormat === 'finalshell'
+          ? [{ text: preparedText, fileName }]
+          : undefined,
+      });
       const previewHosts = importResult.hosts.map((host) => sanitizeHostForAgent(host));
 
       if (dryRun) {

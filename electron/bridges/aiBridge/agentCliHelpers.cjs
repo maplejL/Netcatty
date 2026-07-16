@@ -21,7 +21,9 @@ function createAgentCliHelpers(ctx) {
       const child = spawn(spawnSpec.command, spawnSpec.args, {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: options?.cwd || undefined,
-        env: options?.env || process.env,
+        env: spawnSpec.env
+          ? { ...(options?.env || process.env), ...spawnSpec.env }
+          : (options?.env || process.env),
         shell: spawnSpec.shell,
         windowsHide: true,
       });
