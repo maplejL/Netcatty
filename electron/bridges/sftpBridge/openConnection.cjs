@@ -1,6 +1,23 @@
 /* eslint-disable no-undef */
 const { resolveSftpSudoPassword } = require("./sftpSudoPassword.cjs");
 
+/** Return true when ssh2 reports an authentication-stage failure. */
+function isSftpAuthError(err) {
+  const level = String(err?.level || "").toLowerCase();
+  const message = String(err?.message || "").toLowerCase();
+  return level.includes("authentication") || message.includes("authentication");
+}
+
+/** Decide whether the SFTP target should retry with keyboard-interactive before password. */
+function shouldRetrySftpKeyboardInteractiveFirst(options, authConfig, err) {
+  return Boolean(
+    options?.password &&
+    !options?._skipPasswordMethod &&
+    isSftpAuthError(err) &&
+    authConfig?.authPhase?.retryKeyboardInteractiveFirst,
+  );
+}
+
 function createOpenConnectionApi(ctx) {
   with (ctx) {
     const hasUsableProxy = (proxy) => {
@@ -802,6 +819,7 @@ function createOpenConnectionApi(ctx) {
         agent: connectOpts.agent,
         username: connectOpts.username,
         logPrefix: "[SFTP]",
+        skipPasswordMethod: options._skipPasswordMethod === true,
         defaultKeys: systemAuthAgent && options.identitiesOnly ? [] : defaultKeys,
         sshAgentSocketOverride: agentSocket,
         allowAgentFallback: options.useSshAgent !== false,
@@ -992,6 +1010,15 @@ function createOpenConnectionApi(ctx) {
         }
         // Cleanup jump connections on error
         cleanupPendingConnection();
+        if (shouldRetrySftpKeyboardInteractiveFirst(options, authConfig, err)) {
+          try { client.client?.end?.(); } catch { /* ignore */ }
+          try { client.client?.destroy?.(); } catch { /* ignore */ }
+          console.log("[SFTP] Password auth removed keyboard-interactive; retrying with keyboard-interactive first...");
+          return openSftp(event, {
+            ...options,
+            _skipPasswordMethod: true,
+          });
+        }
         throw err;
       }
     }
