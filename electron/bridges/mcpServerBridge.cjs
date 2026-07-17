@@ -70,6 +70,10 @@ const backgroundJobs = new Map(); // jobId -> job metadata
 const workerBackgroundJobs = new Map(); // jobId -> { chatSessionId, sessionId }
 const activeSessionExecutions = new Map(); // sessionId -> { kind, startedAt, token }
 const activeSessionSftpOps = new Map(); // opId -> { chatSessionId, cancel }
+// Populated by session-close guards when present. Partial cherry-picks may only
+// *read* this map in dispatch(); keep it defined so exec/job-start never throw
+// ReferenceError: closingTerminalSessions is not defined.
+const closingTerminalSessions = new Map(); // sessionId -> overlapping close request count
 const pendingSessionWriteApprovals = new Map(); // sessionId -> method
 const DEFAULT_BACKGROUND_JOB_TIMEOUT_MS = 60 * 60 * 1000;
 const DEFAULT_BACKGROUND_JOB_POLL_INTERVAL_MS = 30 * 1000;
