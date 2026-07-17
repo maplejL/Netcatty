@@ -9,6 +9,10 @@ import type {
   AISession,
   AIPermissionMode,
   AIToolIntegrationMode,
+  ChatMessage,
+  ChatMessageAttachment,
+  ToolCall,
+  ToolResult,
 } from '../../infrastructure/ai/types';
 import {
   bumpDraftMutationVersionState,
@@ -162,13 +166,120 @@ export function cleanupOrphanedAISessions(activeTargetIds: Set<string>) {
 const MAX_STORED_SESSIONS = 50;
 /** Maximum number of messages per session when persisting to localStorage. */
 const MAX_SESSION_MESSAGES = 200;
+/**
+ * Drop large base64 attachment payloads when persisting. Vision screenshots can
+ * be multi-MB each; storing them in localStorage freezes reload into a white
+ * screen after AI panel errors.
+ */
+const MAX_PERSISTED_ATTACHMENT_BASE64_CHARS = 8_000;
+
+function normalizeAttachmentList(
+  raw: unknown,
+  stripHeavyPayloads: boolean,
+): ChatMessageAttachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ChatMessageAttachment[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const att = entry as Partial<ChatMessageAttachment>;
+    const mediaType = typeof att.mediaType === 'string' ? att.mediaType : 'application/octet-stream';
+    let base64Data = typeof att.base64Data === 'string' ? att.base64Data : '';
+    if (
+      stripHeavyPayloads
+      && base64Data.length > MAX_PERSISTED_ATTACHMENT_BASE64_CHARS
+    ) {
+      base64Data = '';
+    }
+    out.push({
+      base64Data,
+      mediaType,
+      filename: typeof att.filename === 'string' ? att.filename : undefined,
+      filePath: typeof att.filePath === 'string' ? att.filePath : undefined,
+      terminalSelection: att.terminalSelection === true ? true : undefined,
+      previewText: typeof att.previewText === 'string' ? att.previewText : undefined,
+      lineCount: typeof att.lineCount === 'number' && Number.isFinite(att.lineCount)
+        ? att.lineCount
+        : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeToolCalls(raw: unknown): ToolCall[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ToolCall[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const tc = entry as Partial<ToolCall>;
+    if (typeof tc.id !== 'string' || !tc.id) continue;
+    if (typeof tc.name !== 'string' || !tc.name) continue;
+    out.push({
+      id: tc.id,
+      name: tc.name,
+      arguments: tc.arguments && typeof tc.arguments === 'object'
+        ? tc.arguments as Record<string, unknown>
+        : {},
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeToolResults(raw: unknown): ToolResult[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ToolResult[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const tr = entry as Partial<ToolResult>;
+    if (typeof tr.toolCallId !== 'string' || !tr.toolCallId) continue;
+    out.push({
+      toolCallId: tr.toolCallId,
+      content: typeof tr.content === 'string' ? tr.content : '',
+      isError: tr.isError === true ? true : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+export function normalizeChatMessage(
+  raw: unknown,
+  options: { stripHeavyAttachmentPayloads?: boolean } = {},
+): ChatMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Partial<ChatMessage>;
+  const id = typeof record.id === 'string' ? record.id.trim() : '';
+  if (!id) return null;
+  const role = record.role;
+  if (role !== 'user' && role !== 'assistant' && role !== 'system' && role !== 'tool') {
+    return null;
+  }
+  const stripHeavy = options.stripHeavyAttachmentPayloads === true;
+  const attachments = normalizeAttachmentList(record.attachments, stripHeavy);
+  const images = normalizeAttachmentList(record.images, stripHeavy);
+  return {
+    ...record,
+    id,
+    role,
+    content: typeof record.content === 'string' ? record.content : '',
+    attachments,
+    images,
+    thinking: typeof record.thinking === 'string' ? record.thinking : undefined,
+    toolCalls: normalizeToolCalls(record.toolCalls),
+    toolResults: normalizeToolResults(record.toolResults),
+    timestamp: typeof record.timestamp === 'number' && Number.isFinite(record.timestamp)
+      ? record.timestamp
+      : Date.now(),
+  };
+}
 
 /**
  * Coerce partial / corrupted localStorage session rows into a safe AISession.
  * Missing `messages` / `scope` previously crashed the AI side panel on open
  * (e.g. `session.messages.length` / `session.scope.type`).
  */
-export function normalizeAISession(raw: unknown): AISession | null {
+export function normalizeAISession(
+  raw: unknown,
+  options: { stripHeavyAttachmentPayloads?: boolean } = {},
+): AISession | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = raw as Partial<AISession> & { scope?: Partial<AISession['scope']> };
   const id = typeof record.id === 'string' ? record.id.trim() : '';
@@ -194,12 +305,18 @@ export function normalizeAISession(raw: unknown): AISession | null {
     ? record.updatedAt
     : createdAt;
 
+  const messages = Array.isArray(record.messages)
+    ? record.messages
+      .map((message) => normalizeChatMessage(message, options))
+      .filter((message): message is ChatMessage => message != null)
+    : [];
+
   return {
     id,
     title: typeof record.title === 'string' && record.title ? record.title : 'New Chat',
     agentId: typeof record.agentId === 'string' && record.agentId ? record.agentId : 'catty',
     scope,
-    messages: Array.isArray(record.messages) ? record.messages : [],
+    messages,
     externalSessionId: typeof record.externalSessionId === 'string'
       ? record.externalSessionId
       : undefined,
@@ -208,14 +325,66 @@ export function normalizeAISession(raw: unknown): AISession | null {
   };
 }
 
+function attachmentHasHeavyBase64(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const base64Data = (entry as { base64Data?: unknown }).base64Data;
+    if (typeof base64Data === 'string' && base64Data.length > MAX_PERSISTED_ATTACHMENT_BASE64_CHARS) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when a raw session row still carries multi-MB image base64. */
+export function sessionsPayloadNeedsStorageRewrite(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const messages = (entry as { messages?: unknown }).messages;
+    if (!Array.isArray(messages)) continue;
+    for (const message of messages) {
+      if (!message || typeof message !== 'object') continue;
+      const record = message as { attachments?: unknown; images?: unknown };
+      if (attachmentHasHeavyBase64(record.attachments) || attachmentHasHeavyBase64(record.images)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function sanitizeAISessions(raw: unknown): AISession[] {
   if (!Array.isArray(raw)) return [];
   const sessions: AISession[] = [];
   for (const entry of raw) {
-    const normalized = normalizeAISession(entry);
+    // Always strip heavy image payloads on load so a previously bloated
+    // localStorage row cannot freeze the renderer into a white screen.
+    const normalized = normalizeAISession(entry, { stripHeavyAttachmentPayloads: true });
     if (normalized) sessions.push(normalized);
   }
   return sessions;
+}
+
+/**
+ * If localStorage still has huge image base64, rewrite a pruned copy once so
+ * subsequent cold starts do not rehydrate multi-MB payloads.
+ */
+export function rewriteAISessionsStorageIfBloated(raw: unknown = null): boolean {
+  try {
+    const stored = raw
+      ?? latestAISessionsSnapshot
+      ?? localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS);
+    if (!sessionsPayloadNeedsStorageRewrite(stored)) return false;
+    const pruned = pruneSessionsForStorage(sanitizeAISessions(stored));
+    localStorageAdapter.write(STORAGE_KEY_AI_SESSIONS, pruned);
+    latestAISessionsSnapshot = pruned;
+    return true;
+  } catch (error) {
+    console.warn('[AIState] Failed to rewrite bloated AI sessions storage:', error);
+    return false;
+  }
 }
 
 /**
@@ -225,9 +394,12 @@ export function sanitizeAISessions(raw: unknown): AISession[] {
  *
  * - Keeps only the MAX_STORED_SESSIONS most-recently-updated sessions.
  * - Trims each session's messages to the last MAX_SESSION_MESSAGES.
+ * - Strips large attachment base64 (images) so reload does not OOM/white-screen.
  */
 export function pruneSessionsForStorage(sessions: AISession[]): AISession[] {
-  const sanitized = sanitizeAISessions(sessions);
+  const sanitized = sessions
+    .map((entry) => normalizeAISession(entry, { stripHeavyAttachmentPayloads: true }))
+    .filter((session): session is AISession => session != null);
   // Sort by updatedAt descending so we keep the newest
   const sorted = [...sanitized].sort((a, b) => b.updatedAt - a.updatedAt);
   const limited = sorted.slice(0, MAX_STORED_SESSIONS);
@@ -257,9 +429,10 @@ export function setLatestAIActiveSessionMapSnapshot(activeSessionIdMap: Record<s
 export function prewarmAIStateStorageSnapshots() {
   try {
     if (latestAISessionsSnapshot === null) {
-      latestAISessionsSnapshot = sanitizeAISessions(
-        localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS),
-      );
+      const stored = localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS);
+      latestAISessionsSnapshot = sanitizeAISessions(stored);
+      // Drop multi-MB image payloads from disk before the next cold start.
+      rewriteAISessionsStorageIfBloated(stored);
     }
     if (latestAIActiveSessionMapSnapshot === null) {
       latestAIActiveSessionMapSnapshot =
@@ -272,11 +445,14 @@ export function prewarmAIStateStorageSnapshots() {
 
 /** Read + sanitize sessions from storage / snapshot for React state. */
 export function readSanitizedAISessions(): AISession[] {
-  return sanitizeAISessions(
-    latestAISessionsSnapshot
-      ?? localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS)
-      ?? [],
-  );
+  const stored = latestAISessionsSnapshot
+    ?? localStorageAdapter.read<unknown>(STORAGE_KEY_AI_SESSIONS)
+    ?? [];
+  const sessions = sanitizeAISessions(stored);
+  if (sessionsPayloadNeedsStorageRewrite(stored)) {
+    rewriteAISessionsStorageIfBloated(stored);
+  }
+  return sessions;
 }
 
 export function setLatestAIDraftsByScopeSnapshot(draftsByScope: DraftsByScope) {

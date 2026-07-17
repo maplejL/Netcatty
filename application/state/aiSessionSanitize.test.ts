@@ -5,6 +5,7 @@ import {
   normalizeAISession,
   pruneSessionsForStorage,
   sanitizeAISessions,
+  sessionsPayloadNeedsStorageRewrite,
 } from "./aiStateSnapshots.ts";
 
 test("normalizeAISession recovers missing messages and invalid scope", () => {
@@ -62,4 +63,73 @@ test("pruneSessionsForStorage does not throw when messages is missing", () => {
 
   assert.ok(pruned.every((s) => Array.isArray(s.messages)));
   assert.ok(pruned.some((s) => s.id === "a"));
+});
+
+test("pruneSessionsForStorage strips large image base64 payloads", () => {
+  const huge = "A".repeat(50_000);
+  const pruned = pruneSessionsForStorage([
+    {
+      id: "img",
+      title: "with image",
+      agentId: "catty",
+      scope: { type: "terminal", targetId: "t1" },
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [
+        {
+          id: "m1",
+          role: "user",
+          content: "see this",
+          timestamp: 1,
+          attachments: [
+            {
+              mediaType: "image/png",
+              filename: "shot.png",
+              base64Data: huge,
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(pruned.length, 1);
+  assert.equal(pruned[0].messages[0].attachments?.[0]?.filename, "shot.png");
+  assert.equal(pruned[0].messages[0].attachments?.[0]?.base64Data, "");
+});
+
+test("normalizeAISession drops malformed messages without crashing", () => {
+  const session = normalizeAISession({
+    id: "s1",
+    messages: [
+      null,
+      { id: "ok", role: "user", content: "hi", timestamp: 1 },
+      { id: "bad-role", role: "wizard", content: "nope" },
+      { role: "assistant", content: "missing id" },
+    ],
+  });
+
+  assert.ok(session);
+  assert.equal(session!.messages.length, 1);
+  assert.equal(session!.messages[0].id, "ok");
+});
+
+test("sessionsPayloadNeedsStorageRewrite detects oversized image base64", () => {
+  assert.equal(sessionsPayloadNeedsStorageRewrite([{ id: "a", messages: [] }]), false);
+  assert.equal(
+    sessionsPayloadNeedsStorageRewrite([
+      {
+        id: "a",
+        messages: [
+          {
+            id: "m1",
+            role: "user",
+            content: "x",
+            attachments: [{ mediaType: "image/png", base64Data: "A".repeat(50_000) }],
+          },
+        ],
+      },
+    ]),
+    true,
+  );
 });

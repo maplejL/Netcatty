@@ -30,15 +30,34 @@ export class LazyLoadBoundary extends Component<LazyLoadBoundaryProps, LazyLoadB
   }
 
   private retry = () => {
-    if (typeof window !== "undefined" && typeof window.location?.reload === "function") {
-      window.location.reload();
-      return;
-    }
+    // Soft remount only. Full window.location.reload() rehydrates huge AI session
+    // payloads (image base64 in localStorage) and often freezes into a white screen.
     this.setState(({ retryKey }) => ({ error: null, retryKey: retryKey + 1 }));
   };
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error(`[LazyLoadBoundary] ${this.props.name || "content"} failed:`, error, errorInfo.componentStack);
+    try {
+      const bridge = (window as unknown as {
+        netcatty?: {
+          logDiagnostic?: (payload: {
+            source: string;
+            message: string;
+            extra?: Record<string, unknown>;
+          }) => void | Promise<unknown>;
+        };
+      }).netcatty;
+      void bridge?.logDiagnostic?.({
+        source: `lazy-load:${this.props.name || "content"}`,
+        message: error?.message || String(error),
+        extra: {
+          stack: error?.stack,
+          componentStack: errorInfo.componentStack,
+        },
+      });
+    } catch {
+      // never throw from the error boundary
+    }
   }
 
   render() {
@@ -66,7 +85,7 @@ export class LazyLoadBoundary extends Component<LazyLoadBoundaryProps, LazyLoadB
             className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
             onClick={this.retry}
           >
-            Reload
+            Retry
           </button>
         </div>
       );
