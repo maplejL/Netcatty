@@ -50,16 +50,25 @@ function modelMessageHasToolCall(message: ModelMessage): boolean {
 }
 
 /**
- * Normalize chat image payloads for OpenAI-compatible vision endpoints.
- * AI SDK chat conversion assigns the value to image_url.url; gateways often require
- * `data:image/...;base64,...` (or an http URL), not raw base64 alone.
+ * Normalize chat image payloads for the model message layer.
+ *
+ * Prefer raw base64 for image/* file parts: AI SDK strips `data:` URLs back to
+ * raw base64 before @ai-sdk/openai writes image_url.url. The actual gateway
+ * fix is normalizeOpenAIChatImageUrlsInBody in the bridge fetch adapter.
+ * This helper still accepts data/http URLs and strips the data: prefix when
+ * present so we always hand the SDK clean base64.
  */
 export function toVisionImageUrl(mediaType: string, base64OrUrl: string): string {
   const value = typeof base64OrUrl === 'string' ? base64OrUrl.trim() : '';
   if (!value) return value;
-  if (/^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
-  const mime = (mediaType || 'image/png').trim() || 'image/png';
-  return `data:${mime};base64,${value}`;
+  if (/^https?:\/\//i.test(value)) return value;
+  const dataMatch = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/i.exec(value);
+  if (dataMatch) {
+    return dataMatch[2];
+  }
+  // Already raw base64 (or opaque string) — pass through for the SDK.
+  void mediaType;
+  return value;
 }
 
 export function collectOpenAIChatAssistantFieldsForMessages(
@@ -223,8 +232,9 @@ export function buildCattySdkMessages(input: BuildCattySdkMessagesInput): ModelM
         parts.push({ type: 'text', text: modelText });
         for (const att of modelAttachments) {
           if (att.mediaType.startsWith('image/')) {
-            // OpenAI-compatible chat path puts file data into image_url.url. Many
-            // gateways reject bare base64 and require a data URL or http(s) URL.
+            // Pass raw base64 (or http URL) into the AI SDK file part. The chat
+            // provider rewrites image_url.url; gateway-facing data: wrapping is
+            // done in normalizeOpenAIChatImageUrlsInBody.
             parts.push({
               type: 'file',
               data: toVisionImageUrl(att.mediaType, att.base64Data),

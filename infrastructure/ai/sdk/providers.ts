@@ -11,6 +11,7 @@ import {
   repairOpenAIChatToolResultPairsInBody,
   type OpenAIChatAssistantFields,
 } from '../providerContinuation';
+import { normalizeOpenAIChatImageUrlsInBody } from './openaiChatImageUrls';
 
 export interface ProviderRequestContext {
   getOpenAIChatAssistantFields?: () => Array<OpenAIChatAssistantFields | undefined>;
@@ -445,11 +446,15 @@ export function createBridgeFetchForSDK(
     const headers = extractHeaders(resolvedInit?.headers);
     const body =
       resolvedInit?.body != null ? String(resolvedInit.body) : undefined;
+    // OpenAI chat conversion emits bare base64 in image_url.url; many gateways
+    // require a data: or http(s) URL. Normalize after other body rewrites.
     const requestBody = body != null
-      ? repairOpenAIChatToolResultPairsInBody(applyOpenAIChatContinuationToBody(
-          body,
-          requestContext?.getOpenAIChatAssistantFields?.() ?? [],
-        ))
+      ? normalizeOpenAIChatImageUrlsInBody(
+          repairOpenAIChatToolResultPairsInBody(applyOpenAIChatContinuationToBody(
+            body,
+            requestContext?.getOpenAIChatAssistantFields?.() ?? [],
+          )),
+        )
       : undefined;
 
     // Streaming path
