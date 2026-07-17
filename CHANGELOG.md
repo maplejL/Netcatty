@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.1.1] - 2026-07-17
+
+本 fork 第二版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。  
+相对 [0.1.0] 主要包含：上游低冲突 cherry-pick 一批稳定性/终端/SSH 修复，以及本 fork 的 AI 视觉、侧栏白屏、MCP exec 等修复。
+
+### 本 fork 修复 / 增强
+
+#### AI 视觉与侧栏稳定性
+- 聊天贴图优先走模型视觉能力，禁止为看图去远端装 OCR / 拉 base64
+- 上下文压缩保留 `image/*` 像素，避免「附件被省略」后模型看不见图
+- OpenAI 兼容网关：在请求出网前把 `image_url.url` 裸 base64 规范为 `data:image/...;base64,...`（修复 400 invalid-argument）
+- AI 侧栏错误改为软 Retry（不再 `location.reload` 整页刷新）
+- 持久化/加载时剥离大图 base64，避免 localStorage 膨胀导致白屏卡死
+- session/message 规范化更严，脏数据不易打崩侧栏
+
+#### MCP / 终端执行
+- 补全 `closingTerminalSessions` 声明：修复 partial cherry-pick 后 `exec` / `job-start` 报 `is not defined`（SFTP 仍正常）
+- SSH：partial cherry-pick 后 `systemAuthAgent is not defined` → 使用已有 `connectOpts.agent`
+
+### 上游 cherry-pick（摘要）
+自 v0.1.0 起约 130+ 条低冲突上游提交，包括但不限于：
+- 终端：OSC7/CWD、复制选区规范化、重连/休眠取消、脚本 overlay、紧凑工具栏与 speed-dial
+- SSH：password-only 主机不回落默认密钥、跳板/严格 agent 相关修复、连接时延测量
+- UI：系统管理面板确认框、主题对比度、macOS Dock 图标与侧栏 tooltip
+- 脚本：停止/重跑/日志清理与 bastion 发送可靠性
+- CI / 打包：Linux glibc 兼容与部分构建脚本修正
+
+> 完整列表见 `git log v0.1.0..v0.1.1`。部分上游能力（如完整 session-close 守卫）仍未全量合入，仅合了可独立落地的补丁。
+
+### 已知限制
+- 与 0.1.0 相同的批量命令跳板、WebGL 偶发花屏、外部 Agent 依赖本机 CLI 等限制仍在
+- 历史会话中已存的大图预览可能因 base64 剥离而不可再显示（文字记录保留）
+
+### 构建
+- 正式安装包：`npm run pack:win-x64`（Windows x64 NSIS / portable / zip）
+- 本地热更 asar：`npm run pack:asar`
+
+---
+
 ## [0.1.0] - 2026-07-16
 
 本仓库基于上游 [binaricat/Netcatty](https://github.com/binaricat/Netcatty) 的 **fork 首发版本**（GPL-3.0）。  
