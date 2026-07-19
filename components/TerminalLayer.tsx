@@ -1818,10 +1818,12 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   }, [onOpenBatchExec]);
 
   const sessionLogConfig = useMemo(
-    () =>
-      sessionLogsEnabled && sessionLogsDir
-        ? { enabled: true as const, directory: sessionLogsDir, format: sessionLogsFormat || 'txt', timestampsEnabled: sessionLogsTimestampsEnabled }
-        : undefined,
+    () => ({
+      enabled: Boolean(sessionLogsEnabled && sessionLogsDir),
+      directory: sessionLogsDir,
+      format: sessionLogsFormat || 'txt',
+      timestampsEnabled: sessionLogsTimestampsEnabled,
+    }),
     [sessionLogsDir, sessionLogsEnabled, sessionLogsFormat, sessionLogsTimestampsEnabled],
   );
 

@@ -2373,9 +2373,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       const currentStatus = await getManualSessionLogStatus({ sessionId: currentSessionId });
       if (currentStatus?.isLogging) {
         const stopResult = await stopManualSessionLog({ sessionId: currentSessionId });
-        if (stopResult?.success) {
+        if (stopResult?.stopped) {
           setIsSessionLogging(false);
-        } else {
+        }
+        if (!stopResult?.success) {
           toast.error(stopResult?.error || "Failed to stop session log");
         }
         return;
@@ -2385,6 +2386,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         sessionId: currentSessionId,
         sessionName: host.label || host.hostname || currentSessionId,
         preferredDirectory: sessionLog?.directory,
+        format: sessionLog?.format,
+        timestampsEnabled: sessionLog?.timestampsEnabled,
         initialLine: termRef.current ? getSessionLogInitialLine(termRef.current) : "",
       });
       if (startResult?.success) {
@@ -2403,6 +2406,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     host.label,
     sessionId,
     sessionLog?.directory,
+    sessionLog?.format,
+    sessionLog?.timestampsEnabled,
     startManualSessionLog,
     stopManualSessionLog,
   ]);

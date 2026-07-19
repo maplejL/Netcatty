@@ -1061,7 +1061,6 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
                   options={formatOptions}
                   onChange={(val) => setSessionLogsFormat(val as SessionLogFormat)}
                   className="w-44"
-                  disabled={!sessionLogsEnabled}
                 />
               </SettingRow>
 
@@ -1072,7 +1071,6 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
                 <Toggle
                   checked={sessionLogsTimestampsEnabled}
                   onChange={setSessionLogsTimestampsEnabled}
-                  disabled={!sessionLogsEnabled}
                 />
               </SettingRow>
             </SettingCard>

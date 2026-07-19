@@ -120,6 +120,8 @@ declare global {
       sessionId: string;
       sessionName?: string;
       preferredDirectory?: string;
+      format?: 'txt' | 'raw' | 'html';
+      timestampsEnabled?: boolean;
       initialLine?: string;
     }): Promise<{ success: boolean; started: boolean; canceled?: boolean; error?: string; filePath?: string }>;
     stopManualSessionLog?(payload: {
