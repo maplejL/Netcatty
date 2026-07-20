@@ -323,6 +323,7 @@ export const enVaultMessages: Messages = {
 
   // SFTP File Opener
   'sftp.context.copyPath': 'Copy file path',
+  'sftp.context.insertPathToTerminal': 'Insert path into terminal',
   'sftp.context.openWithDefault': 'Open with system default',
   'sftp.context.openWith': 'Open with...',
   'sftp.context.edit': 'Edit',

@@ -147,17 +147,19 @@ export function TerminalLayerTabBridge({ stableRef }: { stableRef: StableRef }) 
     const linked = resolveSftpLinkedSessionId(preferredSessionId, sftpActiveHost);
     if (linked) return linked;
 
-    // Last resort for single-host tabs: any connected SSH session on the same
-    // host. Without this, a brief focus/map mismatch leaves activeTerminalCwd
-    // permanently null and follow never reacts to `cd`.
+    // Only fall back when a single same-host SSH session is connected. With two
+    // tabs on the same host (different CWDs), grabbing "any" session made SFTP
+    // follow / go-to-cwd stick to the wrong path (#2322).
+    const candidates: string[] = [];
     for (const session of sessions) {
       if (session.status !== 'connected') continue;
       if (activeWorkspace && session.workspaceId && session.workspaceId !== activeWorkspace.id) {
         continue;
       }
       const candidate = resolveSftpLinkedSessionId(session.id, sftpActiveHost);
-      if (candidate) return candidate;
+      if (candidate) candidates.push(candidate);
     }
+    if (candidates.length === 1) return candidates[0];
     return null;
   }, [
     activeSession?.id,
@@ -434,6 +436,8 @@ export function TerminalLayerTabBridge({ stableRef }: { stableRef: StableRef }) 
     commandHistoryPopupOpen: s.commandHistoryPopupOpen,
     fontSize: s.fontSize,
     getTerminalCwd: s.getTerminalCwd,
+    insertPathIntoTerminal: s.insertPathIntoTerminal,
+    getSftpRememberedPath: s.getSftpRememberedPath,
     handleAddKnownHost: s.handleAddKnownHost,
     handleAddSelectionToAI: s.handleAddSelectionToAI,
     handleBroadcastInput: s.handleBroadcastInput,

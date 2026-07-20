@@ -227,6 +227,8 @@ const SIDE_PANEL_STABLE_CTX_KEYS = [
   'editorWordWrap',
   'setEditorWordWrap',
   'getTerminalCwd',
+  'insertPathIntoTerminal',
+  'getSftpRememberedPath',
   'refocusActiveTerminalSession',
   'terminalSettings',
   'snippets',

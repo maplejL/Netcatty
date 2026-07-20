@@ -49,6 +49,8 @@ import {
 } from "./sftp/sftpFollowTerminalCwd";
 import {
   findReusableSftpSidePanelTab,
+  resolveSftpPathForLinkedSession,
+  shouldNavigateSftpOnSessionSwitch,
   shouldResetSftpSidePanelSourceSession,
   shouldSkipSftpSidePanelAutoConnect,
 } from "./sftp/sftpSidePanelAutoConnect";
@@ -93,8 +95,11 @@ interface SftpSidePanelProps {
     sessionId?: string | null;
   }) => Promise<string | null>;
   activeTerminalCwd?: string | null;
+  /** Last SFTP browse path for the currently linked terminal session (per-session memory). */
+  rememberedPathForSession?: string | null;
   sftpFollowTerminalCwd?: boolean;
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
+  onInsertPathToTerminal?: (path: string) => void;
   onRequestTerminalFocus?: () => void;
   terminalSettings?: { keepaliveInterval: number; keepaliveCountMax: number };
 }
@@ -128,8 +133,10 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   setEditorWordWrap,
   onGetTerminalCwd,
   activeTerminalCwd = null,
+  rememberedPathForSession = null,
   sftpFollowTerminalCwd = false,
   onSftpFollowTerminalCwdChange,
+  onInsertPathToTerminal,
   onRequestTerminalFocus,
   terminalSettings,
 }) => {
@@ -288,9 +295,35 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
       lastSourceSessionIdRef.current = activeSessionId;
     }
 
+    const sessionTargetPath = resolveSftpPathForLinkedSession({
+      rememberedPath: rememberedPathForSession,
+      terminalCwd: activeTerminalCwd,
+    });
+
     const hasBackendSession = (connectionId: string) => !!s.getSftpIdForConnection(connectionId);
     const activeTab = s.leftTabs.tabs.find((tab) => tab.id === s.leftTabs.activeTabId) ?? null;
     const activeConnectionId = activeTab?.connection?.id;
+    const activeConn = activeTab?.connection ?? s.leftPane.connection;
+
+    // Same host, different terminal session: stay on the existing SFTP connection
+    // but navigate to the path remembered / cwd for the newly linked session.
+    if (
+      sessionChanged
+      && shouldNavigateSftpOnSessionSwitch({
+        sessionChanged: true,
+        isConnected: activeConn?.status === "connected",
+        isLocal: !!activeConn?.isLocal,
+        hostIdMatches: activeConn?.hostId === activeHost.id,
+        targetPath: sessionTargetPath,
+        currentPath: activeConn?.currentPath,
+      })
+    ) {
+      connectedKeyRef.current = connectionKey;
+      connectedHostObjRef.current = activeHost;
+      void s.navigateTo("left", sessionTargetPath!);
+      return;
+    }
+
     if (
       !sessionChanged
       && shouldSkipSftpSidePanelAutoConnect(
@@ -312,19 +345,32 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
     });
 
     const tabs = s.leftTabs.tabs;
-    const existingTab = sessionChanged
-      ? null
-      : findReusableSftpSidePanelTab(
-        tabs,
-        activeHost.id,
-        connectionKey,
-        tabConnectionKeyMapRef.current,
-        hasBackendSession,
-      );
+    // After a session switch we still prefer reusing a healthy same-host tab,
+    // then navigate to the session-scoped path instead of reconnecting.
+    const existingTab = findReusableSftpSidePanelTab(
+      tabs,
+      activeHost.id,
+      connectionKey,
+      tabConnectionKeyMapRef.current,
+      hasBackendSession,
+    );
     if (existingTab) {
       s.selectTab("left", existingTab.id);
       connectedKeyRef.current = connectionKey;
       connectedHostObjRef.current = activeHost;
+      if (
+        sessionChanged
+        && shouldNavigateSftpOnSessionSwitch({
+          sessionChanged: true,
+          isConnected: existingTab.connection?.status === "connected",
+          isLocal: !!existingTab.connection?.isLocal,
+          hostIdMatches: existingTab.connection?.hostId === activeHost.id,
+          targetPath: sessionTargetPath,
+          currentPath: existingTab.connection?.currentPath,
+        })
+      ) {
+        void s.navigateTo("left", sessionTargetPath!);
+      }
       return;
     }
 
@@ -335,12 +381,19 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
     connectedHostObjRef.current = activeHost;
     s.connect("left", activeHost, {
       sourceSessionId: activeSessionId ?? undefined,
+      initialPath: sessionTargetPath ?? undefined,
       ...(needsNewTab ? { forceNewTab: true } : undefined),
       onTabCreated: (tabId) => {
         tabConnectionKeyMapRef.current.set(tabId, connectionKey);
       },
     });
-  }, [activeHost, activeSessionId, interactiveWorkActive]);
+  }, [
+    activeHost,
+    activeSessionId,
+    activeTerminalCwd,
+    interactiveWorkActive,
+    rememberedPathForSession,
+  ]);
 
   useEffect(() => {
     if (!activeHost || !isVisible) return;
@@ -500,6 +553,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
         activeTerminalCwd={activeTerminalCwd}
         sftpFollowTerminalCwd={sftpFollowTerminalCwd}
         onSftpFollowTerminalCwdChange={onSftpFollowTerminalCwdChange}
+        onInsertPathToTerminal={onInsertPathToTerminal}
         onRequestTerminalFocus={onRequestTerminalFocus}
         isVisible={isVisible}
         behaviorRef={behaviorRef}
@@ -547,6 +601,7 @@ type SftpSidePanelInteractiveBodyProps = {
   activeTerminalCwd?: string | null;
   sftpFollowTerminalCwd: boolean;
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
+  onInsertPathToTerminal?: (path: string) => void;
   onRequestTerminalFocus?: () => void;
   isVisible: boolean;
   behaviorRef: MutableRefObject<"open" | "transfer">;
@@ -585,6 +640,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
   activeTerminalCwd = null,
   sftpFollowTerminalCwd,
   onSftpFollowTerminalCwdChange,
+  onInsertPathToTerminal,
   onRequestTerminalFocus,
   isVisible,
   behaviorRef,
@@ -711,6 +767,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     getSftpIdForConnection: sftp.getSftpIdForConnection,
     listLocalFiles: listLocalDir,
     listDrives,
+    onInsertPathToTerminal,
   });
 
   const {
@@ -1208,8 +1265,10 @@ const sidePanelAreEqual = (prev: SftpSidePanelProps, next: SftpSidePanelProps): 
   prev.setEditorWordWrap === next.setEditorWordWrap &&
   prev.onGetTerminalCwd === next.onGetTerminalCwd &&
   prev.activeTerminalCwd === next.activeTerminalCwd &&
+  prev.rememberedPathForSession === next.rememberedPathForSession &&
   prev.sftpFollowTerminalCwd === next.sftpFollowTerminalCwd &&
   prev.onSftpFollowTerminalCwdChange === next.onSftpFollowTerminalCwdChange &&
+  prev.onInsertPathToTerminal === next.onInsertPathToTerminal &&
   prev.onRequestTerminalFocus === next.onRequestTerminalFocus &&
   prev.onCurrentPathChange === next.onCurrentPathChange &&
   prev.initialLocation?.hostId === next.initialLocation?.hostId &&

@@ -44,6 +44,7 @@ export const SftpPaneTreeView = React.memo<SftpPaneTreeViewProps>(({
   onEditFile,
   onDownloadFile,
   onEditPermissions,
+  onInsertPathToTerminal,
   draggedFiles,
   openNewFolderDialog,
   openNewFileDialog,
@@ -191,6 +192,8 @@ export const SftpPaneTreeView = React.memo<SftpPaneTreeViewProps>(({
   onDownloadFileRef.current = onDownloadFile;
   const onEditPermissionsRef = useRef(onEditPermissions);
   onEditPermissionsRef.current = onEditPermissions;
+  const onInsertPathToTerminalRef = useRef(onInsertPathToTerminal);
+  onInsertPathToTerminalRef.current = onInsertPathToTerminal;
   const openRenameDialogRef = useRef(openRenameDialog);
   openRenameDialogRef.current = openRenameDialog;
   const openDeleteConfirmRef = useRef(openDeleteConfirm);
@@ -834,6 +837,7 @@ export const SftpPaneTreeView = React.memo<SftpPaneTreeViewProps>(({
     onEditFileRef,
     onDownloadFileRef,
     onEditPermissionsRef,
+    onInsertPathToTerminalRef,
     openDeleteConfirmRef,
     openRenameDialogRef,
     openNewFolderDialogRef,

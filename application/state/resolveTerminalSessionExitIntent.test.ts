@@ -6,10 +6,14 @@ import {
   shouldCloseTerminalPopupOnExit,
 } from "./resolveTerminalSessionExitIntent.ts";
 
-test("normal backend exited events close the session tab", () => {
+test("shell exit / Ctrl+D keeps the tab so scrollback and reconnect remain", () => {
   assert.deepEqual(
     resolveTerminalSessionExitIntent({ reason: "exited", exitCode: 0 }),
-    { kind: "closeSession" },
+    { kind: "markDisconnected" },
+  );
+  assert.deepEqual(
+    resolveTerminalSessionExitIntent({ reason: "exited", exitCode: 1 }),
+    { kind: "markDisconnected" },
   );
 });
 

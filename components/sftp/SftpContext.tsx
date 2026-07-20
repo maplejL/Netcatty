@@ -60,6 +60,8 @@ export interface SftpPaneCallbacks {
     onUploadExternalFileList?: (fileList: FileList, targetPath?: string) => Promise<void>;
     // External folder upload from native directory picker.
     onUploadExternalFolder?: (targetPath?: string) => Promise<void>;
+    /** Insert a remote path into the linked terminal (quoted for the shell). */
+    onInsertPathToTerminal?: (path: string) => void;
     onListDirectory: (path: string) => Promise<SftpFileEntry[]>;
     onListDrives: () => Promise<string[]>;
 }

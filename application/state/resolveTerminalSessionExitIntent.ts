@@ -10,14 +10,12 @@ export type TerminalSessionExitIntent =
   | { kind: "markDisconnected" };
 
 export function resolveTerminalSessionExitIntent(
-  evt: TerminalSessionExitEvent,
+  _evt: TerminalSessionExitEvent,
 ): TerminalSessionExitIntent {
-  if (evt.reason === "exited") {
-    return { kind: "closeSession" };
-  }
-
-  // Timeouts, transport errors, and channel closes should keep the tab visible
-  // so the user can inspect output and reconnect.
+  // Keep the tab for every backend exit path (shell exit / Ctrl+D, transport
+  // errors, timeouts, channel closes). Users expect scrollback to remain and a
+  // one-click reconnect — matching WindTerm / MobaXterm. Explicit tab close is
+  // still the only way to remove a session from the workspace.
   return { kind: "markDisconnected" };
 }
 

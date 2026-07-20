@@ -18,6 +18,7 @@ interface SftpFileRowProps {
     columnWidths: ColumnWidths;
     onSelect: (entry: SftpFileEntry, index: number, e: React.MouseEvent) => void;
     onOpen: (entry: SftpFileEntry) => void;
+    onAuxClick?: (entry: SftpFileEntry, e: React.MouseEvent) => void;
     onDragStart: (entry: SftpFileEntry, e: React.DragEvent) => void;
     onDragEnd: () => void;
     onDragOver: (entry: SftpFileEntry, e: React.DragEvent) => void;
@@ -34,6 +35,7 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
     columnWidths,
     onSelect,
     onOpen,
+    onAuxClick,
     onDragStart,
     onDragEnd,
     onDragOver,
@@ -52,6 +54,9 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
     const handleOpen = useCallback(() => {
         onOpen(entry);
     }, [entry, onOpen]);
+    const handleAuxClick = useCallback((e: React.MouseEvent) => {
+        onAuxClick?.(entry, e);
+    }, [entry, onAuxClick]);
     const handleDragStart = useCallback((e: React.DragEvent) => {
         onDragStart(entry, e);
     }, [entry, onDragStart]);
@@ -78,6 +83,7 @@ const SftpFileRowInner: React.FC<SftpFileRowProps> = ({
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
             onClick={handleSelect}
+            onAuxClick={onAuxClick ? handleAuxClick : undefined}
             onDoubleClick={handleOpen}
             className={cn(
                 "px-4 py-2 items-center cursor-pointer text-sm",
@@ -150,6 +156,7 @@ const areEqual = (prev: SftpFileRowProps, next: SftpFileRowProps): boolean => {
     // Compare callbacks - important for ".." entry which has static properties
     if (prev.onOpen !== next.onOpen) return false;
     if (prev.onSelect !== next.onSelect) return false;
+    if (prev.onAuxClick !== next.onAuxClick) return false;
     const prevEntry = prev.entry;
     const nextEntry = next.entry;
     return (

@@ -51,6 +51,7 @@ export const zhTWTerminalMessages: Messages = {
   'history.action.saveAsSnippet': '儲存為程式碼片段',
   // SFTP File Opener
   'sftp.context.copyPath': '複製檔案路徑',
+  'sftp.context.insertPathToTerminal': '插入路徑到終端',
   'sftp.context.openWith': '開啟方式...',
   'sftp.context.edit': '編輯',
   'sftp.context.preview': '預覽',

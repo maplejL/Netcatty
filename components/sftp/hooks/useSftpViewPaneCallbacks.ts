@@ -49,6 +49,7 @@ interface UseSftpViewPaneCallbacksParams {
   mkdirLocal?: (path: string) => Promise<void>;
   deleteLocalFile?: (path: string) => Promise<void>;
   listDrives: () => Promise<string[]>;
+  onInsertPathToTerminal?: (path: string) => void;
 }
 
 export const useSftpViewPaneCallbacks = ({
@@ -65,7 +66,10 @@ export const useSftpViewPaneCallbacks = ({
   getSftpIdForConnection,
   listLocalFiles,
   listDrives,
+  onInsertPathToTerminal,
 }: UseSftpViewPaneCallbacksParams) => {
+  const onInsertPathToTerminalRef = useRef(onInsertPathToTerminal);
+  onInsertPathToTerminalRef.current = onInsertPathToTerminal;
   const paneActions = useSftpViewPaneActions({ sftpRef });
   const fileOps = useSftpViewFileOps({
     sftpRef,
@@ -176,10 +180,17 @@ export const useSftpViewPaneCallbacks = ({
       onUploadExternalFiles: fileOps.onUploadExternalFilesLeft,
       onUploadExternalFileList: fileOps.onUploadExternalFileListLeft,
       onUploadExternalFolder: fileOps.onUploadExternalFolderLeft,
+      // Capture presence once: side-panel mounts with a handler; dual-pane SFTP does not.
+      onInsertPathToTerminal: onInsertPathToTerminal
+        ? (path: string) => {
+            onInsertPathToTerminalRef.current?.(path);
+          }
+        : undefined,
       onListDirectory: makeListDirectory("left", () => sftpRef.current.leftPane),
       onListDrives: listDrives,
     }),
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Handlers use refs; only presence of insert-path matters.
+    [!!onInsertPathToTerminal],
   );
 
   const rightCallbacks = useMemo<SftpPaneCallbacks>(
@@ -218,10 +229,16 @@ export const useSftpViewPaneCallbacks = ({
       onUploadExternalFiles: fileOps.onUploadExternalFilesRight,
       onUploadExternalFileList: fileOps.onUploadExternalFileListRight,
       onUploadExternalFolder: fileOps.onUploadExternalFolderRight,
+      onInsertPathToTerminal: onInsertPathToTerminal
+        ? (path: string) => {
+            onInsertPathToTerminalRef.current?.(path);
+          }
+        : undefined,
       onListDirectory: makeListDirectory("right", () => sftpRef.current.rightPane),
       onListDrives: listDrives,
     }),
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Handlers use refs; only presence of insert-path matters.
+    [!!onInsertPathToTerminal],
   );
   /* eslint-enable react-hooks/exhaustive-deps */
 

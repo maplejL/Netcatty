@@ -25,6 +25,7 @@ export interface SftpPaneTreeViewProps {
   onEditFile?: (entry: SftpFileEntry, fullPath?: string) => void;
   onDownloadFile?: (entry: SftpFileEntry, fullPath?: string) => void;
   onEditPermissions?: (entry: SftpFileEntry, fullPath?: string) => void;
+  onInsertPathToTerminal?: (path: string) => void;
   draggedFiles: (SftpTransferSource & { side: 'left' | 'right' })[] | null;
   openNewFolderDialog: (targetPath: string) => void;
   openNewFileDialog: (targetPath: string) => void;

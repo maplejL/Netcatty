@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { memo, useCallback, useSyncExternalStore } from 'react';
+import React, { memo, useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import { activeTabStore, useIsTabActive } from '../../application/state/activeTabStore';
 import { getSftpCurrentPathMemoryKey } from '../../application/state/sftp/sftpReopenLocation';
@@ -72,6 +72,8 @@ function SidePanelSftpSlotInner({
     editorWordWrap,
     setEditorWordWrap,
     getTerminalCwd,
+    insertPathIntoTerminal,
+    getSftpRememberedPath,
     sftpFollowTerminalCwd,
     setSftpFollowTerminalCwd,
     setSftpHostForTab,
@@ -148,6 +150,27 @@ function SidePanelSftpSlotInner({
     [handleSftpCurrentPathChange, live.activeTerminalSessionIdForSftp, live.focusedSessionId, tabId],
   );
 
+  const handleInsertPathToTerminal = useCallback((path: string) => {
+    insertPathIntoTerminal?.(path, live.activeTerminalSessionIdForSftp ?? live.focusedSessionId ?? null);
+  }, [insertPathIntoTerminal, live.activeTerminalSessionIdForSftp, live.focusedSessionId]);
+
+  const rememberedPathForSession = useMemo(() => {
+    if (!isVisible || !getSftpRememberedPath) return undefined;
+    const memoryKey = getSftpCurrentPathMemoryKey({
+      tabId,
+      activeTerminalSessionIdForSftp: live.activeTerminalSessionIdForSftp,
+      focusedSessionId: live.focusedSessionId,
+    });
+    return getSftpRememberedPath(memoryKey) ?? undefined;
+  }, [
+    getSftpRememberedPath,
+    isVisible,
+    live.activeTerminalSessionIdForSftp,
+    live.focusedSessionId,
+    live.activeTerminalCwd,
+    tabId,
+  ]);
+
   return (
     <div className={sidePanelHiddenPanelClassName(!isVisible)}>
       <SftpSidePanel
@@ -164,6 +187,7 @@ function SidePanelSftpSlotInner({
         initialLocation={isVisible ? (sftpInitialLocationForTab.get(tabId) ?? null) : null}
         onInitialLocationApplied={handleInitialLocationApplied}
         onCurrentPathChange={handleCurrentPathChange}
+        rememberedPathForSession={rememberedPathForSession}
         showWorkspaceHostHeader={isVisible && !!live.activeWorkspace}
         isVisible={isVisible}
         renderOverlays={isVisible}
@@ -181,6 +205,7 @@ function SidePanelSftpSlotInner({
         activeTerminalCwd={isVisible ? live.activeTerminalCwd : null}
         sftpFollowTerminalCwd={sftpFollowTerminalCwd}
         onSftpFollowTerminalCwdChange={handleFollowTerminalCwdChange}
+        onInsertPathToTerminal={insertPathIntoTerminal ? handleInsertPathToTerminal : undefined}
         onRequestTerminalFocus={refocusActiveTerminalSession}
         terminalSettings={terminalSettings}
       />

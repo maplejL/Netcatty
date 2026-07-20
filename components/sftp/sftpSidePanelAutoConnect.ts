@@ -55,3 +55,37 @@ export function shouldResetSftpSidePanelSourceSession(
   if (!previousSessionId) return false;
   return nextSessionId !== previousSessionId;
 }
+
+/**
+ * Prefer session-scoped SFTP path when switching between terminal sessions on
+ * the same host: remembered browse path, then live terminal cwd.
+ */
+export function resolveSftpPathForLinkedSession(params: {
+  rememberedPath?: string | null;
+  terminalCwd?: string | null;
+  currentPath?: string | null;
+}): string | null {
+  const remembered = (params.rememberedPath || "").trim();
+  if (remembered) return remembered;
+  const cwd = (params.terminalCwd || "").trim();
+  if (cwd) return cwd;
+  return null;
+}
+
+/** Whether an already-connected same-host SFTP pane should navigate on session switch. */
+export function shouldNavigateSftpOnSessionSwitch(params: {
+  sessionChanged: boolean;
+  isConnected: boolean;
+  isLocal: boolean;
+  hostIdMatches: boolean;
+  targetPath: string | null;
+  currentPath?: string | null;
+}): boolean {
+  if (!params.sessionChanged) return false;
+  if (!params.isConnected || params.isLocal) return false;
+  if (!params.hostIdMatches) return false;
+  if (!params.targetPath) return false;
+  const current = (params.currentPath || "").replace(/\/+$/, "") || "/";
+  const target = params.targetPath.replace(/\/+$/, "") || "/";
+  return current !== target;
+}

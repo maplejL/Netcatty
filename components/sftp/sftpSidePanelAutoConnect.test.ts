@@ -4,6 +4,8 @@ import type { SftpPane } from "../../application/state/sftp/types";
 import {
   findReusableSftpSidePanelTab,
   isRemoteSftpTabHealthy,
+  resolveSftpPathForLinkedSession,
+  shouldNavigateSftpOnSessionSwitch,
   shouldResetSftpSidePanelSourceSession,
   shouldSkipSftpSidePanelAutoConnect,
 } from "./sftpSidePanelAutoConnect";
@@ -94,5 +96,65 @@ test("shouldSkipSftpSidePanelAutoConnect returns false after terminal session ch
   assert.equal(
     shouldResetSftpSidePanelSourceSession("sess-a", "sess-b"),
     true,
+  );
+});
+
+test("resolveSftpPathForLinkedSession prefers remembered path over terminal cwd", () => {
+  assert.equal(
+    resolveSftpPathForLinkedSession({
+      rememberedPath: "/var/log",
+      terminalCwd: "/home/user",
+    }),
+    "/var/log",
+  );
+  assert.equal(
+    resolveSftpPathForLinkedSession({
+      rememberedPath: null,
+      terminalCwd: "/home/user",
+    }),
+    "/home/user",
+  );
+  assert.equal(
+    resolveSftpPathForLinkedSession({
+      rememberedPath: "  ",
+      terminalCwd: null,
+    }),
+    null,
+  );
+});
+
+test("shouldNavigateSftpOnSessionSwitch jumps when paths differ after session change", () => {
+  assert.equal(
+    shouldNavigateSftpOnSessionSwitch({
+      sessionChanged: true,
+      isConnected: true,
+      isLocal: false,
+      hostIdMatches: true,
+      targetPath: "/var/www",
+      currentPath: "/home/user",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldNavigateSftpOnSessionSwitch({
+      sessionChanged: true,
+      isConnected: true,
+      isLocal: false,
+      hostIdMatches: true,
+      targetPath: "/var/www/",
+      currentPath: "/var/www",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldNavigateSftpOnSessionSwitch({
+      sessionChanged: false,
+      isConnected: true,
+      isLocal: false,
+      hostIdMatches: true,
+      targetPath: "/var/www",
+      currentPath: "/home/user",
+    }),
+    false,
   );
 });

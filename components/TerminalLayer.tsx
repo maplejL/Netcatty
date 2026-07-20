@@ -18,6 +18,7 @@ import { inferCodingCliProviderFromTitleSignals, shouldClearCodingCliProviderFor
 import { sessionCapabilitiesStore } from '../application/state/sessionCapabilitiesStore';
 import { useTerminalBackend } from '../application/state/useTerminalBackend';
 import { collectSessionIds } from '../domain/workspace';
+import { quoteShellPath } from '../domain/shellPathQuote';
 
 import { cn, normalizeLineEndings } from '../lib/utils';
 import { detectLocalOs } from '../lib/localShell';
@@ -742,6 +743,11 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     sftpLastPathForSourceRef.current.set(memoryKey, location);
   }, []);
 
+  const getSftpRememberedPath = useCallback((memoryKey: string): string | null => {
+    if (!memoryKey) return null;
+    return sftpLastPathForSourceRef.current.get(memoryKey)?.path ?? null;
+  }, []);
+
   // Pre-compute host lookup map for O(1) access
   const hostMap = useMemo(() => {
     const map = new Map<string, Host>();
@@ -1033,6 +1039,20 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     }
     return cwd;
   }, [getActiveTerminalSessionId, handleTerminalCwdChange, terminalBackend]);
+
+  const insertPathIntoTerminal = useCallback((path: string, sessionId?: string | null) => {
+    const trimmed = (path || "").trim();
+    if (!trimmed) return;
+    const targetId = sessionId || getActiveTerminalSessionId();
+    if (!targetId) return;
+    const session = sessionsRef.current.find((candidate) => candidate.id === targetId);
+    if (!session || session.status !== "connected") return;
+    const quoted = quoteShellPath(trimmed);
+    // Space after the path so the next arg can be typed immediately.
+    terminalBackend.writeToSession(targetId, `${quoted} `);
+    syncWorkspaceFocusIfNeeded(targetId);
+    focusTerminalSessionInput(targetId);
+  }, [getActiveTerminalSessionId, syncWorkspaceFocusIfNeeded, terminalBackend]);
 
   const refocusTerminalSession = useCallback((sessionId?: string | null) => {
     focusTerminalSessionInput(sessionId);
@@ -1636,6 +1656,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     fontSize,
     getSessionActivityIdsToClear,
     getTerminalCwd,
+    insertPathIntoTerminal,
     handleAddKnownHost,
     handleAddSelectionToAI,
     handleBroadcastInput,
@@ -1666,6 +1687,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     handlePendingUploadHandled,
     handleSessionExit,
     handleSftpCurrentPathChange,
+    getSftpRememberedPath,
     handleSftpInitialLocationApplied,
     persistSidePanelWidth,
     handleSnippetClickForFocusedSession,
