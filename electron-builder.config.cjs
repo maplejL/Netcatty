@@ -1,5 +1,9 @@
 const { moshExtraResources } = require('./scripts/mosh-extra-resources.cjs');
 const { etExtraResources } = require('./scripts/et-extra-resources.cjs');
+const {
+    RELEASE_GITHUB_OWNER,
+    RELEASE_GITHUB_REPO,
+} = require('./infrastructure/config/releaseSource.cjs');
 
 /**
  * @type {import('electron-builder').Configuration}
@@ -268,8 +272,8 @@ module.exports = {
     publish: [
         {
             provider: 'github',
-            owner: 'binaricat',
-            repo: 'Netcatty',
+            owner: RELEASE_GITHUB_OWNER,
+            repo: RELEASE_GITHUB_REPO,
             releaseType: 'release'
         }
     ]

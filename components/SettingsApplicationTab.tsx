@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { useApplicationBackend } from "../application/state/useApplicationBackend";
 import type { UpdateState, UseUpdateCheckResult } from "../application/state/useUpdateCheck";
 import { useI18n } from "../application/i18n/I18nProvider";
+import { RELEASE_REPO_URL } from "../infrastructure/config/releaseSource";
 import { SettingsTabContent } from "./settings/settings-ui";
 import { toast } from "./ui/toast";
 
@@ -15,7 +16,7 @@ type AppInfo = {
   platform?: string;
 };
 
-const REPO_URL = "https://github.com/binaricat/Netcatty";
+const REPO_URL = RELEASE_REPO_URL;
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
 const mapIssuePlatform = (platform?: string) => {

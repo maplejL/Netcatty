@@ -2,6 +2,20 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const config = require("../electron-builder.config.cjs");
+const releaseSource = require("../infrastructure/config/releaseSource.cjs");
+
+test("publish feed points at this fork release repository", () => {
+  assert.equal(releaseSource.RELEASE_GITHUB_OWNER, "maplejL");
+  assert.equal(releaseSource.RELEASE_GITHUB_REPO, "Netcatty");
+  assert.ok(Array.isArray(config.publish));
+  assert.equal(config.publish[0]?.provider, "github");
+  assert.equal(config.publish[0]?.owner, releaseSource.RELEASE_GITHUB_OWNER);
+  assert.equal(config.publish[0]?.repo, releaseSource.RELEASE_GITHUB_REPO);
+  assert.match(
+    releaseSource.GITHUB_LATEST_RELEASE_API_URL,
+    /repos\/maplejL\/Netcatty\/releases\/latest$/,
+  );
+});
 
 test("unpacked MCP server includes its shared CommonJS dependencies", () => {
   assert.ok(

@@ -1,11 +1,15 @@
 {
   "name": "netcatty",
   "description": "Netcatty is a modern SSH manager and terminal app with host grouping, SFTP, keychain, port forwarding, and a rich UI.",
-  "homepage": "https://github.com/binaricat/Netcatty",
+  "homepage": "https://github.com/maplejL/Netcatty",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maplejL/Netcatty.git"
+  },
   "private": true,
   "version": "0.1.1",
   "type": "module",
-  "author": "binaricat <support@netcatty.com>",
+  "author": "maplejL",
   "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=22"
