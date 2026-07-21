@@ -283,8 +283,37 @@ export function scrollTopTabIntoComfortView(
   container: HTMLDivElement | null,
   tab: HTMLElement | null,
   behavior: ScrollBehavior = 'smooth',
+  orientation: 'horizontal' | 'vertical' = 'horizontal',
 ) {
   if (!container || !tab) return;
+
+  if (orientation === 'vertical') {
+    if (container.scrollHeight <= container.clientHeight) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const edgeBuffer = Math.min(
+      TOP_TAB_COMFORT_EDGE_MAX,
+      Math.max(TOP_TAB_COMFORT_EDGE_MIN, containerRect.height * TOP_TAB_COMFORT_EDGE_RATIO),
+    );
+    const isNearTop = tabRect.top < containerRect.top + edgeBuffer;
+    const isNearBottom = tabRect.bottom > containerRect.bottom - edgeBuffer;
+
+    if (!isNearTop && !isNearBottom) return;
+
+    const tabCenter =
+      tabRect.top - containerRect.top + container.scrollTop + tabRect.height / 2;
+    const maxScrollTop = container.scrollHeight - container.clientHeight;
+    const targetTop = Math.max(
+      0,
+      Math.min(maxScrollTop, tabCenter - container.clientHeight / 2),
+    );
+
+    if (Math.abs(container.scrollTop - targetTop) < 1) return;
+    container.scrollTo({ top: targetTop, behavior });
+    return;
+  }
+
   if (container.scrollWidth <= container.clientWidth) return;
 
   const containerRect = container.getBoundingClientRect();
@@ -313,11 +342,13 @@ export function scrollTopTabIntoComfortView(
 interface ActiveTabAutoScrollerProps {
   tabsContainerRef: React.RefObject<HTMLDivElement | null>;
   updateScrollState: () => void;
+  orientation?: 'horizontal' | 'vertical';
 }
 
 export const ActiveTabAutoScroller: React.FC<ActiveTabAutoScrollerProps> = memo(({
   tabsContainerRef,
   updateScrollState,
+  orientation = 'horizontal',
 }) => {
   const activeTabId = useActiveTabId();
 
@@ -327,10 +358,10 @@ export const ActiveTabAutoScroller: React.FC<ActiveTabAutoScrollerProps> = memo(
     if (!container) return;
 
     const activeTabElement = container.querySelector(`[data-tab-id="${activeTabId}"]`) as HTMLElement | null;
-    scrollTopTabIntoComfortView(container, activeTabElement, 'smooth');
+    scrollTopTabIntoComfortView(container, activeTabElement, 'smooth', orientation);
 
     setTimeout(updateScrollState, 260);
-  }, [activeTabId, tabsContainerRef, updateScrollState]);
+  }, [activeTabId, tabsContainerRef, updateScrollState, orientation]);
 
   return null;
 });

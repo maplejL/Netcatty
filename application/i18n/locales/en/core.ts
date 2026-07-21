@@ -272,6 +272,11 @@ export const enCoreMessages: Messages = {
   'settings.vault.showSftpTabDesc': 'Display the standalone SFTP view in the top tab bar. When hidden, use the in-session SFTP side panel instead.',
   'settings.vault.showHostTreeSidebar': 'Show host list sidebar',
   'settings.vault.showHostTreeSidebarDesc': 'Display the host list sidebar and its top-bar toggle on terminal and editor tabs.',
+  'settings.appearance.workTabsLocation': 'Work tabs location',
+  'settings.appearance.workTabsLocationDesc': 'Place session and workspace tabs along the top, left, or right edge. Side tabs show full titles when many sessions are open.',
+  'settings.appearance.workTabsLocation.top': 'Top',
+  'settings.appearance.workTabsLocation.left': 'Left',
+  'settings.appearance.workTabsLocation.right': 'Right',
 
   // Update notifications
   'update.available.title': 'Update Available',

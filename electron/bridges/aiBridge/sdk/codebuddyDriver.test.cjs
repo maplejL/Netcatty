@@ -222,11 +222,56 @@ test("mapCodebuddyModels maps model ids and drops invalid entries", () => {
     { value: "cb-2", displayName: "CodeBuddy 2" },
     { name: "missing id" },
   ]), [
-    { id: "glm-5.1", name: "GLM-5.1", description: undefined },
-    { id: "cb-1", name: "CodeBuddy 1", description: "default" },
-    { id: "cb-2", name: "CodeBuddy 2", description: undefined },
+    {
+      id: "glm-5.1",
+      name: "GLM-5.1",
+      description: undefined,
+      thinkingLevels: ["adaptive", "enabled"],
+      supportsFast: true,
+      fastEffort: "disabled",
+    },
+    {
+      id: "cb-1",
+      name: "CodeBuddy 1",
+      description: "default",
+      thinkingLevels: ["adaptive", "enabled"],
+      supportsFast: true,
+      fastEffort: "disabled",
+    },
+    {
+      id: "cb-2",
+      name: "CodeBuddy 2",
+      description: undefined,
+      thinkingLevels: ["adaptive", "enabled"],
+      supportsFast: true,
+      fastEffort: "disabled",
+    },
   ]);
   assert.deepEqual(mapCodebuddyModels(null), []);
+});
+
+test("buildCodebuddyQueryOptions splits slash thinking from model id", () => {
+  const opts = buildCodebuddyQueryOptions({
+    model: "glm-5.1/adaptive",
+    cwd: "/tmp",
+  });
+  assert.equal(opts.model, "glm-5.1");
+  assert.deepEqual(opts.thinking, { type: "adaptive" });
+
+  const fast = buildCodebuddyQueryOptions({
+    model: "glm-5.1/disabled",
+    cwd: "/tmp",
+  });
+  assert.equal(fast.model, "glm-5.1");
+  assert.deepEqual(fast.thinking, { type: "disabled" });
+
+  // Unknown suffix stays on the model id (e.g. provider/model).
+  const nested = buildCodebuddyQueryOptions({
+    model: "vendor/custom-model",
+    cwd: "/tmp",
+  });
+  assert.equal(nested.model, "vendor/custom-model");
+  assert.equal(nested.thinking, undefined);
 });
 
 test("classifyCodebuddySpawnError does not treat bare 'not found' as missing CLI", () => {

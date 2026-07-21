@@ -19,9 +19,9 @@ test("restore previous session setting preserves explicit stored values", () => 
   assert.equal(resolveRestorePreviousSessionSetting(false), false);
 });
 
-test("restore terminal cwd setting defaults off", () => {
-  assert.equal(DEFAULT_RESTORE_TERMINAL_CWD, false);
-  assert.equal(resolveRestoreTerminalCwdSetting(null), false);
+test("restore terminal cwd setting defaults on", () => {
+  assert.equal(DEFAULT_RESTORE_TERMINAL_CWD, true);
+  assert.equal(resolveRestoreTerminalCwdSetting(null), true);
 });
 
 test("restore terminal cwd setting preserves explicit stored values", () => {

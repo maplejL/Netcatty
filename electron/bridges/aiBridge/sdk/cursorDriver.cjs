@@ -53,13 +53,21 @@ function toCursorMcpServers(injectedMcpServers) {
 function parseCursorModelSelection(model) {
   const raw = String(model || DEFAULT_CURSOR_MODEL).trim() || DEFAULT_CURSOR_MODEL;
   const queryIndex = raw.indexOf("?");
-  if (queryIndex < 0) return { id: raw };
+  // Cursor defaults models with a Fast variant (composer-2.5, cursor-grok-4.5,
+  // …) to Fast when `fast` is omitted. Always pin false unless the caller
+  // encoded an explicit fast param.
+  if (queryIndex < 0) {
+    return { id: raw, params: [{ id: "fast", value: "false" }] };
+  }
 
   const id = raw.slice(0, queryIndex);
   const search = new URLSearchParams(raw.slice(queryIndex + 1));
   const params = [];
   for (const [paramId, value] of search.entries()) {
     if (paramId && value) params.push({ id: paramId, value });
+  }
+  if (!params.some((param) => param.id === "fast")) {
+    params.push({ id: "fast", value: "false" });
   }
   return params.length > 0 ? { id, params } : { id };
 }
@@ -395,13 +403,23 @@ async function runCursorTurn({
     if (signal?.aborted) return { sessionId };
 
     const sendMessage = buildCursorSendMessage(prompt, attachments);
+    const sendOptions = agentOptions?.model
+      ? { model: agentOptions.model }
+      : undefined;
     const restoreSendEnv = applyTemporaryProcessEnv(runtimeEnv);
     try {
-      run = await abortable(agent.send(sendMessage), signal, (lateRun) => {
-        if (lateRun && typeof lateRun.cancel === "function") {
-          void lateRun.cancel().catch(() => {});
-        }
-      });
+      // Cursor updates the active model from send({ model }), not only create().
+      // Fast / effort params must be passed here or mid-chat toggles and resumes
+      // keep the previous selection.
+      run = await abortable(
+        sendOptions ? agent.send(sendMessage, sendOptions) : agent.send(sendMessage),
+        signal,
+        (lateRun) => {
+          if (lateRun && typeof lateRun.cancel === "function") {
+            void lateRun.cancel().catch(() => {});
+          }
+        },
+      );
     } finally {
       restoreSendEnv();
     }
@@ -496,12 +514,122 @@ async function runCursorTurn({
 /**
  * Map Cursor.models.list() into picker rows.
  *
- * Keep one row per base model id. Expanding variants/parameters into separate
- * selectable ids produced long near-duplicate lists (e.g. "GPT-5", "GPT-5 - Fast",
- * "GPT-5 - High") that felt like duplicates in the UI. Users can still send a
- * previously selected variant id if it is already stored; the picker itself only
- * offers the account's base catalog.
+ * Keep one row per base model id. Fast / effort controls are exposed as
+ * metadata on the row so the chat input can render toggles instead of
+ * flooding the picker with "GPT-5 - Fast" / "GPT-5 - High" duplicates.
  */
+function isTruthyFastValue(value, displayName) {
+  const raw = String(value ?? "").toLowerCase();
+  if (raw === "true" || raw === "1" || raw === "yes") return true;
+  return /fast/i.test(String(displayName || ""));
+}
+
+function isExplicitFastParam(param) {
+  if (!param?.id || param.value == null) return false;
+  if (param.id === "fast" || /fast/i.test(String(param.id))) return true;
+  return false;
+}
+
+/** Fast expressed only as effort=low (no separate fast=true axis). */
+function isEffortOnlyFastParams(fastParams, thinkingParamId = "effort") {
+  if (!Array.isArray(fastParams) || fastParams.length !== 1) return false;
+  const only = fastParams[0];
+  return only?.id === thinkingParamId && String(only?.value) === "low";
+}
+
+function extractCursorModelControls(model) {
+  const supports = {
+    supportsFast: false,
+    fastParams: null,
+    thinkingLevels: null,
+    thinkingParamId: null,
+  };
+
+  for (const param of model.parameters || []) {
+    if (!param?.id || !Array.isArray(param.values) || param.values.length === 0) continue;
+    const paramKey = `${param.id} ${param.displayName || ""}`;
+
+    if (param.id === "fast" || /fast/i.test(paramKey)) {
+      const trueVal = param.values.find((value) => isTruthyFastValue(value?.value, value?.displayName));
+      if (trueVal) {
+        supports.supportsFast = true;
+        supports.fastParams = [{ id: param.id, value: String(trueVal.value) }];
+      }
+    }
+
+    if (
+      param.id === "effort"
+      || /effort|thinking|reasoning/i.test(paramKey)
+    ) {
+      const levels = param.values
+        .map((value) => (value?.value == null ? "" : String(value.value)))
+        .filter(Boolean);
+      if (levels.length > 0) {
+        supports.thinkingLevels = levels;
+        supports.thinkingParamId = param.id;
+      }
+    }
+  }
+
+  for (const variant of model.variants || []) {
+    const displayName = String(variant?.displayName || "");
+    const params = Array.isArray(variant?.params) ? variant.params : [];
+    const effortParam = params.find((param) => param?.id === "effort" && param?.value != null);
+
+    if (effortParam) {
+      const level = String(effortParam.value);
+      if (!supports.thinkingLevels) {
+        supports.thinkingLevels = [];
+        supports.thinkingParamId = "effort";
+      }
+      if (!supports.thinkingLevels.includes(level)) {
+        supports.thinkingLevels.push(level);
+      }
+    }
+
+    // Prefer an explicit fast=true axis. Never copy effort into fastParams when
+    // the variant is named "Low Fast" / "Fast" — bundling effort=low with Fast
+    // makes selecting Low look like Fast and bills as *-low-fast.
+    if (!supports.supportsFast && /fast/i.test(displayName)) {
+      const explicitFast = params
+        .filter((param) => isExplicitFastParam(param))
+        .map((param) => ({ id: param.id, value: String(param.value) }));
+      if (explicitFast.length > 0) {
+        supports.supportsFast = true;
+        supports.fastParams = explicitFast;
+      } else if (effortParam && String(effortParam.value) === "low") {
+        // Tentative: Fast variant is literally effort=low (older Cursor catalogs).
+        // Dropped below when "low" is already a normal effort choice.
+        supports.supportsFast = true;
+        supports.fastParams = [{ id: "effort", value: "low" }];
+      }
+    }
+  }
+
+  if (supports.thinkingLevels && supports.thinkingLevels.length === 0) {
+    supports.thinkingLevels = null;
+    supports.thinkingParamId = null;
+  }
+
+  // If Fast is only an alias for effort=low and Low is already selectable,
+  // hide the Fast toggle — otherwise picking Low auto-enables Fast.
+  if (
+    supports.supportsFast
+    && isEffortOnlyFastParams(supports.fastParams, supports.thinkingParamId || "effort")
+    && supports.thinkingLevels?.includes("low")
+  ) {
+    supports.supportsFast = false;
+    supports.fastParams = null;
+  }
+
+  if (supports.supportsFast && (!supports.fastParams || supports.fastParams.length === 0)) {
+    supports.supportsFast = false;
+    supports.fastParams = null;
+  }
+
+  return supports;
+}
+
 function mapCursorModels(models) {
   const out = [];
   if (!Array.isArray(models)) return out;
@@ -510,10 +638,15 @@ function mapCursorModels(models) {
     if (!model?.id || seen.has(model.id)) continue;
     seen.add(model.id);
     const name = model.displayName || model.name || model.id;
+    const controls = extractCursorModelControls(model);
     out.push({
       id: model.id,
       name,
       ...(model.description ? { description: model.description } : {}),
+      ...(controls.supportsFast ? { supportsFast: true, fastParams: controls.fastParams } : {}),
+      ...(controls.thinkingLevels
+        ? { thinkingLevels: controls.thinkingLevels, thinkingParamId: controls.thinkingParamId }
+        : {}),
     });
   }
   return out;

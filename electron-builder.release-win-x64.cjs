@@ -1,6 +1,9 @@
 /**
- * Temporary electron-builder config for fork release (Windows x64 only).
- * Disables npmRebuild to avoid MSVC Spectre-mitigated libs requirement on this machine.
+ * Fast fork release config for Windows x64.
+ * NSIS installer only (app update uses exe + blockmap + latest.yml).
+ * Disables npmRebuild to avoid MSVC Spectre-mitigated libs on this machine.
+ *
+ * For portable + zip as well, use electron-builder.release-win-x64-full.cjs.
  */
 const base = require('./electron-builder.config.cjs');
 
@@ -11,8 +14,6 @@ module.exports = {
     ...base.win,
     target: [
       { target: 'nsis', arch: ['x64'] },
-      { target: 'portable', arch: ['x64'] },
-      { target: 'zip', arch: ['x64'] },
     ],
   },
 };

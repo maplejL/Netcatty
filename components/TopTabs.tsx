@@ -7,6 +7,11 @@ import { buildWorkspaceActivityMap } from '../application/state/sessionActivity'
 import { collectSessionIds } from '../domain/workspace';
 import { resolveSessionTabTitle } from '../domain/sessionTabTitle';
 import type { DynamicTabTitleMode } from '../domain/models';
+import {
+  DEFAULT_WORK_TABS_LOCATION,
+  isSideWorkTabsLocation,
+  type WorkTabsLocation,
+} from '../domain/workTabsLocation';
 import { useSessionActivityMap } from '../application/state/sessionActivityStore';
 import { getTopTabInsertionTarget, getWorkspaceSessionDragId, hasWorkspaceSessionDrag } from '../application/state/terminalDragData';
 import {
@@ -147,6 +152,9 @@ interface TopTabsProps {
   ) => void;
   showSftpTab: boolean;
   showHostTreeSidebar: boolean;
+  workTabsLocation?: WorkTabsLocation;
+  /** When false, chrome utilities live in AppWindowChrome above the side rail. */
+  showEmbeddedChrome?: boolean;
   dynamicTabTitleMode?: DynamicTabTitleMode;
   editorTabs: readonly EditorTab[];
   onRequestCloseEditorTab: (editorTabId: string) => void;
@@ -183,12 +191,15 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   onRemoveSessionFromWorkspace,
   showSftpTab,
   showHostTreeSidebar,
+  workTabsLocation = DEFAULT_WORK_TABS_LOCATION,
+  showEmbeddedChrome = true,
   dynamicTabTitleMode,
   editorTabs,
   onRequestCloseEditorTab,
   hostById,
 }) => {
   const { t } = useI18n();
+  const isSideTabs = isSideWorkTabsLocation(workTabsLocation);
   const { maximize, isFullscreen, onFullscreenChanged } = useWindowControls();
   const sessionActivityMap = useSessionActivityMap();
   const isHostTreeOpen = useTerminalHostTreeOpen();
@@ -238,12 +249,19 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   const updateScrollState = useCallback(() => {
     const container = tabsContainerRef.current;
     if (container) {
-      const hasScroll = container.scrollWidth > container.clientWidth;
-      setHasOverflow(hasScroll);
-      setCanScrollLeft(container.scrollLeft > 0);
-      setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 1);
+      if (isSideTabs) {
+        const hasScroll = container.scrollHeight > container.clientHeight;
+        setHasOverflow(hasScroll);
+        setCanScrollLeft(container.scrollTop > 0);
+        setCanScrollRight(container.scrollTop < container.scrollHeight - container.clientHeight - 1);
+      } else {
+        const hasScroll = container.scrollWidth > container.clientWidth;
+        setHasOverflow(hasScroll);
+        setCanScrollLeft(container.scrollLeft > 0);
+        setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 1);
+      }
     }
-  }, []);
+  }, [isSideTabs]);
 
   // Update scroll state on mount and resize
   useEffect(() => {
@@ -253,8 +271,9 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       // Translate vertical wheel to horizontal scroll so users can reach
       // off-screen tabs with a standard mouse wheel. Trackpad gestures that
       // already carry horizontal delta are left alone so native two-finger
-      // swiping still works.
+      // swiping still works. Side rails use native vertical scroll.
       const handleWheel = (e: WheelEvent) => {
+        if (isSideTabs) return;
         if (e.deltaY !== 0 && e.deltaX === 0) {
           e.preventDefault();
           container.scrollLeft += e.deltaY;
@@ -270,7 +289,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         resizeObserver.disconnect();
       };
     }
-  }, [updateScrollState, orderedTabs]);
+  }, [updateScrollState, orderedTabs, isSideTabs]);
 
   // Pre-compute lookup maps for O(1) access instead of O(n) find operations
   const orphanSessionMap = useMemo(() => {
@@ -857,7 +876,15 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
     <div
       data-top-tabs-root
       data-section="top-tabs"
-      className="relative w-full bg-secondary app-drag"
+      data-work-tabs-location={workTabsLocation}
+      className={cn(
+        'relative bg-secondary app-drag',
+        isSideTabs
+          ? 'h-full w-[200px] min-w-[160px] max-w-[280px] flex-shrink-0 border-border/60'
+          : 'w-full',
+        workTabsLocation === 'left' && 'border-r',
+        workTabsLocation === 'right' && 'border-l',
+      )}
       style={{
         ...dragRegionNoSelect,
         backgroundColor: 'var(--top-tabs-bg, hsl(var(--secondary)))',
@@ -868,24 +895,40 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       <ActiveTabAutoScroller
         tabsContainerRef={tabsContainerRef}
         updateScrollState={updateScrollState}
+        orientation={isSideTabs ? 'vertical' : 'horizontal'}
       />
       {/* Always-on drag stripe so the window can be moved even when tabs fill the bar */}
-      <div className="absolute inset-x-0 top-0 h-1 app-drag pointer-events-auto z-10" style={dragRegionStyle} aria-hidden />
+      {!isSideTabs && (
+        <div className="absolute inset-x-0 top-0 h-1 app-drag pointer-events-auto z-10" style={dragRegionStyle} aria-hidden />
+      )}
       <div
-        className="h-9 flex items-end gap-0 app-drag overflow-visible"
+        className={cn(
+          'app-drag overflow-visible',
+          isSideTabs ? 'h-full flex flex-col gap-1 px-1.5 py-2' : 'h-9 flex items-end gap-0',
+        )}
         style={{
           ...dragRegionStyle,
-          paddingLeft: isMacClient && !isWindowFullscreen ? 76 : 12,
-          paddingRight: showWindowControls ? 0 : 12,
+          ...(isSideTabs
+            ? {}
+            : {
+                paddingLeft: isMacClient && !isWindowFullscreen ? 76 : 12,
+                paddingRight: showWindowControls && showEmbeddedChrome ? 0 : 12,
+              }),
         }}
       >
         {/* Fixed left tabs: Vaults and SFTP */}
-        <div ref={fixedLeftTabsRef} className="flex items-end gap-0 flex-shrink-0 app-drag">
+        <div
+          ref={fixedLeftTabsRef}
+          className={cn(
+            'flex-shrink-0 app-drag',
+            isSideTabs ? 'flex flex-col gap-0.5 w-full' : 'flex items-end gap-0',
+          )}
+        >
           <RootTopTab
             tabId="vault"
             label="Vaults"
             icon={<FolderLock size={14} />}
-            className="rounded"
+            className={cn('rounded', isSideTabs && 'w-full max-w-none min-w-0 rounded-md')}
             compact={rootTabsCompact}
           />
           {showSftpTab && (
@@ -893,7 +936,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
               tabId="sftp"
               label="SFTP"
               icon={<Folder size={14} />}
-              className="rounded-t-md"
+              className={cn(isSideTabs ? 'w-full max-w-none min-w-0 rounded-md' : 'rounded-t-md')}
               compact={rootTabsCompact}
             />
           )}
@@ -901,7 +944,10 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
 
         {/* Scrollable tabs container with fade masks */}
         <div
-          className="relative min-w-0 flex-1 flex app-drag"
+          className={cn(
+            'relative min-w-0 flex-1 flex app-drag',
+            isSideTabs && 'min-h-0 flex-col',
+          )}
           style={dragRegionStyle}
           // Add container-level drag handlers to prevent indicator loss
           onDragOver={(e) => {
@@ -921,7 +967,10 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
           {hasHostTreeToggleSurface && (
             <div
               ref={hostTreeToggleSlotRef}
-              className="top-tab-host-tree-toggle-slot mb-0 flex-shrink-0 self-end app-no-drag"
+              className={cn(
+                'top-tab-host-tree-toggle-slot flex-shrink-0 app-no-drag',
+                isSideTabs ? 'self-start' : 'mb-0 self-end',
+              )}
               data-section="top-tabs-host-tree-toggle"
               data-visible={effectiveShowHostTreeToggle ? 'true' : 'false'}
               style={noDragRegionStyle}
@@ -955,7 +1004,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
               </Tooltip>
             </div>
           )}
-          {hasHostTreeToggleSurface && (
+          {hasHostTreeToggleSurface && !isSideTabs && (
             <div
               className={cn(
                 'top-tab-host-tree-gutter flex-shrink-0',
@@ -966,19 +1015,37 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
             />
           )}
 
-          <div className="relative min-w-0 flex-1 flex app-drag" style={dragRegionStyle}>
-            {/* Left fade mask */}
+          <div
+            className={cn(
+              'relative min-w-0 flex-1 flex app-drag',
+              isSideTabs && 'min-h-0 flex-col',
+            )}
+            style={dragRegionStyle}
+          >
+            {/* Edge fade masks */}
             {canScrollLeft && (
               <div
-                className="absolute left-0 top-0 bottom-0 w-8 pointer-events-none z-10"
-                style={{ background: 'linear-gradient(to right, var(--top-tabs-bg, hsl(var(--secondary))), transparent)' }}
+                className={cn(
+                  'absolute pointer-events-none z-10',
+                  isSideTabs ? 'left-0 right-0 top-0 h-6' : 'left-0 top-0 bottom-0 w-8',
+                )}
+                style={{
+                  background: isSideTabs
+                    ? 'linear-gradient(to bottom, var(--top-tabs-bg, hsl(var(--secondary))), transparent)'
+                    : 'linear-gradient(to right, var(--top-tabs-bg, hsl(var(--secondary))), transparent)',
+                }}
               />
             )}
 
             {/* Scrollable container */}
             <div
               ref={tabsContainerRef}
-              className="flex items-end gap-0 overflow-x-auto scrollbar-none app-drag max-w-full"
+              className={cn(
+                'app-drag scrollbar-none',
+                isSideTabs
+                  ? 'flex flex-col gap-0.5 overflow-y-auto overflow-x-hidden max-h-full w-full'
+                  : 'flex items-end gap-0 overflow-x-auto max-w-full',
+              )}
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onClick={handleScrollableTabClick}
               onDragOver={(e) => {
@@ -998,7 +1065,10 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
                       variant="ghost"
                       size="icon"
                       data-section="top-tabs-quick-switcher-toggle"
-                      className="h-7 w-7 flex-shrink-0 app-no-drag mb-0 rounded-none"
+                      className={cn(
+                        'h-7 w-7 flex-shrink-0 app-no-drag rounded-none',
+                        isSideTabs ? 'self-start' : 'mb-0',
+                      )}
                       style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
                       onClick={onOpenQuickSwitcher}
                     >
@@ -1009,14 +1079,22 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
                 </Tooltip>
               )}
               {/* Draggable spacer - fixed width handle at the end */}
-              <div className="min-w-[20px] h-7 app-drag flex-shrink-0" style={dragRegionStyle} />
+              {!isSideTabs && (
+                <div className="min-w-[20px] h-7 app-drag flex-shrink-0" style={dragRegionStyle} />
+              )}
             </div>
 
-            {/* Right fade mask */}
             {canScrollRight && (
               <div
-                className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none z-10"
-                style={{ background: 'linear-gradient(to left, var(--top-tabs-bg, hsl(var(--secondary))), transparent)' }}
+                className={cn(
+                  'absolute pointer-events-none z-10',
+                  isSideTabs ? 'left-0 right-0 bottom-0 h-6' : 'right-0 top-0 bottom-0 w-8',
+                )}
+                style={{
+                  background: isSideTabs
+                    ? 'linear-gradient(to top, var(--top-tabs-bg, hsl(var(--secondary))), transparent)'
+                    : 'linear-gradient(to left, var(--top-tabs-bg, hsl(var(--secondary))), transparent)',
+                }}
               />
             )}
           </div>
@@ -1030,7 +1108,10 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 flex-shrink-0 app-no-drag self-end rounded-none"
+                className={cn(
+                  'h-7 w-7 flex-shrink-0 app-no-drag rounded-none',
+                  isSideTabs ? 'self-start' : 'self-end',
+                )}
                 style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
                 onClick={onOpenQuickSwitcher}
               >
@@ -1042,68 +1123,73 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         )}
 
         {/* Fixed right controls — utility icons + window controls share one h-7 row */}
-        <div
-          className="flex-shrink-0 flex items-center gap-0.5 app-drag self-end h-7 overflow-visible"
-          style={dragRegionStyle}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
-                style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-                onClick={() => window.dispatchEvent(new CustomEvent('netcatty:toggle-ai-panel'))}
-              >
-                <Sparkles size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('topTabs.aiAssistant')}</TooltipContent>
-          </Tooltip>
-          <WindowOpacityButton
-            windowOpacity={windowOpacity}
-            setWindowOpacity={setWindowOpacity}
-            className="h-7 w-7 shrink-0 top-tab-utility-btn"
-            style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-          />
-          <SyncStatusButton
-            onOpenSettings={onOpenSettings}
-            onSyncNow={onSyncNow}
-            className="h-7 w-7 shrink-0 top-tab-utility-btn"
-            style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
-                style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-                onClick={onToggleTheme}
-              >
-                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('topTabs.toggleTheme')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
-                style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-                onClick={onOpenSettings}
-              >
-                <Settings size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('topTabs.openSettings')}</TooltipContent>
-          </Tooltip>
-          {showWindowControls && <WindowControls />}
-        </div>
+        {showEmbeddedChrome && (
+          <div
+            className={cn(
+              'flex-shrink-0 flex items-center gap-0.5 app-drag overflow-visible',
+              isSideTabs ? 'flex-wrap w-full justify-start pt-1' : 'self-end h-7',
+            )}
+            style={dragRegionStyle}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
+                  style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+                  onClick={() => window.dispatchEvent(new CustomEvent('netcatty:toggle-ai-panel'))}
+                >
+                  <Sparkles size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('topTabs.aiAssistant')}</TooltipContent>
+            </Tooltip>
+            <WindowOpacityButton
+              windowOpacity={windowOpacity}
+              setWindowOpacity={setWindowOpacity}
+              className="h-7 w-7 shrink-0 top-tab-utility-btn"
+              style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+            />
+            <SyncStatusButton
+              onOpenSettings={onOpenSettings}
+              onSyncNow={onSyncNow}
+              className="h-7 w-7 shrink-0 top-tab-utility-btn"
+              style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
+                  style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+                  onClick={onToggleTheme}
+                >
+                  {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('topTabs.toggleTheme')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
+                  style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+                  onClick={onOpenSettings}
+                >
+                  <Settings size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('topTabs.openSettings')}</TooltipContent>
+            </Tooltip>
+            {showWindowControls && <WindowControls />}
+          </div>
+        )}
         {/* Small drag shim to the right edge (macOS only – on Windows the close button should touch the edge) */}
-        {isMacClient && !showWindowControls && (
+        {showEmbeddedChrome && isMacClient && !showWindowControls && !isSideTabs && (
           <div className="w-2 h-9 app-drag flex-shrink-0 self-end" />
         )}
       </div>
@@ -1132,6 +1218,8 @@ const topTabsAreEqual = (prev: TopTabsProps, next: TopTabsProps): boolean => {
     prev.onToggleTheme === next.onToggleTheme &&
     prev.showSftpTab === next.showSftpTab &&
     prev.showHostTreeSidebar === next.showHostTreeSidebar &&
+    prev.workTabsLocation === next.workTabsLocation &&
+    prev.showEmbeddedChrome === next.showEmbeddedChrome &&
     prev.dynamicTabTitleMode === next.dynamicTabTitleMode
   );
 };

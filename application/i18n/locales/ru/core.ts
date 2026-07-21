@@ -261,6 +261,11 @@ export const ruCoreMessages: Messages = {
   'settings.vault.showSftpTabDesc': 'Показывать отдельный SFTP-вид в верхней панели вкладок. Если скрыто, используйте боковую панель SFTP внутри сессии.',
   'settings.vault.showHostTreeSidebar': 'Показывать боковую панель хостов',
   'settings.vault.showHostTreeSidebarDesc': 'Показывать список хостов и кнопку в верхней панели для вкладок терминала и редактора.',
+  'settings.appearance.workTabsLocation': 'Расположение рабочих вкладок',
+  'settings.appearance.workTabsLocationDesc': 'Разместить вкладки сессий и рабочих областей сверху, слева или справа. Боковые вкладки показывают полные заголовки при многих сессиях.',
+  'settings.appearance.workTabsLocation.top': 'Сверху',
+  'settings.appearance.workTabsLocation.left': 'Слева',
+  'settings.appearance.workTabsLocation.right': 'Справа',
 
   // Update notifications
   'update.available.title': 'Доступно обновление',

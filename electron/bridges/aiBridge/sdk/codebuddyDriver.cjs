@@ -55,6 +55,26 @@ function parseCodebuddyThinking(value) {
   return undefined;
 }
 
+/** Thinking levels the renderer may slash-encode onto the model id. */
+const CODEBUDDY_SLASH_THINKING = new Set(["disabled", "adaptive", "enabled"]);
+
+/**
+ * Split "glm-5.1/adaptive" → { model, thinking } for SDK options.
+ * Only strips known thinking suffixes so provider/model ids with "/" stay intact.
+ */
+function splitCodebuddyModelSelection(model) {
+  const raw = String(model || "").trim();
+  if (!raw) return { model: undefined, thinking: undefined };
+  const slash = raw.lastIndexOf("/");
+  if (slash <= 0) return { model: raw, thinking: undefined };
+  const suffix = raw.slice(slash + 1).toLowerCase();
+  if (!CODEBUDDY_SLASH_THINKING.has(suffix)) return { model: raw, thinking: undefined };
+  return {
+    model: raw.slice(0, slash),
+    thinking: parseCodebuddyThinking(suffix),
+  };
+}
+
 /**
  * Serialize thinking config to env pairs for storage/display.
  */
@@ -125,14 +145,17 @@ function buildCodebuddyQueryOptions({
     settingSources: [],
     env,
   };
-  if (model) options.model = model;
+  const split = splitCodebuddyModelSelection(model);
+  if (split.model) options.model = split.model;
   if (abortController) options.abortController = abortController;
   // Resume prior session for multi-turn context continuity.
   if (resume) options.resume = resume;
   // CLI executable path (auto-discovery if omitted).
   if (pathToCodebuddyCode) options.pathToCodebuddyCode = pathToCodebuddyCode;
-  // Thinking mode from env marker or explicit param.
-  const thinkingConfig = thinking || parseCodebuddyThinking(env?.NETCATTY_CODEBUDDY_THINKING);
+  // Thinking: explicit arg > slash-encoded model id > env marker.
+  const thinkingConfig = thinking
+    || split.thinking
+    || parseCodebuddyThinking(env?.NETCATTY_CODEBUDDY_THINKING);
   if (thinkingConfig) {
     options.thinking = thinkingConfig;
     if (thinkingConfig.type === "enabled" && thinkingConfig.budgetTokens) {
@@ -478,6 +501,11 @@ function mapCodebuddyModels(models) {
         id,
         name: m.name || m.displayName || id,
         description: m.description,
+        // Same controls as curated CODEBUDDY_MODEL_PRESETS so runtime lists
+        // keep Fast + thinking chips in the chat input.
+        thinkingLevels: ["adaptive", "enabled"],
+        supportsFast: true,
+        fastEffort: "disabled",
       };
     })
     .filter(Boolean);
@@ -528,6 +556,7 @@ module.exports = {
   buildCodebuddyPromptInput,
   buildCodebuddyThinkingEnv,
   parseCodebuddyThinking,
+  splitCodebuddyModelSelection,
   toSdkMcpServers,
   runCodebuddyTurn,
   listCodebuddyModels,

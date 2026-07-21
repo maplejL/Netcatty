@@ -438,9 +438,27 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   description?: string;
-  /** Codex thinking levels (model ID sent as `id/thinking`) */
+  /** Slash-encoded thinking levels (model ID sent as `id/level`) */
   thinkingLevels?: string[];
+  /**
+   * When set (Cursor effort param), thinking is encoded as `id?param=level`
+   * instead of slash-style `id/level`.
+   */
+  thinkingParamId?: string;
+  /** Fast mode toggle availability */
+  supportsFast?: boolean;
+  /** Cursor-style query params when Fast is enabled (e.g. fast=true) */
+  fastParams?: Array<{ id: string; value: string }>;
+  /**
+   * Slash-style Fast (Codex / CodeBuddy): selecting Fast stores `id/<fastEffort>`.
+   * Prefer a value NOT listed in thinkingLevels (e.g. Codex `minimal`) so Fast
+   * stays independent from the Low effort chip.
+   */
+  fastEffort?: string;
 }
+
+/** CodeBuddy / WorkBuddy thinking modes (slash-encoded on the model id). */
+export const CODEBUDDY_THINKING_LEVELS = ['disabled', 'adaptive', 'enabled'] as const;
 
 export const CLAUDE_MODEL_PRESETS: AgentModelPreset[] = [
   { id: 'default', name: 'Opus 4.6', description: 'Recommended' },
@@ -451,13 +469,34 @@ export const CLAUDE_MODEL_PRESETS: AgentModelPreset[] = [
 // Curated codex model list (codex-sdk has no enumeration API). Mirrors the
 // craft agent's `openai-codex` set. The codex driver splits "<id>/<effort>"
 // into model + modelReasoningEffort, so thinkingLevels work via codex-sdk.
+// Fast maps to `minimal` (not `low`) so it stays independent of the Low chip.
+const CODEX_GPT_CONTROLS = {
+  thinkingLevels: ['low', 'medium', 'high', 'xhigh'] as string[],
+  supportsFast: true,
+  fastEffort: 'minimal',
+};
+
 export const CODEX_MODEL_PRESETS: AgentModelPreset[] = [
-  { id: 'gpt-5.5', name: 'GPT-5.5', description: 'Latest', thinkingLevels: ['low', 'medium', 'high', 'xhigh'] },
-  { id: 'gpt-5.2', name: 'GPT-5.2', thinkingLevels: ['low', 'medium', 'high', 'xhigh'] },
-  { id: 'gpt-5.1', name: 'GPT-5.1', thinkingLevels: ['low', 'medium', 'high', 'xhigh'] },
-  { id: 'gpt-5', name: 'GPT-5', thinkingLevels: ['low', 'medium', 'high', 'xhigh'] },
-  { id: 'o4-mini', name: 'o4-mini', description: 'Fast reasoning' },
-  { id: 'o3', name: 'o3', description: 'Reasoning' },
+  { id: 'gpt-5.5', name: 'GPT-5.5', description: 'Latest', ...CODEX_GPT_CONTROLS },
+  { id: 'gpt-5.2', name: 'GPT-5.2', ...CODEX_GPT_CONTROLS },
+  { id: 'gpt-5.1', name: 'GPT-5.1', ...CODEX_GPT_CONTROLS },
+  { id: 'gpt-5', name: 'GPT-5', ...CODEX_GPT_CONTROLS },
+  {
+    id: 'o4-mini',
+    name: 'o4-mini',
+    description: 'Fast reasoning',
+    thinkingLevels: ['low', 'medium', 'high'],
+    supportsFast: true,
+    fastEffort: 'minimal',
+  },
+  {
+    id: 'o3',
+    name: 'o3',
+    description: 'Reasoning',
+    thinkingLevels: ['low', 'medium', 'high'],
+    supportsFast: true,
+    fastEffort: 'minimal',
+  },
   { id: 'gpt-4o', name: 'GPT-4o' },
 ];
 
@@ -465,31 +504,88 @@ export const CODEX_MODEL_PRESETS: AgentModelPreset[] = [
 // IDs must match Cursor SDK model ids (dots, not hyphens in the minor segment
 // for Claude aliases vary by account — runtime list is authoritative).
 export const CURSOR_MODEL_PRESETS: AgentModelPreset[] = [
-  { id: 'composer-2.5', name: 'Composer 2.5', description: 'Recommended' },
+  { id: 'composer-2.5', name: 'Composer 2.5', description: 'Recommended', supportsFast: true, fastParams: [{ id: 'fast', value: 'true' }] },
   { id: 'auto', name: 'Auto', description: 'Cursor selects a model' },
-  { id: 'gpt-5.5', name: 'GPT-5.5' },
-  { id: 'gpt-5.2', name: 'GPT-5.2' },
-  { id: 'gpt-5.1', name: 'GPT-5.1' },
+  {
+    id: 'gpt-5.5',
+    name: 'GPT-5.5',
+    supportsFast: true,
+    fastParams: [{ id: 'fast', value: 'true' }],
+    thinkingLevels: ['low', 'medium', 'high', 'xhigh'],
+    thinkingParamId: 'effort',
+  },
+  {
+    id: 'gpt-5.2',
+    name: 'GPT-5.2',
+    supportsFast: true,
+    fastParams: [{ id: 'fast', value: 'true' }],
+    thinkingLevels: ['low', 'medium', 'high', 'xhigh'],
+    thinkingParamId: 'effort',
+  },
+  {
+    id: 'gpt-5.1',
+    name: 'GPT-5.1',
+    supportsFast: true,
+    fastParams: [{ id: 'fast', value: 'true' }],
+    thinkingLevels: ['low', 'medium', 'high', 'xhigh'],
+    thinkingParamId: 'effort',
+  },
   { id: 'claude-opus-4.6', name: 'Claude Opus 4.6' },
   { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6' },
 ];
 
 // CodeBuddy's SDK model enumeration can be empty depending on CLI/account
 // state; keep a CLI-supported fallback list so users can still pass --model.
+// Thinking is slash-encoded (`id/adaptive`); Fast maps to thinking disabled
+// and is kept OUT of thinkingLevels so the Off chip does not light Fast.
+const CODEBUDDY_MODEL_CONTROLS = {
+  thinkingLevels: ['adaptive', 'enabled'] as string[],
+  supportsFast: true,
+  fastEffort: 'disabled',
+};
+
 export const CODEBUDDY_MODEL_PRESETS: AgentModelPreset[] = [
-  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
-  { id: 'deepseek-v3-2-volc', name: 'DeepSeek V3.2' },
-  { id: 'glm-5.1', name: 'GLM 5.1' },
-  { id: 'glm-5.0', name: 'GLM 5.0' },
-  { id: 'glm-5.0-turbo', name: 'GLM 5.0 Turbo' },
-  { id: 'glm-5v-turbo', name: 'GLM 5V Turbo' },
-  { id: 'glm-4.7', name: 'GLM 4.7' },
-  { id: 'minimax-m3-pay', name: 'MiniMax M3' },
-  { id: 'minimax-m2.7', name: 'MiniMax M2.7' },
-  { id: 'kimi-k2.6', name: 'Kimi K2.6' },
-  { id: 'hy3-preview', name: 'Hy3 Preview' },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'deepseek-v3-2-volc', name: 'DeepSeek V3.2', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'glm-5.1', name: 'GLM 5.1', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'glm-5.0', name: 'GLM 5.0', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'glm-5.0-turbo', name: 'GLM 5.0 Turbo', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'glm-5v-turbo', name: 'GLM 5V Turbo', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'glm-4.7', name: 'GLM 4.7', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'minimax-m3-pay', name: 'MiniMax M3', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'minimax-m2.7', name: 'MiniMax M2.7', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'kimi-k2.6', name: 'Kimi K2.6', ...CODEBUDDY_MODEL_CONTROLS },
+  { id: 'hy3-preview', name: 'Hy3 Preview', ...CODEBUDDY_MODEL_CONTROLS },
 ];
+
+/** Encode slash-style model + Fast/effort (Codex, CodeBuddy). */
+export function resolveSlashModelSelection(
+  baseId: string,
+  options: {
+    effort?: string | null;
+    fast?: boolean;
+    fastEffort?: string | null;
+    thinkingLevels?: readonly string[] | null;
+  },
+): string {
+  const id = String(baseId || '').trim();
+  if (!id) return '';
+  let effort = options.effort ?? null;
+  if (options.fast && options.fastEffort) {
+    effort = options.fastEffort;
+  }
+  if (
+    effort
+    && (
+      options.thinkingLevels?.includes(effort)
+      || effort === options.fastEffort
+    )
+  ) {
+    return `${id}/${effort}`;
+  }
+  return id;
+}
 
 export const OPENCODE_MODEL_PRESETS: AgentModelPreset[] = [
   { id: 'openai/gpt-5.1', name: 'OpenAI GPT-5.1' },
@@ -533,5 +629,9 @@ export function formatThinkingLabel(level: string): string {
   const value = String(level ?? '').trim();
   if (!value) return '';
   if (value === 'xhigh') return 'Extra High';
+  if (value === 'minimal') return 'Minimal';
+  if (value === 'disabled') return 'Off';
+  if (value === 'adaptive') return 'Adaptive';
+  if (value === 'enabled') return 'On';
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

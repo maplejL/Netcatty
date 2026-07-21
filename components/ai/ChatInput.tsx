@@ -21,8 +21,14 @@ import {
   PromptInputTools,
 } from '../ai-elements/prompt-input';
 import type { PromptInputStatus } from '../ai-elements/prompt-input';
-import { formatThinkingLabel } from '../../infrastructure/ai/types';
+import { formatThinkingLabel, resolveSlashModelSelection } from '../../infrastructure/ai/types';
 import type { AgentModelPreset, AIPermissionMode, ProviderConfig, UploadedFile } from '../../infrastructure/ai/types';
+import {
+  isEffortOnlyFast,
+  parseCursorModelId,
+  resolveCursorModelSelection,
+} from '../../infrastructure/ai/cursorModelSelection';
+import { modelPresetMatchesId } from '../AIChatSidePanelHelpers';
 import { ProviderIconBadge } from '../settings/tabs/ai/ProviderIconBadge';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
@@ -136,7 +142,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const hasTerminalSelectionAttachment = files.some((file) => file.terminalSelection);
   const [expanded, setExpanded] = useState(false);
   // Consolidate menu state into a single discriminated union to prevent multiple menus open simultaneously
-  type ActiveMenu = 'model' | 'attach' | 'atMention' | 'slashCommand' | 'perm' | null;
+  type ActiveMenu = 'model' | 'attach' | 'atMention' | 'slashCommand' | 'perm' | 'effort' | null;
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; bottom: number } | null>(null);
   const [inputPanelPos, setInputPanelPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
@@ -152,6 +158,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const showAtMention = activeMenu === 'atMention';
   const showSlashCommandPicker = activeMenu === 'slashCommand';
   const showPermPicker = activeMenu === 'perm';
+  const showEffortPicker = activeMenu === 'effort';
 
   const closeAllMenus = useCallback(() => {
     setActiveMenu(null);
@@ -164,6 +171,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputShellRef = useRef<HTMLDivElement>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
+  const effortBtnRef = useRef<HTMLButtonElement>(null);
   const permBtnRef = useRef<HTMLButtonElement>(null);
   const attachBtnRef = useRef<HTMLButtonElement>(null);
   const slashPickerListRef = useRef<HTMLDivElement>(null);
@@ -477,26 +485,138 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // Permission mode chip removed — agents run in auto mode
 
-  // selectedModelId may be "<modelId>/<thinkingLevel>" for codex ChatGPT models
-  // (e.g. "gpt-5.4/high"). Note: custom config.toml / OpenRouter model ids
-  // themselves can contain '/' (e.g. "qwen/qwen3.6-plus"), so don't just
-  // split on the first '/'. Match against the full id first; only treat the
-  // trailing segment as a thinking level when we find a preset whose
-  // declared thinkingLevels make the combined form equal to selectedModelId.
-  const { selectedPreset, selectedThinking } = (() => {
-    if (!selectedModelId) return { selectedPreset: undefined, selectedThinking: undefined };
-    const direct = modelPresets.find(m => m.id === selectedModelId);
-    if (direct) return { selectedPreset: direct, selectedThinking: undefined };
-    const viaThinking = modelPresets.find(
-      m => m.thinkingLevels?.some(level => `${m.id}/${level}` === selectedModelId),
-    );
+  // selectedModelId may be:
+  //   - Codex: "<modelId>/<thinkingLevel>" (e.g. "gpt-5.4/high")
+  //   - Cursor: "<modelId>?effort=high" / "?fast=true"
+  // Custom config.toml / OpenRouter model ids themselves can contain '/'
+  // (e.g. "qwen/qwen3.6-plus"), so don't just split on the first '/'.
+  const { selectedPreset, selectedThinking, selectedFast } = (() => {
+    if (!selectedModelId) {
+      return { selectedPreset: undefined, selectedThinking: undefined, selectedFast: false };
+    }
+    const direct = modelPresets.find((m) => m.id === selectedModelId);
+    if (direct) {
+      return { selectedPreset: direct, selectedThinking: undefined, selectedFast: false };
+    }
+
+    const cursor = parseCursorModelId(selectedModelId);
+    if (cursor.baseId && selectedModelId.includes("?")) {
+      const preset = modelPresets.find((m) => m.id === cursor.baseId);
+      if (preset) {
+        const effortOnlyFast = isEffortOnlyFast(
+          preset.fastParams,
+          preset.thinkingParamId || "effort",
+          preset.thinkingLevels,
+        );
+        const fast = Boolean(
+          preset.supportsFast && (
+            cursor.params.some((p) => p.id === "fast" && (p.value === "true" || p.value === "1"))
+            || (effortOnlyFast && cursor.effort === "low")
+          ),
+        );
+        return {
+          selectedPreset: preset,
+          selectedThinking: cursor.effort,
+          selectedFast: fast,
+        };
+      }
+    }
+
+    const viaThinking = modelPresets.find((m) => (
+      m.thinkingLevels?.some((level) => `${m.id}/${level}` === selectedModelId)
+      || (m.fastEffort != null && `${m.id}/${m.fastEffort}` === selectedModelId)
+    ));
     if (viaThinking) {
       const thinking = selectedModelId.slice(viaThinking.id.length + 1);
-      return { selectedPreset: viaThinking, selectedThinking: thinking };
+      const fast = Boolean(
+        viaThinking.supportsFast
+        && viaThinking.fastEffort
+        && thinking === viaThinking.fastEffort,
+      );
+      return {
+        selectedPreset: viaThinking,
+        selectedThinking: thinking,
+        selectedFast: fast,
+      };
     }
-    return { selectedPreset: undefined, selectedThinking: undefined };
+
+    const matched = modelPresets.find((m) => modelPresetMatchesId(m, selectedModelId));
+    if (matched) {
+      return { selectedPreset: matched, selectedThinking: undefined, selectedFast: false };
+    }
+    return { selectedPreset: undefined, selectedThinking: undefined, selectedFast: false };
   })();
   const selectedBaseModelId = selectedPreset?.id;
+  const canToggleFast = Boolean(
+    selectedPreset?.supportsFast
+    && (
+      (selectedPreset.fastParams?.length ?? 0) > 0
+      || Boolean(selectedPreset.fastEffort)
+    ),
+  );
+  // Effort / thinking chip for Cursor (query) and Codex/CodeBuddy (slash).
+  const canSelectEffort = Boolean(selectedPreset?.thinkingLevels && selectedPreset.thinkingLevels.length > 0);
+
+  const applyModelSelection = useCallback((options: {
+    baseId?: string;
+    fast?: boolean;
+    effort?: string | null;
+  }) => {
+    const preset = options.baseId
+      ? modelPresets.find((m) => m.id === options.baseId) || selectedPreset
+      : selectedPreset;
+    if (!preset || !onModelSelect) return;
+
+    const baseId = options.baseId ?? preset.id;
+    const nextFast = options.fast ?? selectedFast;
+    const nextEffort = options.effort === undefined ? selectedThinking : options.effort;
+
+    // Cursor query encoding when the preset uses fastParams / thinkingParamId.
+    // Slash agents (Codex, CodeBuddy) use fastEffort — never route them here.
+    const usesCursorQueryEncoding = Boolean(
+      preset.thinkingParamId
+      || (preset.fastParams && preset.fastParams.length > 0),
+    );
+
+    if (usesCursorQueryEncoding) {
+      let effort = nextEffort ?? null;
+      let fast = nextFast;
+      if (isEffortOnlyFast(
+        preset.fastParams,
+        preset.thinkingParamId || "effort",
+        preset.thinkingLevels,
+      )) {
+        if (fast && options.fast === true && options.effort === undefined) {
+          effort = "low";
+        } else if (effort && effort !== "low") {
+          fast = false;
+        } else if (!fast && options.fast === false && effort === "low") {
+          effort = null;
+        }
+      }
+      onModelSelect(resolveCursorModelSelection(baseId, {
+        fast,
+        effort,
+        thinkingParamId: preset.thinkingParamId,
+        fastParams: preset.fastParams,
+      }));
+      return;
+    }
+
+    let effort = nextEffort ?? null;
+    if (options.fast === true && preset.fastEffort) {
+      effort = preset.fastEffort;
+    } else if (options.fast === false && effort === preset.fastEffort) {
+      effort = null;
+    }
+    onModelSelect(resolveSlashModelSelection(baseId, {
+      effort,
+      fast: false,
+      fastEffort: preset.fastEffort,
+      thinkingLevels: preset.thinkingLevels,
+    }));
+  }, [modelPresets, onModelSelect, selectedFast, selectedPreset, selectedThinking]);
+
   // Provider switcher mode (Catty Agent): two-column popover, chip carries
   // the provider's icon + name + model name. Falls back to the existing
   // single-list model dropdown for external SDK agents.
@@ -518,13 +638,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const modelLabel = hasProviderSwitcher
     ? providerSwitcherChipLabel
     : (selectedPreset
-        ? selectedPreset.name + (selectedThinking ? ` / ${formatThinkingLabel(selectedThinking)}` : '')
+        ? selectedPreset.name
+          + (selectedFast ? ` · ${t('ai.chat.fast')}` : '')
+          + (selectedThinking ? ` / ${formatThinkingLabel(selectedThinking)}` : '')
         : modelsLoading
           ? 'Refreshing…'
           : modelName || providerName || t('ai.chat.noModel'));
   const modelChipMaxWidth = hasProviderSwitcher
     ? 'max-w-[180px]'
-    : (selectedThinking ? 'max-w-[148px]' : 'max-w-[82px]');
+    : ((selectedThinking || selectedFast) ? 'max-w-[168px]' : 'max-w-[82px]');
   const hasModelPicker = hasProviderSwitcher
     || ((modelPresets.length > 0 || modelsLoading) && !!onModelSelect);
   const popoverMaxWidth = hasProviderSwitcher ? PROVIDER_PICKER_MAX_WIDTH : MODEL_PICKER_MAX_WIDTH;
@@ -833,9 +955,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     const left = Math.max(8, Math.min(rect.left, window.innerWidth - popoverMaxWidth - 8));
                     setMenuPos({ left, bottom: window.innerHeight - rect.top + 6 });
                   }
-                  if (selectedPreset?.thinkingLevels?.length) {
-                    setHoveredModelId(selectedPreset.id);
-                  }
                   setActiveMenu('model');
                 } else {
                   closeAllMenus();
@@ -924,75 +1043,33 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       )}
                       {modelPresets.map(preset => {
                     const isSelected = preset.id === selectedBaseModelId;
-                    const hasThinking = preset.thinkingLevels && preset.thinkingLevels.length > 0;
-                    const showThinkingLevels = hasThinking && hoveredModelId === preset.id;
                     return (
-                      <div
-                        key={preset.id}
-                        onMouseEnter={() => setHoveredModelId(hasThinking ? preset.id : null)}
-                        onFocus={() => { if (hasThinking) setHoveredModelId(preset.id); }}
-                        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHoveredModelId(null); }}
-                      >
+                      <div key={preset.id}>
                         <button
                           type="button"
                           role="option"
                           aria-selected={isSelected}
-                          aria-expanded={hasThinking ? showThinkingLevels : undefined}
                           onClick={() => {
-                            if (!hasThinking) {
-                              onModelSelect?.(preset.id);
-                              closeAllMenus();
-                              return;
-                            }
-                            setHoveredModelId(showThinkingLevels ? null : preset.id);
+                            applyModelSelection({
+                              baseId: preset.id,
+                              fast: false,
+                              effort: null,
+                            });
+                            closeAllMenus();
                           }}
                           className="w-full min-w-0 flex items-center gap-1.5 px-3 py-1.5 text-left text-[12px] hover:bg-muted/30 transition-colors cursor-pointer"
                         >
                           {isSelected ? <Check size={11} className="text-primary shrink-0" /> : <span className="w-[11px] shrink-0" />}
                           <span className="flex-1 min-w-0 truncate text-foreground/85">{preset.name}</span>
-                          {hasThinking && (
-                            <ChevronRight
-                              size={10}
-                              className={`text-muted-foreground/50 shrink-0 transition-transform ${showThinkingLevels ? 'rotate-90' : ''}`}
-                            />
+                          {preset.supportsFast && (
+                            <Zap size={10} className="text-muted-foreground/45 shrink-0" />
+                          )}
+                          {preset.thinkingLevels && preset.thinkingLevels.length > 0 && (
+                            <span className="text-[9px] text-muted-foreground/45 shrink-0">
+                              {preset.thinkingLevels.length}
+                            </span>
                           )}
                         </button>
-                        {/* Inline thinking levels — flyout submenus get clipped by overflow-y-auto above. */}
-                        {showThinkingLevels && (
-                          <div role="listbox" aria-label="Thinking level" className="border-t border-border/30 bg-muted/10 py-0.5">
-                            {preset.thinkingLevels!.map(level => {
-                              const fullId = `${preset.id}/${level}`;
-                              const isLevelSelected = selectedModelId === fullId;
-                              return (
-                                <button
-                                  key={level}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={isLevelSelected}
-                                  tabIndex={0}
-                                  onClick={() => {
-                                    onModelSelect?.(fullId);
-                                    closeAllMenus();
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault();
-                                      onModelSelect?.(fullId);
-                                      closeAllMenus();
-                                    } else if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      closeAllMenus();
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-1.5 pl-7 pr-3 py-1.5 text-left text-[12px] hover:bg-muted/30 transition-colors cursor-pointer whitespace-nowrap"
-                                >
-                                  {isLevelSelected ? <Check size={11} className="text-primary shrink-0" /> : <span className="w-[11px] shrink-0" />}
-                                  <span className="text-foreground/85">{formatThinkingLabel(level)}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
                     );
                       })}
@@ -1001,6 +1078,108 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 </div>
               </>,
               document.body,
+            )}
+            {canToggleFast && onModelSelect && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => applyModelSelection({ fast: !selectedFast })}
+                    className={`${chipClassName} shrink-0 cursor-pointer transition-colors ${
+                      selectedFast
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 hover:bg-amber-500/20'
+                        : 'hover:bg-muted/24'
+                    }`}
+                    aria-label={t('ai.chat.fast')}
+                    aria-pressed={selectedFast}
+                  >
+                    <Zap size={11} className={selectedFast ? 'text-amber-500' : 'text-muted-foreground/64'} />
+                    <span>{t('ai.chat.fast')}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t('ai.chat.fastDesc')}</TooltipContent>
+              </Tooltip>
+            )}
+            {canSelectEffort && onModelSelect && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      ref={effortBtnRef}
+                      type="button"
+                      onClick={() => {
+                        if (!showEffortPicker) {
+                          const rect = effortBtnRef.current?.getBoundingClientRect();
+                          if (rect) {
+                            const left = Math.max(8, Math.min(rect.left, window.innerWidth - 200));
+                            setMenuPos({ left, bottom: window.innerHeight - rect.top + 6 });
+                          }
+                          setActiveMenu('effort');
+                        } else {
+                          closeAllMenus();
+                        }
+                      }}
+                      className={`${chipClassName} shrink-0 cursor-pointer hover:bg-muted/24 transition-colors`}
+                      aria-label={t('ai.chat.effort')}
+                      aria-expanded={showEffortPicker}
+                    >
+                      <span className="truncate max-w-[88px]">
+                        {selectedThinking
+                          ? formatThinkingLabel(selectedThinking)
+                          : t('ai.chat.effort')}
+                      </span>
+                      <ChevronDown size={9} className="text-muted-foreground/50" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('ai.chat.effortDesc')}</TooltipContent>
+                </Tooltip>
+                {showEffortPicker && menuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[999]" onClick={closeAllMenus} />
+                    <div className="fixed inset-0 z-[999] cursor-default" onClick={closeAllMenus} />
+                    <div
+                      role="listbox"
+                      aria-label={t('ai.chat.effort')}
+                      className="fixed z-[1000] min-w-[140px] rounded-lg border border-border/50 bg-popover shadow-lg py-1"
+                      style={{ left: menuPos.left, bottom: menuPos.bottom }}
+                    >
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={!selectedThinking}
+                        onClick={() => {
+                          applyModelSelection({ effort: null });
+                          closeAllMenus();
+                        }}
+                        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[12px] hover:bg-muted/30 transition-colors cursor-pointer"
+                      >
+                        {!selectedThinking ? <Check size={11} className="text-primary shrink-0" /> : <span className="w-[11px] shrink-0" />}
+                        <span className="text-foreground/85">{t('ai.chat.effortDefault')}</span>
+                      </button>
+                      {selectedPreset!.thinkingLevels!.map((level) => {
+                        const isLevelSelected = selectedThinking === level;
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            role="option"
+                            aria-selected={isLevelSelected}
+                            onClick={() => {
+                              applyModelSelection({ effort: level });
+                              closeAllMenus();
+                            }}
+                            className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[12px] hover:bg-muted/30 transition-colors cursor-pointer"
+                          >
+                            {isLevelSelected ? <Check size={11} className="text-primary shrink-0" /> : <span className="w-[11px] shrink-0" />}
+                            <span className="text-foreground/85">{formatThinkingLabel(level)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </>
             )}
             {/* Permission mode chip — only for Catty Agent */}
             {permissionMode && onPermissionModeChange && (

@@ -1,5 +1,6 @@
 import type { AgentModelPreset, ExternalAgentConfig } from '../infrastructure/ai/types';
 import { getExternalAgentSdkBackend } from '../infrastructure/ai/managedAgents';
+import { parseCursorModelId } from '../infrastructure/ai/cursorModelSelection';
 
 export type SdkRuntimeModelCatalog = {
   currentModelId: string | null;
@@ -114,10 +115,36 @@ export function createSdkRuntimeModelCache(options: SdkRuntimeModelCacheOptions 
 export const sdkRuntimeModelCache = createSdkRuntimeModelCache();
 
 export function modelPresetMatchesId(preset: AgentModelPreset, modelId: string): boolean {
-  if (preset.thinkingLevels?.length) {
-    return preset.thinkingLevels.some((level) => `${preset.id}/${level}` === modelId);
+  if (!modelId) return false;
+  if (preset.id === modelId) return true;
+
+  // Cursor query encoding: "gpt-5.5?effort=high" / "composer-2.5?fast=true"
+  const cursor = parseCursorModelId(modelId);
+  if (cursor.baseId && cursor.baseId === preset.id && (cursor.params.length > 0 || modelId.includes("?"))) {
+    return true;
   }
-  return preset.id === modelId;
+
+  if (preset.thinkingLevels?.length) {
+    // Codex / CodeBuddy slash encoding: "gpt-5.5/high" / "glm-5.1/adaptive"
+    if (preset.thinkingLevels.some((level) => `${preset.id}/${level}` === modelId)) {
+      return true;
+    }
+    // Cursor effort via query when thinkingParamId is set
+    if (preset.thinkingParamId && cursor.baseId === preset.id) {
+      return true;
+    }
+  }
+
+  // Slash Fast (e.g. Codex minimal) may sit outside thinkingLevels
+  if (preset.fastEffort && `${preset.id}/${preset.fastEffort}` === modelId) {
+    return true;
+  }
+
+  if (preset.supportsFast && cursor.baseId === preset.id) {
+    return true;
+  }
+
+  return false;
 }
 
 export function modelPresetsContainId(presets: AgentModelPreset[], modelId: string): boolean {

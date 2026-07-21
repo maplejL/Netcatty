@@ -40,6 +40,7 @@ import {
   STORAGE_KEY_UI_THEME_LIGHT,
   STORAGE_KEY_WORKSPACE_FOCUS_STYLE,
   STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR,
+  STORAGE_KEY_WORK_TABS_LOCATION,
   STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN,
   STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN_TAB,
   STORAGE_KEY_WINDOW_OPACITY,
@@ -53,6 +54,7 @@ import {
   migrateIncomingTerminalFontId,
 } from './settingsStateDefaults';
 import { isTerminalSidePanelAutoOpenTab, type TerminalSidePanelAutoOpenTab } from '../../domain/terminalSidePanelAutoOpen';
+import { isWorkTabsLocation, type WorkTabsLocation } from '../../domain/workTabsLocation';
 
 interface UseSettingsIpcSyncParams {
   enabled?: boolean;
@@ -87,6 +89,7 @@ interface UseSettingsIpcSyncParams {
   setSftpDefaultViewMode: Dispatch<SetStateAction<'list' | 'tree'>>;
   setWorkspaceFocusStyleState: Dispatch<SetStateAction<'dim' | 'border'>>;
   setShowHostTreeSidebarState: Dispatch<SetStateAction<boolean>>;
+  setWorkTabsLocationState: Dispatch<SetStateAction<WorkTabsLocation>>;
   setTerminalSidePanelAutoOpenState: Dispatch<SetStateAction<boolean>>;
   setTerminalSidePanelAutoOpenTabState: Dispatch<SetStateAction<TerminalSidePanelAutoOpenTab>>;
   setDisableTerminalFontZoomState: Dispatch<SetStateAction<boolean>>;
@@ -128,6 +131,7 @@ export function useSettingsIpcSync({
   setSftpDefaultViewMode,
   setWorkspaceFocusStyleState,
   setShowHostTreeSidebarState,
+  setWorkTabsLocationState,
   setTerminalSidePanelAutoOpenState,
   setTerminalSidePanelAutoOpenTabState,
   setDisableTerminalFontZoomState,
@@ -267,6 +271,9 @@ export function useSettingsIpcSync({
       if (key === STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR && typeof value === 'boolean') {
         setShowHostTreeSidebarState((prev) => (prev === value ? prev : value));
       }
+      if (key === STORAGE_KEY_WORK_TABS_LOCATION && isWorkTabsLocation(value)) {
+        setWorkTabsLocationState((prev) => (prev === value ? prev : value));
+      }
       if (key === STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN && typeof value === 'boolean') {
         setTerminalSidePanelAutoOpenState((prev) => (prev === value ? prev : value));
       }
@@ -316,6 +323,7 @@ export function useSettingsIpcSync({
     setSftpFollowTerminalCwd,
     setSftpDefaultViewMode,
     setShowHostTreeSidebarState,
+    setWorkTabsLocationState,
     setTerminalSidePanelAutoOpenState,
     setTerminalSidePanelAutoOpenTabState,
     setDisableTerminalFontZoomState,

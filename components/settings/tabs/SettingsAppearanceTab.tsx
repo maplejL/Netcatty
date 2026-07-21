@@ -8,6 +8,7 @@ import { useAvailableUIFonts } from "../../../application/state/uiFontStore";
 import { SUPPORTED_UI_LOCALES } from "../../../infrastructure/config/i18n";
 import { APP_ICON_VARIANT_ASSET_PATH, APP_ICON_VARIANT_GROUPS, APP_ICON_VARIANT_I18N_KEY } from "../../../infrastructure/config/appIconVariants";
 import { resolveAppIconVariant, type AppIconVariant } from "../../../domain/appIconVariant";
+import type { WorkTabsLocation } from "../../../domain/workTabsLocation";
 import { cn } from "../../../lib/utils";
 import { SectionHeader, SettingsTabContent, SettingRow, Toggle, Select } from "../settings-ui";
 import { FontSelect } from "../FontSelect";
@@ -49,6 +50,8 @@ function SettingsAppearanceTab(props: {
   setShowSftpTab: (enabled: boolean) => void;
   showHostTreeSidebar: boolean;
   setShowHostTreeSidebar: (enabled: boolean) => void;
+  workTabsLocation: WorkTabsLocation;
+  setWorkTabsLocation: (location: WorkTabsLocation) => void;
   windowOpacity: number;
   setWindowOpacity: (opacity: number) => void;
   appIconVariant: AppIconVariant;
@@ -83,6 +86,8 @@ function SettingsAppearanceTab(props: {
     setShowSftpTab,
     showHostTreeSidebar,
     setShowHostTreeSidebar,
+    workTabsLocation,
+    setWorkTabsLocation,
     windowOpacity,
     setWindowOpacity,
     appIconVariant,
@@ -421,6 +426,20 @@ function SettingsAppearanceTab(props: {
           description={t('settings.vault.showHostTreeSidebarDesc')}
         >
           <Toggle checked={showHostTreeSidebar} onChange={setShowHostTreeSidebar} />
+        </SettingRow>
+        <SettingRow
+          label={t('settings.appearance.workTabsLocation')}
+          description={t('settings.appearance.workTabsLocationDesc')}
+        >
+          <Select
+            value={workTabsLocation}
+            onChange={(value) => setWorkTabsLocation(value as 'top' | 'left' | 'right')}
+            options={[
+              { value: 'top', label: t('settings.appearance.workTabsLocation.top') },
+              { value: 'left', label: t('settings.appearance.workTabsLocation.left') },
+              { value: 'right', label: t('settings.appearance.workTabsLocation.right') },
+            ]}
+          />
         </SettingRow>
       </div>
 

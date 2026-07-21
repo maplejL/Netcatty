@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.3] - 2026-07-21
+
+本 fork 第四版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。
+
+### 本 fork 修复 / 增强
+
+#### 终端体验
+- Ctrl+C 中断时始终滚到底（不受「按键滚动」开关影响）
+- 会话恢复默认带回终端 CWD（OSC 7 + `cd` 注入）
+- 工作标签可放在顶部 / 左侧 / 右侧（外观设置）
+
+#### AI / 外部 Agent
+- Cursor：模型旁 **Fast** 开关 + **推理程度**（effort）芯片；`send({ model })` 带上选中参数
+- 修复 Cursor 未传 `fast` 时默认走 Fast 变体（显式 `fast=false`，避免用量变成 `*-low-fast`）
+- Codex：Fast → `minimal`；推理程度 `low/medium/high/xhigh`（slash 编码）
+- CodeBuddy / WorkBuddy：Fast → 关闭思考；思考档位 `adaptive` / `enabled`
+
+### 构建
+- 快速正式包（仅 NSIS）：`npm run pack:win-x64:release`
+- 完整包（NSIS + portable + zip）：`npm run pack:win-x64:release:full`
+- 打完并上传更新资产：`npm run release:win-x64`（可选 `-Full` 脚本：`release:win-x64:full`）
+- 本地热更 asar：`npm run pack:asar`
+
+---
+
 ## [0.1.2] - 2026-07-21
 
 本 fork 第三版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。
@@ -26,7 +51,9 @@
 - 更新检测与发布源指向本 fork（maplejL/Netcatty）
 
 ### 构建
-- 正式安装包：`electron-builder --config electron-builder.release-win-x64.cjs`
+- 快速正式包（仅 NSIS）：`npm run pack:win-x64:release`
+- 完整包（NSIS + portable + zip）：`npm run pack:win-x64:release:full`
+- 打完并上传更新资产：`npm run release:win-x64`（可选 `-Full` 脚本：`release:win-x64:full`）
 - 本地热更 asar：`npm run pack:asar`
 
 ---

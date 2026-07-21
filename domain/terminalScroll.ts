@@ -21,10 +21,18 @@ export const shouldEnableNativeUserInputAutoScroll = (
   settings?: Partial<TerminalSettings> | null,
 ): boolean => settings?.scrollOnInput ?? true;
 
+/** Ctrl+C / SIGINT — always jump to the live edge after scrollback review (e.g. tail -f). */
+export const isTerminalInterruptInput = (data: string): boolean => data === "\x03";
+
 export const shouldScrollOnTerminalInput = (
   settings: Partial<TerminalSettings> | null | undefined,
   data: string,
 ): boolean => {
+  // Interrupt must return to the bottom even when "scroll on key press" is off.
+  if (isTerminalInterruptInput(data)) {
+    return true;
+  }
+
   const scrollOnInput = settings?.scrollOnInput ?? true;
   const scrollOnKeyPress = settings?.scrollOnKeyPress ?? false;
 

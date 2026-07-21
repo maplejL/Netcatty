@@ -270,6 +270,11 @@ export const zhCNCoreMessages: Messages = {
   'settings.vault.showSftpTabDesc': '在顶部标签栏显示独立的 SFTP 视图。关闭后可改用会话内左侧的 SFTP 侧栏。',
   'settings.vault.showHostTreeSidebar': '显示主机列表侧栏',
   'settings.vault.showHostTreeSidebarDesc': '在终端和编辑器标签页显示主机列表侧栏及顶部开关。',
+  'settings.appearance.workTabsLocation': '工作标签位置',
+  'settings.appearance.workTabsLocationDesc': '将会话与工作区标签放在顶部、左侧或右侧。侧边标签在多会话时可显示完整标题。',
+  'settings.appearance.workTabsLocation.top': '顶部',
+  'settings.appearance.workTabsLocation.left': '左侧',
+  'settings.appearance.workTabsLocation.right': '右侧',
 
   // Update notifications
   'update.available.title': '发现新版本',

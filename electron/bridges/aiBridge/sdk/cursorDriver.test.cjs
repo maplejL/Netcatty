@@ -44,7 +44,7 @@ test("buildCursorAgentOptions uses api key, model, cwd, and injected MCP servers
 
   assert.deepEqual(options, {
     apiKey: "cur-key",
-    model: { id: "composer-2" },
+    model: { id: "composer-2", params: [{ id: "fast", value: "false" }] },
     local: { cwd: "/repo", autoReview: false },
     mcpServers: {
       netcatty: {
@@ -64,7 +64,32 @@ test("buildCursorAgentOptions falls back to CURSOR_API_KEY and composer-2.5", ()
   });
 
   assert.equal(options.apiKey, "env-key");
-  assert.deepEqual(options.model, { id: "composer-2.5" });
+  assert.deepEqual(options.model, {
+    id: "composer-2.5",
+    params: [{ id: "fast", value: "false" }],
+  });
+});
+
+test("parseCursorModelSelection pins fast=false when omitted (Cursor default is Fast)", () => {
+  const { parseCursorModelSelection } = require("./cursorDriver.cjs");
+  assert.deepEqual(parseCursorModelSelection("cursor-grok-4.5"), {
+    id: "cursor-grok-4.5",
+    params: [{ id: "fast", value: "false" }],
+  });
+  assert.deepEqual(parseCursorModelSelection("cursor-grok-4.5?effort=low"), {
+    id: "cursor-grok-4.5",
+    params: [
+      { id: "effort", value: "low" },
+      { id: "fast", value: "false" },
+    ],
+  });
+  assert.deepEqual(parseCursorModelSelection("cursor-grok-4.5?fast=true&effort=low"), {
+    id: "cursor-grok-4.5",
+    params: [
+      { id: "fast", value: "true" },
+      { id: "effort", value: "low" },
+    ],
+  });
 });
 
 test("toCursorMcpServers drops invalid server configs", () => {
@@ -127,6 +152,47 @@ test("runCursorTurn exposes runtime env while creating and sending", async () =>
     ["create", "/tmp/discovery.json"],
     ["send", "/tmp/discovery.json"],
   ]);
+});
+
+test("runCursorTurn passes model selection (incl. Fast params) on send", async () => {
+  const emitter = makeEmitter();
+  let sentOptions = null;
+  const sdkModule = {
+    Agent: {
+      async create() {
+        return {
+          agentId: "agent-fast",
+          async send(_message, options) {
+            sentOptions = options;
+            return {
+              async *stream() {
+                yield { type: "assistant", message: { content: [{ type: "text", text: "ok" }] } };
+              },
+              async wait() {
+                return { status: "finished", result: "ok" };
+              },
+            };
+          },
+          close() {},
+        };
+      },
+    },
+  };
+
+  await runCursorTurn({
+    prompt: "hi",
+    agentOptions: {
+      apiKey: "key",
+      model: { id: "composer-2.5", params: [{ id: "fast", value: "true" }] },
+      local: { cwd: "/repo" },
+    },
+    emitter,
+    sdkModule,
+  });
+
+  assert.deepEqual(sentOptions, {
+    model: { id: "composer-2.5", params: [{ id: "fast", value: "true" }] },
+  });
 });
 
 test("translateCursorEvent maps assistant, thinking, and tool events", () => {
@@ -466,7 +532,7 @@ test("runCursorTurn cancels a late Cursor run when aborted while sending", async
   assert.equal(cancelled, true);
 });
 
-test("mapCursorModels keeps one row per base model id", () => {
+test("mapCursorModels keeps one row per base model and exposes Fast/effort controls", () => {
   assert.deepEqual(
     mapCursorModels([
       { id: "composer-2.5", displayName: "Composer 2.5", description: "Default" },
@@ -476,6 +542,7 @@ test("mapCursorModels keeps one row per base model id", () => {
         variants: [
           { displayName: "Standard", params: [], isDefault: true },
           { displayName: "Fast", params: [{ id: "effort", value: "low" }] },
+          { displayName: "High", params: [{ id: "effort", value: "high" }] },
         ],
       },
       {
@@ -488,10 +555,87 @@ test("mapCursorModels keeps one row per base model id", () => {
           },
         ],
       },
+      {
+        id: "gpt-5.5",
+        displayName: "GPT-5.5",
+        parameters: [
+          {
+            id: "fast",
+            values: [{ value: "false" }, { value: "true", displayName: "Fast" }],
+          },
+          {
+            id: "effort",
+            values: [
+              { value: "low", displayName: "Low" },
+              { value: "medium", displayName: "Medium" },
+              { value: "high", displayName: "High" },
+            ],
+          },
+        ],
+      },
     ]),
     [
       { id: "composer-2.5", name: "Composer 2.5", description: "Default" },
-      { id: "gpt-5", name: "GPT-5" },
+      {
+        // Fast variant is effort=low; Low is already in thinkingLevels, so the
+        // Fast toggle is omitted (selecting Low must not bill as *-low-fast).
+        id: "gpt-5",
+        name: "GPT-5",
+        thinkingLevels: ["low", "high"],
+        thinkingParamId: "effort",
+      },
+      {
+        id: "gpt-5.5",
+        name: "GPT-5.5",
+        supportsFast: true,
+        fastParams: [{ id: "fast", value: "true" }],
+        thinkingLevels: ["low", "medium", "high"],
+        thinkingParamId: "effort",
+      },
+    ],
+  );
+});
+
+test("mapCursorModels keeps Fast independent from Low for dual-axis models", () => {
+  assert.deepEqual(
+    mapCursorModels([
+      {
+        id: "cursor-grok-4.5",
+        displayName: "Cursor Grok 4.5",
+        parameters: [
+          {
+            id: "fast",
+            values: [{ value: "false" }, { value: "true", displayName: "Fast" }],
+          },
+          {
+            id: "effort",
+            values: [
+              { value: "low", displayName: "Low" },
+              { value: "high", displayName: "High" },
+            ],
+          },
+        ],
+        variants: [
+          { displayName: "Low", params: [{ id: "effort", value: "low" }] },
+          {
+            displayName: "Low Fast",
+            params: [
+              { id: "effort", value: "low" },
+              { id: "fast", value: "true" },
+            ],
+          },
+        ],
+      },
+    ]),
+    [
+      {
+        id: "cursor-grok-4.5",
+        name: "Cursor Grok 4.5",
+        supportsFast: true,
+        fastParams: [{ id: "fast", value: "true" }],
+        thinkingLevels: ["low", "high"],
+        thinkingParamId: "effort",
+      },
     ],
   );
 });

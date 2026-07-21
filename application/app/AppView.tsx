@@ -6,7 +6,10 @@ import { editorTabStore } from '../state/editorTabStore';
 import { releaseEditorTabSaveCoordinator, saveEditorTab } from '../state/editorTabSave';
 import { useTerminalHostTreeLayoutWidth } from '../state/terminalHostTreeStore';
 import { TopTabs } from '../../components/TopTabs';
+import { AppWindowChrome } from '../../components/top-tabs/AppWindowChrome';
+import { isSideWorkTabsLocation } from '../../domain/workTabsLocation';
 import { VaultView } from '../../components/VaultView';
+import { cn } from '../../lib/utils';
 import { QuickAddSnippetDialog } from '../../components/QuickAddSnippetDialog';
 import { QuickScriptEditorDialog } from '../../components/scripts/QuickScriptEditorDialog';
 import { AddToWorkspaceDialog } from '../../components/workspace/AddToWorkspaceDialog';
@@ -187,7 +190,34 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
         handleRequestCloseEditorTabRef.current = handleRequestCloseEditorTab;
 
         return (
-    <div className="flex flex-col h-screen text-foreground font-sans netcatty-shell" data-terminal-appearance-root onContextMenu={handleRootContextMenu}>
+    <div
+      className={cn(
+        'h-screen text-foreground font-sans netcatty-shell flex flex-col',
+      )}
+      data-terminal-appearance-root
+      onContextMenu={handleRootContextMenu}
+    >
+      {isSideWorkTabsLocation(settings.workTabsLocation) && (
+        <AppWindowChrome
+          theme={resolvedTheme}
+          isMacClient={isMacClient}
+          showWindowControls={!isMacClient}
+          windowOpacity={settings.windowOpacity}
+          setWindowOpacity={settings.setWindowOpacity}
+          onToggleTheme={handleToggleTheme}
+          onOpenSettings={handleOpenSettings}
+          onSyncNow={handleSyncNowManual}
+          paddingLeft={isMacClient ? 76 : 12}
+        />
+      )}
+      <div
+        className={cn(
+          'flex-1 min-h-0 flex',
+          settings.workTabsLocation === 'top' && 'flex-col',
+          settings.workTabsLocation === 'left' && 'flex-row',
+          settings.workTabsLocation === 'right' && 'flex-row-reverse',
+        )}
+      >
       <TopTabs
         theme={resolvedTheme}
         hosts={hosts}
@@ -218,6 +248,8 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
         onRemoveSessionFromWorkspace={removeSessionFromWorkspace}
         showSftpTab={settings.showSftpTab}
         showHostTreeSidebar={settings.showHostTreeSidebar}
+        workTabsLocation={settings.workTabsLocation}
+        showEmbeddedChrome={!isSideWorkTabsLocation(settings.workTabsLocation)}
         dynamicTabTitleMode={settings.terminalSettings.dynamicTabTitleMode}
         editorTabs={editorTabs}
         onRequestCloseEditorTab={handleRequestCloseEditorTab}
@@ -473,6 +505,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
             </Suspense>
           </LazyLoadBoundary>
         ))}
+      </div>
       </div>
 
       {/* Global "quick add / edit snippet" dialog, triggered by the

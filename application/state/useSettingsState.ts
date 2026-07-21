@@ -51,6 +51,7 @@ import {
   STORAGE_KEY_SHOW_ONLY_UNGROUPED_HOSTS_IN_ROOT,
   STORAGE_KEY_SHOW_SFTP_TAB,
   STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR,
+  STORAGE_KEY_WORK_TABS_LOCATION,
   STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN,
   STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN_TAB,
   STORAGE_KEY_SHELL_ONLY_TAB_NUMBER_SHORTCUTS,
@@ -117,6 +118,10 @@ import {
   serializeTerminalSettings,
 } from './settingsStateDefaults';
 import { resolveRestorePreviousSessionSetting, resolveRestoreTerminalCwdSetting } from './sessionRestoreSettings';
+import {
+  resolveWorkTabsLocation,
+  type WorkTabsLocation,
+} from '../../domain/workTabsLocation';
 import { sessionRestoreStorage } from './sessionRestoreStorage';
 import { setTerminalCommandTimingDebugEnabled } from '../../components/terminal/runtime/terminalCommandTiming';
 import { useSettingsStorageSync } from './settingsStorageSync';
@@ -263,6 +268,9 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
   const [showHostTreeSidebar, setShowHostTreeSidebarState] = useState<boolean>(() => {
     const stored = localStorageAdapter.readBoolean(STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR);
     return stored ?? DEFAULT_SHOW_HOST_TREE_SIDEBAR;
+  });
+  const [workTabsLocation, setWorkTabsLocationState] = useState<WorkTabsLocation>(() => {
+    return resolveWorkTabsLocation(readStoredString(STORAGE_KEY_WORK_TABS_LOCATION));
   });
   const [terminalSidePanelAutoOpen, setTerminalSidePanelAutoOpenState] = useState<boolean>(() => {
     const stored = localStorageAdapter.readBoolean(STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN);
@@ -635,6 +643,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setShowSftpTabState(storedShowSftpTab ?? DEFAULT_SHOW_SFTP_TAB);
     const storedShowHostTreeSidebar = localStorageAdapter.readBoolean(STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR);
     setShowHostTreeSidebarState(storedShowHostTreeSidebar ?? DEFAULT_SHOW_HOST_TREE_SIDEBAR);
+    setWorkTabsLocationState(resolveWorkTabsLocation(readStoredString(STORAGE_KEY_WORK_TABS_LOCATION)));
     const storedTerminalSidePanelAutoOpen = localStorageAdapter.readBoolean(STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN);
     setTerminalSidePanelAutoOpenState(storedTerminalSidePanelAutoOpen ?? DEFAULT_TERMINAL_SIDE_PANEL_AUTO_OPEN_ENABLED);
     const storedTerminalSidePanelAutoOpenTab = readStoredString(STORAGE_KEY_TERMINAL_SIDE_PANEL_AUTO_OPEN_TAB);
@@ -748,6 +757,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSftpDefaultViewMode,
     setWorkspaceFocusStyleState,
     setShowHostTreeSidebarState,
+    setWorkTabsLocationState,
     setTerminalSidePanelAutoOpenState,
     setTerminalSidePanelAutoOpenTabState,
     setDisableTerminalFontZoomState,
@@ -781,7 +791,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     terminalThemeId, followAppTerminalTheme, terminalFontFamilyId, terminalFontSize,
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
     sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
-    showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
+    showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
     editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
     setTheme, setLightUiThemeId, setDarkUiThemeId, setAccentMode, setCustomAccent,
@@ -790,7 +800,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setFollowAppTerminalThemeState, setTerminalFontFamilyId, setTerminalFontSize,
     setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
     setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpDefaultViewMode,
-    setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
+    setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setWorkTabsLocationState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
     setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
     setSftpTransferConcurrencyState, applyIncomingCustomKeyBindings, mergeIncomingTerminalSettings,
@@ -902,6 +912,14 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     localStorageAdapter.writeBoolean(STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR, enabled);
     if (!persistMountedRef.current) return;
     notifySettingsChanged(STORAGE_KEY_SHOW_HOST_TREE_SIDEBAR, enabled);
+  }, [notifySettingsChanged]);
+
+  const setWorkTabsLocation = useCallback((location: WorkTabsLocation) => {
+    const next = resolveWorkTabsLocation(location);
+    setWorkTabsLocationState(next);
+    localStorageAdapter.writeString(STORAGE_KEY_WORK_TABS_LOCATION, next);
+    if (!persistMountedRef.current) return;
+    notifySettingsChanged(STORAGE_KEY_WORK_TABS_LOCATION, next);
   }, [notifySettingsChanged]);
 
   const setTerminalSidePanelAutoOpen = useCallback((enabled: boolean) => {
@@ -1268,6 +1286,8 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setShowSftpTab,
     showHostTreeSidebar,
     setShowHostTreeSidebar,
+    workTabsLocation,
+    setWorkTabsLocation,
     terminalSidePanelAutoOpen,
     setTerminalSidePanelAutoOpen,
     terminalSidePanelAutoOpenTab,
@@ -1330,7 +1350,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
       terminalThemeId, terminalFontFamilyId, terminalFontSize, terminalSettings,
       customKeyBindings, editorWordWrap,
       sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles, sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
-      showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom,
+      showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom,
       customThemes, workspaceFocusStyle, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     ]),
   };
