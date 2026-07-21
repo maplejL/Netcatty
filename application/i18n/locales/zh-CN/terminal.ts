@@ -80,6 +80,9 @@ export const zhCNTerminalMessages: Messages = {
   'sftp.editor.saveFailed': '保存文件失败',
   'sftp.editor.unsavedChanges': '您有未保存的更改。确定要关闭吗？',
   'sftp.editor.syntaxHighlight': '语法高亮',
+  'sftp.editor.compareMode': '对照',
+  'sftp.editor.exitCompare': '退出对照',
+  'sftp.editor.compareWithActive': '与当前编辑器对照',
   'sftp.preview.title': '图片预览',
   'sftp.preview.zoomIn': '放大',
   'sftp.preview.zoomOut': '缩小',
@@ -264,6 +267,12 @@ export const zhCNTerminalMessages: Messages = {
   'settings.terminal.behavior.bracketedPaste': '括号粘贴模式',
   'settings.terminal.behavior.bracketedPaste.desc':
     '粘贴文本时使用转义序列包裹，以便终端区分粘贴和键入。如果出现 ^[[200~ 字样请关闭此选项。',
+  'settings.terminal.behavior.confirmMultilinePaste': '多行粘贴确认',
+  'settings.terminal.behavior.confirmMultilinePaste.desc':
+    '粘贴包含两行及以上内容时，先弹出可编辑确认框，避免误粘危险脚本。',
+  'terminal.pasteConfirm.title': '确认粘贴',
+  'terminal.pasteConfirm.description': '即将粘贴 {lines} 行内容，可先编辑再确认。',
+  'terminal.pasteConfirm.confirm': '粘贴',
   'settings.terminal.behavior.clearWipesScrollback': '`clear` 同时清空回滚历史',
   'settings.terminal.behavior.clearWipesScrollback.desc':
     '`clear` 命令同时清空回滚历史（POSIX 默认行为）。关闭则保留历史。',

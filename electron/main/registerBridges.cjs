@@ -782,6 +782,24 @@ function createBridgeRegistrar(context) {
   
       return result.filePaths[0];
     });
+
+    // Multi-select files (batch SFTP upload, etc.)
+    ipcMain.handle("netcatty:selectFiles", async (_event, { title, defaultPath, filters }) => {
+      const { dialog } = electronModule;
+
+      const result = await dialog.showOpenDialog({
+        title: title || "Select Files",
+        defaultPath: defaultPath || os.homedir(),
+        filters: filters || [{ name: "All Files", extensions: ["*"] }],
+        properties: ["openFile", "multiSelections", "showHiddenFiles"],
+      });
+
+      if (result.canceled || !result.filePaths.length) {
+        return [];
+      }
+
+      return result.filePaths;
+    });
   
     // Select a directory and return the selected path
     ipcMain.handle("netcatty:selectDirectory", async (_event, { title, defaultPath }) => {

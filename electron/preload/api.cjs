@@ -860,6 +860,8 @@ function createPreloadApi(ctx) {
     ipcRenderer.invoke("netcatty:selectDirectory", { title, defaultPath }),
   selectFile: (title, defaultPath, filters) =>
     ipcRenderer.invoke("netcatty:selectFile", { title, defaultPath, filters }),
+  selectFiles: (title, defaultPath, filters) =>
+    ipcRenderer.invoke("netcatty:selectFiles", { title, defaultPath, filters }),
 
   // File watcher for auto-sync feature
   startFileWatch: (localPath, remotePath, sftpId, encoding) =>

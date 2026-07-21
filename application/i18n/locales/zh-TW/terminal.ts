@@ -73,6 +73,9 @@ export const zhTWTerminalMessages: Messages = {
   'sftp.opener.justOnce': '僅此一次',
   'sftp.opener.confirm.title': '設定預設應用程式',
   'sftp.opener.confirm.desc': '是否始終使用此應用程式開啟 .{ext} 檔案？',
+  'sftp.editor.compareMode': '對照',
+  'sftp.editor.exitCompare': '退出對照',
+  'sftp.editor.compareWithActive': '與目前編輯器對照',
   'sftp.editor.title': '文字編輯器',
   'sftp.editor.save': '儲存到遠端',
   'sftp.editor.saving': '儲存中...',
@@ -262,6 +265,12 @@ export const zhTWTerminalMessages: Messages = {
   'settings.terminal.behavior.wordSeparators.desc':
     '雙擊選取文字時作為邊界的字元。空格也算；可加入 =、逗號或 :，方便選取 uid=name 裡的部分內容。',
   'settings.terminal.behavior.bracketedPaste': '括號貼上模式',
+  'settings.terminal.behavior.confirmMultilinePaste': '多行貼上確認',
+  'settings.terminal.behavior.confirmMultilinePaste.desc':
+    '貼上包含兩行及以上內容時，先彈出可編輯確認框，避免誤貼危險腳本。',
+  'terminal.pasteConfirm.title': '確認貼上',
+  'terminal.pasteConfirm.description': '即將貼上 {lines} 行內容，可先編輯再確認。',
+  'terminal.pasteConfirm.confirm': '貼上',
   'settings.terminal.behavior.bracketedPaste.desc':
     '貼上文字時使用轉義序列包裹，以便終端區分貼上和鍵入。如果出現 ^[[200~ 字樣請關閉此選項。',
   'settings.terminal.behavior.clearWipesScrollback': '`clear` 同時清空捲動緩衝',

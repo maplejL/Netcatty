@@ -39,14 +39,46 @@ const genId = (): EditorTabId => `edt_${Date.now().toString(36)}_${(++idCounter)
 
 export class EditorTabStore {
   private tabs: EditorTab[] = [];
+  /** When set, the two editor tab ids render side-by-side for comparison (#830). */
+  private comparePair: readonly [EditorTabId, EditorTabId] | null = null;
   private listeners = new Set<Listener>();
   private pendingNotify = false;
 
   getTabs = (): readonly EditorTab[] => this.tabs;
   getTab = (id: EditorTabId): EditorTab | undefined => this.tabs.find((t) => t.id === id);
+  getComparePair = (): readonly [EditorTabId, EditorTabId] | null => this.comparePair;
   isDirty = (id: EditorTabId): boolean => {
     const t = this.getTab(id);
     return !!t && t.content !== t.baselineContent;
+  };
+
+  /**
+   * Pin two open editor tabs into a side-by-side compare layout.
+   * Passing the same id twice or unknown ids is ignored.
+   */
+  setComparePair = (leftId: EditorTabId, rightId: EditorTabId) => {
+    if (leftId === rightId) return;
+    if (!this.getTab(leftId) || !this.getTab(rightId)) return;
+    this.comparePair = [leftId, rightId];
+    this.notify();
+  };
+
+  clearComparePair = () => {
+    if (!this.comparePair) return;
+    this.comparePair = null;
+    this.notify();
+  };
+
+  /** Pair the given tab with the previously active editor tab (if any). */
+  compareWithActive = (otherId: EditorTabId): boolean => {
+    const activeId = activeTabStore.getActiveTabId();
+    if (!isEditorTabId(activeId)) return false;
+    const activeEditorId = fromEditorTabId(activeId);
+    if (!activeEditorId || activeEditorId === otherId) return false;
+    if (!this.getTab(activeEditorId) || !this.getTab(otherId)) return false;
+    this.comparePair = [activeEditorId, otherId];
+    this.notify();
+    return true;
   };
 
   updateContent = (
@@ -80,6 +112,9 @@ export class EditorTabStore {
     const next = this.tabs.filter((t) => t.id !== id);
     if (next.length !== this.tabs.length) {
       this.tabs = next;
+      if (this.comparePair && (this.comparePair[0] === id || this.comparePair[1] === id)) {
+        this.comparePair = null;
+      }
       this.notify();
     }
   };
@@ -96,6 +131,12 @@ export class EditorTabStore {
     const removed = this.tabs.filter((t) => idSet.has(t.sessionId)).map((t) => t.id);
     if (removed.length === 0) return [];
     this.tabs = this.tabs.filter((t) => !idSet.has(t.sessionId));
+    if (
+      this.comparePair &&
+      (removed.includes(this.comparePair[0]) || removed.includes(this.comparePair[1]))
+    ) {
+      this.comparePair = null;
+    }
     this.notify();
 
     // If the current active tab was one of the editor tabs we just removed,
@@ -236,9 +277,13 @@ export const editorTabStore = new EditorTabStore();
 
 // Hooks
 const getTabsSnapshot = () => editorTabStore.getTabs();
+const getComparePairSnapshot = () => editorTabStore.getComparePair();
 
 export const useEditorTabs = (): readonly EditorTab[] =>
   useSyncExternalStore(editorTabStore.subscribe, getTabsSnapshot, getTabsSnapshot);
+
+export const useEditorComparePair = (): readonly [EditorTabId, EditorTabId] | null =>
+  useSyncExternalStore(editorTabStore.subscribe, getComparePairSnapshot, getComparePairSnapshot);
 
 export const useEditorTab = (id: EditorTabId): EditorTab | undefined => {
   const getSnapshot = useCallback(() => editorTabStore.getTab(id), [id]);

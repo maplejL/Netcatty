@@ -514,6 +514,12 @@ export const ruCoreMessages: Messages = {
   'settings.terminal.behavior.wordSeparators.desc':
     'Символы, которые считаются границами слова при выделении двойным щелчком. Пробел тоже учитывается; добавьте =, запятую или : для строк вроде uid=name.',
   'settings.terminal.behavior.bracketedPaste': 'Режим bracketed paste',
+  'settings.terminal.behavior.confirmMultilinePaste': 'Подтверждение многострочной вставки',
+  'settings.terminal.behavior.confirmMultilinePaste.desc':
+    'При вставке двух и более строк сначала показать редактируемый диалог подтверждения.',
+  'terminal.pasteConfirm.title': 'Подтвердить вставку',
+  'terminal.pasteConfirm.description': 'Будет вставлено строк: {lines}. При необходимости отредактируйте текст.',
+  'terminal.pasteConfirm.confirm': 'Вставить',
   'settings.terminal.behavior.bracketedPaste.desc':
     'Оборачивать вставляемый текст escape-последовательностями, чтобы оболочка отличала вставку от обычного ввода. Отключите, если видите артефакты вида ^[[200~.',
   'settings.terminal.behavior.clearWipesScrollback': '`clear` очищает буфер прокрутки',

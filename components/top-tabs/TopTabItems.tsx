@@ -1,7 +1,13 @@
-import { Copy, FileCode, FileText, LayoutGrid, Minus, Server, Square, TerminalSquare, Usb, X } from 'lucide-react';
+import { Columns2, Copy, FileCode, FileText, LayoutGrid, Minus, Server, Square, TerminalSquare, Usb, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { activeTabStore, useActiveTabId, useIsTabActive } from '../../application/state/activeTabStore';
-import type { EditorTab } from '../../application/state/editorTabStore';
+import {
+  activeTabStore,
+  fromEditorTabId,
+  isEditorTabId,
+  useActiveTabId,
+  useIsTabActive,
+} from '../../application/state/activeTabStore';
+import { editorTabStore, type EditorTab } from '../../application/state/editorTabStore';
 import type { LogView } from '../../application/state/logViewState';
 import { useWindowControls } from '../../application/state/useWindowControls';
 import { terminalReconnectRegistry } from '../../application/state/terminalReconnectRegistry';
@@ -435,7 +441,9 @@ export const EditorTopTab: React.FC<EditorTopTabProps> = memo(({
   onTabDrop,
   tabAnimationClass,
 }) => {
+  const { t } = useI18n();
   const isActive = useIsTabActive(tabId);
+  const activeTabId = useActiveTabId();
   const dirty = editorTab.content !== editorTab.baselineContent;
   const tooltip = `${host?.label ?? editorTab.hostId}@${host?.hostname ?? ''}:${editorTab.remotePath}`;
   const FileIcon = CODE_EXTENSIONS_RE.test(editorTab.fileName) ? FileCode : FileText;
@@ -447,85 +455,114 @@ export const EditorTopTab: React.FC<EditorTopTabProps> = memo(({
     onRequestCloseEditorTab(editorTab.id);
   }, [editorTab.id, onRequestCloseEditorTab]);
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
+  const canCompareWithActive = useMemo(() => {
+    if (!isEditorTabId(activeTabId)) return false;
+    const activeEditorId = fromEditorTabId(activeTabId);
+    return !!activeEditorId && activeEditorId !== editorTab.id;
+  }, [activeTabId, editorTab.id]);
+
+  const handleCompareWithActive = useCallback(() => {
+    editorTabStore.compareWithActive(editorTab.id);
+  }, [editorTab.id]);
+
+  const tabBody = (
+    <div
+      data-tab-id={tabId}
+      data-tab-type="editor"
+      data-state={isActive ? 'active' : 'inactive'}
+      onClick={handleClick}
+      onMouseDown={handleTabMiddleMouseDown}
+      onAuxClick={(e) => handleTabMiddleClickClose(e, () => onRequestCloseEditorTab(editorTab.id))}
+      draggable
+      onDragStart={(e) => onTabDragStart(e, tabId)}
+      onDragEnd={onTabDragEnd}
+      onDragOver={(e) => onTabDragOver(e, tabId)}
+      onDragLeave={onTabDragLeave}
+      onDrop={(e) => onTabDrop(e, tabId)}
+      className={cn(
+        "netcatty-tab relative h-7 pl-3 pr-2 min-w-[140px] max-w-[240px] rounded-t-md overflow-hidden text-xs font-semibold cursor-pointer flex items-center justify-between gap-2 app-no-drag flex-shrink-0",
+        "transition-transform duration-150",
+        isBeingDragged && isDraggingForReorder ? "opacity-40 scale-95" : "",
+        tabAnimationClass,
+      )}
+      style={{
+        ...shiftStyle,
+        backgroundColor: isActive
+          ? 'var(--top-tabs-active-bg, hsl(var(--background)))'
+          : 'transparent',
+        color: isActive
+          ? 'var(--top-tabs-fg, hsl(var(--foreground)))'
+          : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--top-tabs-active-bg, hsl(var(--background))) 40%, transparent)';
+          e.currentTarget.style.color = 'var(--top-tabs-fg, hsl(var(--foreground)))';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.color = 'var(--top-tabs-muted, hsl(var(--muted-foreground)))';
+        }
+      }}
+    >
+      {showDropIndicatorBefore && isDraggingForReorder && (
         <div
-          data-tab-id={tabId}
-          data-tab-type="editor"
-          data-state={isActive ? 'active' : 'inactive'}
-          onClick={handleClick}
-          onMouseDown={handleTabMiddleMouseDown}
-          onAuxClick={(e) => handleTabMiddleClickClose(e, () => onRequestCloseEditorTab(editorTab.id))}
-          draggable
-          onDragStart={(e) => onTabDragStart(e, tabId)}
-          onDragEnd={onTabDragEnd}
-          onDragOver={(e) => onTabDragOver(e, tabId)}
-          onDragLeave={onTabDragLeave}
-          onDrop={(e) => onTabDrop(e, tabId)}
-          className={cn(
-            "netcatty-tab relative h-7 pl-3 pr-2 min-w-[140px] max-w-[240px] rounded-t-md overflow-hidden text-xs font-semibold cursor-pointer flex items-center justify-between gap-2 app-no-drag flex-shrink-0",
-            "transition-transform duration-150",
-            isBeingDragged && isDraggingForReorder ? "opacity-40 scale-95" : "",
-            tabAnimationClass,
-          )}
-          style={{
-            ...shiftStyle,
-            backgroundColor: isActive
-              ? 'var(--top-tabs-active-bg, hsl(var(--background)))'
-              : 'transparent',
-            color: isActive
-              ? 'var(--top-tabs-fg, hsl(var(--foreground)))'
-              : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))',
-          }}
-          onMouseEnter={(e) => {
-            if (!isActive) {
-              e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--top-tabs-active-bg, hsl(var(--background))) 40%, transparent)';
-              e.currentTarget.style.color = 'var(--top-tabs-fg, hsl(var(--foreground)))';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isActive) {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = 'var(--top-tabs-muted, hsl(var(--muted-foreground)))';
-            }
-          }}
+          className="absolute -left-0.5 top-1 bottom-1 w-0.5 rounded-full animate-pulse"
+          style={{ backgroundColor: 'var(--top-tabs-accent, hsl(var(--accent)))', boxShadow: '0 0 8px 2px color-mix(in srgb, var(--top-tabs-accent, hsl(var(--accent))) 50%, transparent)' }}
+        />
+      )}
+      {showDropIndicatorAfter && isDraggingForReorder && (
+        <div
+          className="absolute -right-0.5 top-1 bottom-1 w-0.5 rounded-full animate-pulse"
+          style={{ backgroundColor: 'var(--top-tabs-accent, hsl(var(--accent)))', boxShadow: '0 0 8px 2px color-mix(in srgb, var(--top-tabs-accent, hsl(var(--accent))) 50%, transparent)' }}
+        />
+      )}
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <FileIcon
+          size={14}
+          className="shrink-0"
+          style={{ color: isActive ? 'var(--top-tabs-accent, hsl(var(--accent)))' : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+        />
+        <span className="truncate flex items-center gap-0.5">
+          {dirty && <span className="text-primary mr-0.5">●</span>}
+          {editorTab.fileName}
+          {suffix && <span className="text-muted-foreground ml-1">{suffix}</span>}
+        </span>
+      </div>
+      <button
+        onClick={handleClose}
+        className="p-1 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+        aria-label="Close editor tab"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
+
+  return (
+    <ContextMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <ContextMenuTrigger asChild>{tabBody}</ContextMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+      <ContextMenuContent>
+        <ContextMenuItem disabled={!canCompareWithActive} onClick={handleCompareWithActive}>
+          <Columns2 size={14} className="mr-2" />
+          {t('sftp.editor.compareWithActive')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="text-destructive"
+          onClick={() => onRequestCloseEditorTab(editorTab.id)}
         >
-          {showDropIndicatorBefore && isDraggingForReorder && (
-            <div
-              className="absolute -left-0.5 top-1 bottom-1 w-0.5 rounded-full animate-pulse"
-              style={{ backgroundColor: 'var(--top-tabs-accent, hsl(var(--accent)))', boxShadow: '0 0 8px 2px color-mix(in srgb, var(--top-tabs-accent, hsl(var(--accent))) 50%, transparent)' }}
-            />
-          )}
-          {showDropIndicatorAfter && isDraggingForReorder && (
-            <div
-              className="absolute -right-0.5 top-1 bottom-1 w-0.5 rounded-full animate-pulse"
-              style={{ backgroundColor: 'var(--top-tabs-accent, hsl(var(--accent)))', boxShadow: '0 0 8px 2px color-mix(in srgb, var(--top-tabs-accent, hsl(var(--accent))) 50%, transparent)' }}
-            />
-          )}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <FileIcon
-              size={14}
-              className="shrink-0"
-              style={{ color: isActive ? 'var(--top-tabs-accent, hsl(var(--accent)))' : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
-            />
-            <span className="truncate flex items-center gap-0.5">
-              {dirty && <span className="text-primary mr-0.5">●</span>}
-              {editorTab.fileName}
-              {suffix && <span className="text-muted-foreground ml-1">{suffix}</span>}
-            </span>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-1 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
-            aria-label="Close editor tab"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
+          {t('sftp.tabs.closeTab')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
 EditorTopTab.displayName = 'EditorTopTab';

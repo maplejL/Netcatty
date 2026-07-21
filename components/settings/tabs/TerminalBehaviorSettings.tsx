@@ -98,6 +98,16 @@ export const TerminalBehaviorSettings: React.FC<TerminalBehaviorSettingsProps> =
         </SettingRow>
 
         <SettingRow
+          label={t("settings.terminal.behavior.confirmMultilinePaste")}
+          description={t("settings.terminal.behavior.confirmMultilinePaste.desc")}
+        >
+          <Toggle
+            checked={terminalSettings.confirmMultilinePaste ?? true}
+            onChange={(v) => updateTerminalSetting("confirmMultilinePaste", v)}
+          />
+        </SettingRow>
+
+        <SettingRow
           label={t("settings.terminal.behavior.clearWipesScrollback")}
           description={t("settings.terminal.behavior.clearWipesScrollback.desc")}
         >

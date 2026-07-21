@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { Suspense, lazy, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Download, Trash2 } from 'lucide-react';
 import { activeTabStore, toEditorTabId, useIsEditorTabActive } from '../state/activeTabStore';
 import { editorTabStore } from '../state/editorTabStore';
@@ -11,8 +11,17 @@ import { QuickAddSnippetDialog } from '../../components/QuickAddSnippetDialog';
 import { QuickScriptEditorDialog } from '../../components/scripts/QuickScriptEditorDialog';
 import { AddToWorkspaceDialog } from '../../components/workspace/AddToWorkspaceDialog';
 import { BatchExecDialog } from '../../components/batch/BatchExecDialog';
+import { BatchSftpUploadDialog } from '../../components/batch/BatchSftpUploadDialog';
 import { KeyboardInteractiveModal } from '../../components/KeyboardInteractiveModal';
 import { PassphraseModal } from '../../components/PassphraseModal';
+import {
+  MultilinePasteConfirmDialog,
+  type MultilinePasteConfirmRequest,
+} from '../../components/terminal/MultilinePasteConfirmDialog';
+import {
+  clearMultilinePasteConfirmRequest,
+  subscribeMultilinePasteConfirm,
+} from '../../components/terminal/multilinePasteConfirmStore';
 import { UnsavedChangesProvider } from '../../components/editor/UnsavedChangesDialog';
 import { SnippetExecutionProvider } from '../../components/SnippetExecutionProvider';
 import { Button } from '../../components/ui/button';
@@ -86,13 +95,18 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
 
   useMainWindowInputFocusRecovery({ onPageHidden: dismissTransientOverlays });
 
+  const [multilinePasteRequest, setMultilinePasteRequest] =
+    useState<MultilinePasteConfirmRequest | null>(null);
+
+  useEffect(() => subscribeMultilinePasteConfirm(setMultilinePasteRequest), []);
+
   const {
-    accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace, batchExecDialogHosts, setBatchExecDialogHosts,
+    accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace, batchExecDialogHosts, setBatchExecDialogHosts, batchSftpDialogHosts, setBatchSftpDialogHosts,
     clearAndRemoveSource, clearAndRemoveSources, clearUnsavedConnectionLogs, closeLogView, closeSession, closeTabsBatch, closeWorkspace, copySessionToNewWindowWithCurrentShell, copySessionWithCurrentShell,
     connectionLogs, convertKnownHostToHost, createWorkspaceFromSessions, createWorkspaceFromTargets, createWorkspaceWithHosts, customAccent,
     customGroups, currentTerminalTheme, deepLinkHostDraft, deleteConnectionLog, draggingSessionId, effectiveKnownHosts, editorTabs, editorWordWrap, emptyVaultConflict,
     followAppTerminalTheme,
-    groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateWorkspaceWithHostsFromVault, handleOpenBatchExec, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost,
+    groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateWorkspaceWithHostsFromVault, handleOpenBatchExec, handleOpenBatchSftp, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost,
     handleEndSessionDrag, handleFollowAppTerminalThemeChange, handleHostConnectWithProtocolCheck, handleHotkeyAction, handleKeyboardInteractiveCancel, handleKeyboardInteractiveSubmit,
     handleOpenHostFromVaultNote, handleOpenQuickSwitcher, handleOpenSettings, handleOpenVaultHostFromChat, handleOpenVaultNoteFromChat, handleOpenVaultSectionFromChat, handleOpenVaultSnippetFromChat, handleRootContextMenu, handlePassphraseCancel, handlePassphraseSkip, handlePassphraseSubmit, handleProtocolSelect,
     handleRequestCloseEditorTabRef, handleSessionStatusChange, handleSyncNowManual, handleTerminalDataCapture, handleToggleTheme, handleUpdateHostFromTerminal,
@@ -263,6 +277,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
             onConnect={handleConnectToHost}
             onCreateWorkspaceWithHosts={handleCreateWorkspaceWithHostsFromVault}
             onOpenBatchExec={handleOpenBatchExec}
+            onOpenBatchSftp={handleOpenBatchSftp}
             onOpenHostFromNote={handleOpenHostFromVaultNote}
             groupConfigs={groupConfigs}
             onUpdateGroupConfigs={updateGroupConfigs}
@@ -543,6 +558,24 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           identities={identities}
         />
       )}
+
+      {batchSftpDialogHosts && (
+        <BatchSftpUploadDialog
+          open
+          onOpenChange={(open) => { if (!open) setBatchSftpDialogHosts(null); }}
+          hosts={batchSftpDialogHosts}
+          allHosts={hosts}
+          keys={keys}
+          identities={identities}
+          knownHosts={effectiveKnownHosts}
+          terminalSettings={terminalSettings}
+        />
+      )}
+
+      <MultilinePasteConfirmDialog
+        request={multilinePasteRequest}
+        onSettled={clearMultilinePasteConfirmRequest}
+      />
 
       {isQuickSwitcherOpen && (
         <LazyLoadBoundary name="Quick switcher" resetKey={quickSearch}>

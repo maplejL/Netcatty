@@ -23,6 +23,7 @@ declare global {
     showSaveDialog?(defaultPath: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string | null>;
     selectDirectory?(title?: string, defaultPath?: string): Promise<string | null>;
     selectFile?(title?: string, defaultPath?: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string | null>;
+    selectFiles?(title?: string, defaultPath?: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string[]>;
 
     // File watcher for auto-sync feature
     startFileWatch?(localPath: string, remotePath: string, sftpId: string, encoding?: SftpFilenameEncoding): Promise<{ watchId: string }>;

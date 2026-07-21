@@ -539,6 +539,12 @@ Highlight the focused split pane:
   'settings.terminal.behavior.bracketedPaste': 'Bracketed paste mode',
   'settings.terminal.behavior.bracketedPaste.desc':
     'Wrap pasted text with escape sequences so the shell can distinguish paste from typed input. Disable if you see ^[[200~ artifacts.',
+  'settings.terminal.behavior.confirmMultilinePaste': 'Confirm multi-line paste',
+  'settings.terminal.behavior.confirmMultilinePaste.desc':
+    'When pasting two or more lines, show an editable confirmation dialog first to avoid accidental dangerous pastes.',
+  'terminal.pasteConfirm.title': 'Confirm paste',
+  'terminal.pasteConfirm.description': 'About to paste {lines} lines. Edit the content if needed, then confirm.',
+  'terminal.pasteConfirm.confirm': 'Paste',
   'settings.terminal.behavior.clearWipesScrollback': '`clear` wipes scrollback',
   'settings.terminal.behavior.clearWipesScrollback.desc':
     'Make `clear` also wipe the scrollback buffer (POSIX default). Disable to keep history visible after `clear`.',
@@ -928,6 +934,7 @@ Highlight the focused split pane:
   'vault.hosts.connectWorkspace': 'Workspace ({count})',
   'vault.hosts.connectWorkspace.success': 'Opening workspace with {count} hosts',
   'vault.hosts.batchExec': 'Batch command ({count})',
+  'vault.hosts.batchSftp': 'Batch SFTP upload ({count})',
   'vault.hosts.moveToGroup.success': 'Moved {host} to {group}',
   'vault.hosts.errors.nameRequired': 'Host name is required.',
   'vault.hosts.empty.title': 'Set up your hosts',
@@ -946,5 +953,20 @@ Highlight the focused split pane:
   'batchExec.skip.non-ssh': 'SSH hosts only',
   'batchExec.skip.jump-chain': 'Jump-chain hosts are not supported yet',
   'batchExec.skip.credentials': 'Credentials missing or cannot be decrypted',
+
+  'batchSftp.title': 'Batch SFTP upload',
+  'batchSftp.description': 'Upload the same local files to {count} hosts via SFTP.',
+  'batchSftp.pickFiles': 'Choose files…',
+  'batchSftp.pickFilesTitle': 'Select files to upload',
+  'batchSftp.noFiles': 'No files selected',
+  'batchSftp.filesSelected': '{count} file(s) selected',
+  'batchSftp.remoteDir': 'Remote directory',
+  'batchSftp.run': 'Upload',
+  'batchSftp.running': 'Uploading…',
+  'batchSftp.resultsHeading': 'Results',
+  'batchSftp.summary': '{success} ok · {failed} failed · {skipped} skipped',
+  'batchSftp.skip.non-ssh': 'SSH hosts only',
+  'batchSftp.skip.local': 'Local hosts are not supported',
+  'batchSftp.skip.credentials': 'Credentials missing or cannot be decrypted',
 
 };

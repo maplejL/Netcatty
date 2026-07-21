@@ -16,6 +16,7 @@ interface UseTerminalFilePasteOptions {
     writeToSession: (sessionId: string, data: string, options?: { automated?: boolean }) => void;
   };
   scrollOnPasteRef?: React.RefObject<boolean>;
+  confirmMultilinePasteRef?: React.RefObject<boolean>;
   onPasteData?: (data: string) => boolean | void;
   scrollToBottomAfterProgrammaticInput: (data: string) => void;
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -28,6 +29,7 @@ export function useTerminalFilePaste({
   sessionRef,
   terminalBackend,
   scrollOnPasteRef,
+  confirmMultilinePasteRef,
   onPasteData,
   scrollToBottomAfterProgrammaticInput,
   containerRef,
@@ -58,6 +60,7 @@ export function useTerminalFilePaste({
             isLocalConnection,
             readClipboardText: () => navigator.clipboard.readText(),
             scrollOnPaste: scrollOnPasteRef?.current ?? false,
+            confirmMultilinePaste: confirmMultilinePasteRef?.current ?? true,
             onPasteData,
             sessionId: sessionRef.current,
             terminalBackend,
@@ -75,6 +78,7 @@ export function useTerminalFilePaste({
       container.removeEventListener("paste", handlePaste, true);
     };
   }, [
+    confirmMultilinePasteRef,
     containerRef,
     isLocalConnection,
     onPasteData,

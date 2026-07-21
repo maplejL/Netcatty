@@ -85,20 +85,50 @@ export const useSftpViewFileOps = ({
       if (!pane.connection) return;
 
       const resolvedFullPath = fullPath ?? sftpRef.current.joinPath(pane.connection.currentPath, file.name);
+      const hostId = pane.connection.hostId;
+      if (!hostId) {
+        // Local / unhosted connections still use the modal path.
+        try {
+          setLoadingTextContent(true);
+          setTextEditorTarget({ file, side, fullPath: resolvedFullPath, hostId: pane.connection.hostId });
+          const content = await sftpRef.current.readTextFile(side, resolvedFullPath);
+          setTextEditorContent(content);
+          setShowTextEditor(true);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to load file", "SFTP");
+          setTextEditorTarget(null);
+        } finally {
+          setLoadingTextContent(false);
+        }
+        return;
+      }
 
+      // Open as an independent top-level editor tab so multiple files can be
+      // compared side-by-side (issue #830). Modal remains available via promote
+      // only when hostId is missing.
       try {
+        // Keep the pane overlay consistent with the modal path: set target so
+        // SftpView can show "loading" while we fetch content over SFTP.
+        setTextEditorTarget({ file, side, fullPath: resolvedFullPath, hostId });
         setLoadingTextContent(true);
-        setTextEditorTarget({ file, side, fullPath: resolvedFullPath, hostId: pane.connection.hostId });
-
         const content = await sftpRef.current.readTextFile(side, resolvedFullPath);
-
-        setTextEditorContent(content);
-        setShowTextEditor(true);
+        const editorId = editorTabStore.promoteFromModal({
+          sessionId: pane.connection.id,
+          hostId,
+          remotePath: resolvedFullPath,
+          fileName: file.name,
+          languageId: getLanguageId(file.name),
+          content,
+          baselineContent: content,
+          wordWrap: false,
+          viewState: null,
+        });
+        activeTabStore.setActiveTabId(toEditorTabId(editorId));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load file", "SFTP");
-        setTextEditorTarget(null);
       } finally {
         setLoadingTextContent(false);
+        setTextEditorTarget(null);
       }
     },
     [sftpRef],

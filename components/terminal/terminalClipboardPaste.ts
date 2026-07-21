@@ -1,7 +1,9 @@
 import type { Terminal as XTerm } from "@xterm/xterm";
 
+import { shouldConfirmMultilinePaste } from "../../domain/multilinePaste";
 import { extractRootPathsFromClipboardFiles } from "./terminalHelpers";
 import { pasteTextIntoTerminal } from "./runtime/terminalUserPaste";
+import { requestMultilinePasteConfirm } from "./multilinePasteConfirmStore";
 
 type ClipboardFileBridge = Pick<Partial<NetcattyBridge>, "readClipboardFiles">;
 
@@ -11,6 +13,8 @@ type TerminalClipboardPasteOptions = {
   onPasteData?: (data: string) => boolean | void;
   readClipboardText: () => Promise<string>;
   scrollOnPaste?: boolean;
+  /** When true (default), multi-line pastes open an editable confirm dialog. */
+  confirmMultilinePaste?: boolean;
   scrollToBottomAfterProgrammaticInput?: (data: string) => void;
   sessionId: string | null | undefined;
   terminalBackend: {
@@ -25,6 +29,7 @@ export async function handleTerminalClipboardPaste({
   onPasteData,
   readClipboardText,
   scrollOnPaste = false,
+  confirmMultilinePaste = true,
   scrollToBottomAfterProgrammaticInput,
   sessionId,
   terminalBackend,
@@ -51,7 +56,14 @@ export async function handleTerminalClipboardPaste({
 
   const text = await readClipboardText();
   if (text && sessionId) {
-    pasteTextIntoTerminal(term, text, {
+    let pasteText = text;
+    if (shouldConfirmMultilinePaste(text, { enabled: confirmMultilinePaste })) {
+      const result = await requestMultilinePasteConfirm(text);
+      if (result.action === "cancel") return;
+      pasteText = result.text;
+      if (!pasteText) return;
+    }
+    pasteTextIntoTerminal(term, pasteText, {
       scrollOnPaste,
       onPasteData,
     });

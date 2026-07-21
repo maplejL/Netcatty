@@ -105,6 +105,11 @@ export interface TerminalSettings {
 
   // Paste
   disableBracketedPaste: boolean; // Disable bracketed paste mode (avoid ^[[200~ artifacts)
+  /**
+   * When true, pasting 2+ lines into the terminal opens an editable confirm
+   * dialog before the text is sent (MobaXterm / SecureCRT style safety net).
+   */
+  confirmMultilinePaste: boolean;
 
   // Shell `clear` command behavior — controls whether CSI 3 J (erase scrollback)
   // from the shell is honored. Default true matches POSIX/ncurses since 2013:
@@ -371,6 +376,7 @@ const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   systemManagerDockerListRefreshInterval: 5,
   systemManagerDockerStatsRefreshInterval: 3,
   disableBracketedPaste: false, // Bracketed paste enabled by default
+  confirmMultilinePaste: true, // Confirm/edit multi-line pastes by default
   clearWipesScrollback: true, // POSIX-standard: shell `clear` clears scrollback too
   preserveSelectionOnInput: false, // Opt-in: keep selection alive when typing
   forcePromptNewLine: false, // Opt-in: keep the next shell prompt visually separated from unterminated final output lines

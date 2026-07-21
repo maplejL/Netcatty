@@ -36,6 +36,7 @@ export const useTerminalContextActions = ({
   sessionRef,
   onHasSelectionChange,
   scrollOnPasteRef,
+  confirmMultilinePasteRef,
   isBroadcastEnabledRef,
   onBroadcastInputRef,
   isLocalConnection,
@@ -51,6 +52,7 @@ export const useTerminalContextActions = ({
   sessionRef: RefObject<string | null>;
   onHasSelectionChange?: (hasSelection: boolean) => void;
   scrollOnPasteRef?: RefObject<boolean>;
+  confirmMultilinePasteRef?: RefObject<boolean>;
   isBroadcastEnabledRef?: RefObject<boolean | undefined>;
   onBroadcastInputRef?: RefObject<((data: string, sourceSessionId: string) => void) | undefined>;
   isLocalConnection: boolean;
@@ -91,6 +93,7 @@ export const useTerminalContextActions = ({
         isLocalConnection,
         readClipboardText: () => navigator.clipboard.readText(),
         scrollOnPaste: scrollOnPasteRef?.current ?? false,
+        confirmMultilinePaste: confirmMultilinePasteRef?.current ?? true,
         onPasteData: broadcastUserPasteData,
         sessionId: sessionRef.current,
         terminalBackend,
@@ -101,6 +104,7 @@ export const useTerminalContextActions = ({
     }
   }, [
     broadcastUserPasteData,
+    confirmMultilinePasteRef,
     isLocalConnection,
     sessionRef,
     termRef,

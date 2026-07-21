@@ -206,22 +206,64 @@ function clampCoordinate(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
 
+export interface PopupGeometryClampInputWithAnchor extends PopupGeometryClampInput {
+  /**
+   * When set, the final top clamp refuses to cover the active input line.
+   * `renderUpward` decides which side of the anchor is legal.
+   */
+  anchorTop?: number;
+  anchorBottom?: number;
+  anchorGap?: number;
+  renderUpward?: boolean;
+}
+
 /**
  * Final guardrail using the rendered popup's actual DOM size. The placement
  * pass uses estimated list/detail/panel sizes so it can decide before render;
  * this pass prevents any estimate mismatch or delayed xterm cursor refresh
  * from letting the fixed-position portal escape the terminal/app bounds.
+ *
+ * When anchor bounds are provided, also keep the popup clear of the current
+ * input line so path completions (`cd …`) never cover what the user is typing
+ * (issue #2157).
  */
 export function clampAutocompletePopupGeometry(
-  input: PopupGeometryClampInput,
+  input: PopupGeometryClampInputWithAnchor,
 ): PopupGeometry {
-  const { left, top, width, height, clampViewport, viewportPadding } = input;
+  const {
+    left,
+    top,
+    width,
+    height,
+    clampViewport,
+    viewportPadding,
+    anchorTop,
+    anchorBottom,
+    anchorGap = 8,
+    renderUpward,
+  } = input;
   const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
   const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
   const minLeft = clampViewport.left + viewportPadding;
-  const minTop = clampViewport.top + viewportPadding;
   const maxLeft = clampViewport.left + clampViewport.width - viewportPadding - safeWidth;
-  const maxTop = clampViewport.top + clampViewport.height - viewportPadding - safeHeight;
+  let minTop = clampViewport.top + viewportPadding;
+  let maxTop = clampViewport.top + clampViewport.height - viewportPadding - safeHeight;
+
+  // Keep the measured popup off the cursor row whenever we know the anchor.
+  if (
+    typeof anchorTop === "number" &&
+    typeof anchorBottom === "number" &&
+    Number.isFinite(anchorTop) &&
+    Number.isFinite(anchorBottom)
+  ) {
+    if (renderUpward) {
+      // Popup sits above the input line: bottom edge must stay above anchorTop.
+      maxTop = Math.min(maxTop, anchorTop - anchorGap - safeHeight);
+    } else {
+      // Popup sits below the input line: top edge must stay below anchorBottom.
+      minTop = Math.max(minTop, anchorBottom + anchorGap);
+    }
+  }
 
   return {
     left: clampCoordinate(left, minLeft, Math.max(minLeft, maxLeft)),
@@ -294,15 +336,22 @@ export function computeAutocompletePopupPlacement(
     Math.min(maxHeight, availableVerticalSpace, availableViewportHeight),
   );
   const contentHeightForPlacement = Math.min(effectiveMaxHeight, cappedDesiredHeight);
+  // Never cover the active input line. Upward popups must end above
+  // `anchorTop - gap`; downward ones must start at/after `anchorBottom + gap`.
+  // Prefer shrinking + scrolling over sliding onto the cursor row (#2157).
   const unclampedTop = renderUpward
-    ? Math.max(bounds.top + viewportPadding, anchorTop - anchorGap - contentHeightForPlacement)
-    : Math.min(
-        anchorBottom + anchorGap,
+    ? anchorTop - anchorGap - contentHeightForPlacement
+    : anchorBottom + anchorGap;
+  const minTop = renderUpward
+    ? bounds.top + viewportPadding
+    : Math.max(bounds.top + viewportPadding, anchorBottom + anchorGap);
+  const maxTop = renderUpward
+    ? Math.min(
         boundsBottom - viewportPadding - contentHeightForPlacement,
-      );
-  const minTop = bounds.top + viewportPadding;
-  const maxTop = Math.max(minTop, boundsBottom - viewportPadding - contentHeightForPlacement);
-  const top = Math.max(minTop, Math.min(unclampedTop, maxTop));
+        anchorTop - anchorGap - contentHeightForPlacement,
+      )
+    : Math.max(minTop, boundsBottom - viewportPadding - contentHeightForPlacement);
+  const top = Math.max(minTop, Math.min(unclampedTop, Math.max(minTop, maxTop)));
 
   // Right edge that keeps the clamped assembly inside the bounds. When the
   // assembly is wider than the available room this goes below the left padding,

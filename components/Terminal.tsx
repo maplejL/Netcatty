@@ -1850,6 +1850,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
   const scrollOnPasteRef = useRef(terminalSettings?.scrollOnPaste ?? true);
   scrollOnPasteRef.current = terminalSettings?.scrollOnPaste ?? true;
+  const confirmMultilinePasteRef = useRef(terminalSettings?.confirmMultilinePaste ?? true);
+  confirmMultilinePasteRef.current = terminalSettings?.confirmMultilinePaste ?? true;
   const clearWipesScrollbackRef = useRef(terminalSettings?.clearWipesScrollback ?? true);
   clearWipesScrollbackRef.current = terminalSettings?.clearWipesScrollback ?? true;
 
@@ -1960,6 +1962,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     sessionRef,
     onHasSelectionChange: setHasSelection,
     scrollOnPasteRef,
+    confirmMultilinePasteRef,
     clearWipesScrollbackRef,
     isBroadcastEnabledRef,
     onBroadcastInputRef,
@@ -2327,6 +2330,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     sessionRef,
     terminalBackend,
     scrollOnPasteRef,
+    confirmMultilinePasteRef,
     onPasteData: broadcastUserPasteData,
     scrollToBottomAfterProgrammaticInput,
     containerRef,

@@ -330,6 +330,10 @@ const AutocompletePopup: React.FC<AutocompletePopupProps> = ({
         height: measuredSize.height,
         clampViewport,
         viewportPadding,
+        anchorTop: fixedLineTop,
+        anchorBottom: fixedLineBottom,
+        anchorGap,
+        renderUpward,
       })
     : { left: clampedLeft, top: anchoredTop };
 
