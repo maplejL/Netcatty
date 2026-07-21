@@ -37,15 +37,18 @@ const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(naviga
 const HostItem = memo(({
   host,
   isSelected,
+  selectedItemRef,
   onSelect,
   onMouseEnter,
 }: {
   host: Host;
   isSelected: boolean;
+  selectedItemRef?: React.Ref<HTMLDivElement>;
   onSelect: (host: Host) => void;
   onMouseEnter: () => void;
 }) => (
   <div
+    ref={selectedItemRef}
     className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${isSelected ? "bg-primary/15" : "hover:bg-muted/50"
       }`}
     onClick={() => onSelect(host)}
@@ -141,6 +144,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedItemRef = useRef<HTMLDivElement>(null);
 
   // Reset state when opening
   useEffect(() => {
@@ -306,6 +310,14 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
     return itemIndexMap.get(`${type}:${id}`) ?? -1;
   }, [itemIndexMap]);
 
+  const selectedItem = flatItems[selectedIndex];
+  const selectedItemKey = selectedItem ? `${selectedItem.type}:${selectedItem.id}` : '';
+
+  useEffect(() => {
+    if (!isOpen || !selectedItemKey) return;
+    selectedItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isOpen, selectedIndex, selectedItemKey]);
+
   if (!isOpen) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -430,6 +442,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                     key={host.id}
                     host={host}
                     isSelected={getItemIndex("host", host.id) === selectedIndex}
+                    selectedItemRef={getItemIndex("host", host.id) === selectedIndex ? selectedItemRef : undefined}
                     onSelect={onSelect}
                     onMouseEnter={() => setSelectedIndex(getItemIndex("host", host.id))}
                   />
@@ -460,6 +473,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                 return (
                   <div
                     key={tabId}
+                    ref={isSelected ? selectedItemRef : undefined}
                     className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isSelected ? "bg-primary/15" : "hover:bg-muted/50"
                       }`}
                     onClick={() => {
@@ -484,6 +498,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                 return (
                   <div
                     key={workspace.id}
+                    ref={isSelected ? selectedItemRef : undefined}
                     className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isSelected ? "bg-primary/15" : "hover:bg-muted/50"
                       }`}
                     onClick={() => {
@@ -510,6 +525,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                 return (
                   <div
                     key={session.id}
+                    ref={isSelected ? selectedItemRef : undefined}
                     className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isSelected ? "bg-primary/15" : "hover:bg-muted/50"
                       }`}
                     onClick={() => {
@@ -544,6 +560,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                   return (
                     <div
                       key={shell.id}
+                      ref={isSelected ? selectedItemRef : undefined}
                       className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
                         isSelected ? "bg-primary/15" : "hover:bg-muted/50"
                       }`}
@@ -578,6 +595,7 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                   </span>
                 </div>
                 <div
+                  ref={getItemIndex("action", "local-terminal") === selectedIndex ? selectedItemRef : undefined}
                   className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
                     getItemIndex("action", "local-terminal") === selectedIndex
                       ? "bg-primary/15"
