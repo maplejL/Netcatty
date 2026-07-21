@@ -176,6 +176,7 @@ import type { CreateXTermRuntimeContext } from "./terminal/runtime/createXTermRu
 import { TerminalView } from "./terminal/TerminalView";
 import {
   getInitialTerminalStatus,
+  shouldSuppressHostStartupCommandOnReconnect,
   shouldStartTerminalBackend,
 } from "./terminal/restoredSessionGate";
 import {
@@ -1097,7 +1098,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   }, [host, t, terminalSettings, updateStatus]);
 
   const prepareRestoredReconnect = useCallback(() => {
-    suppressHostStartupCommandRef.current = false;
+    suppressHostStartupCommandRef.current = shouldSuppressHostStartupCommandOnReconnect(
+      restoreState === "restored-disconnected" ? "restored" : "manual",
+    );
     if (restoreState !== "restored-disconnected") {
       restoreCwdIntentRef.current = null;
       return;
@@ -2228,7 +2231,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       prepareRestoredReconnect();
     } else {
       restoreCwdIntentRef.current = null;
-      suppressHostStartupCommandRef.current = true;
+      suppressHostStartupCommandRef.current = shouldSuppressHostStartupCommandOnReconnect("automatic");
     }
     cleanupSession();
     const term = termRef.current;
