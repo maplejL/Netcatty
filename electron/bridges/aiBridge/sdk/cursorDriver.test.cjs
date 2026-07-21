@@ -216,6 +216,13 @@ test("formatCursorErrorForUser points users to the settings API key", () => {
   );
 });
 
+test("formatCursorErrorForUser includes diagnostics when message is empty", () => {
+  assert.match(
+    formatCursorErrorForUser("", { code: "NETWORK", status: 502, requestId: "req-1" }),
+    /Cursor turn failed \(code=NETWORK, status=502, requestId=req-1\)/,
+  );
+});
+
 test("runCursorTurn creates or resumes an agent, streams events, and emits done", async () => {
   const emitter = makeEmitter();
   const captured = {};
@@ -232,6 +239,9 @@ test("runCursorTurn creates or resumes an agent, streams events, and emits done"
               agentId: "agent-new",
               async *stream() {
                 yield { type: "assistant", message: { content: [{ type: "text", text: "done" }] } };
+              },
+              async wait() {
+                return { status: "finished", result: "done" };
               },
             };
           },
@@ -277,6 +287,9 @@ test("runCursorTurn does not emit done after a Cursor error status", async () =>
                 yield { type: "status", status: "ERROR", message: "bad key" };
                 yield { type: "assistant", message: { content: [{ type: "text", text: "late" }] } };
               },
+              async wait() {
+                return { status: "finished" };
+              },
             };
           },
           close() {},
@@ -296,6 +309,58 @@ test("runCursorTurn does not emit done after a Cursor error status", async () =>
   assert.deepEqual(emitter.calls, [
     ["sessionId", "agent-error"],
     ["error", "bad key"],
+  ]);
+});
+
+test("runCursorTurn rejects when Cursor API key is missing", async () => {
+  const emitter = makeEmitter();
+  const result = await runCursorTurn({
+    prompt: "hi",
+    agentOptions: { model: { id: "composer-2.5" }, local: { cwd: "/repo" } },
+    emitter,
+    sdkModule: { Agent: { create() { throw new Error("should not create"); } } },
+  });
+  assert.deepEqual(result, { sessionId: null });
+  assert.deepEqual(emitter.calls, [[
+    "error",
+    "Cursor API Key is missing. Add it in Settings -> AI.",
+  ]]);
+});
+
+test("runCursorTurn surfaces wait() error status", async () => {
+  const emitter = makeEmitter();
+  const sdkModule = {
+    Agent: {
+      async create() {
+        return {
+          agentId: "agent-wait-error",
+          async send() {
+            return {
+              async *stream() {
+                yield { type: "assistant", message: { content: [{ type: "text", text: "partial" }] } };
+              },
+              async wait() {
+                return { status: "error", message: "quota exceeded" };
+              },
+            };
+          },
+          close() {},
+        };
+      },
+    },
+  };
+
+  await runCursorTurn({
+    prompt: "hi",
+    agentOptions: { apiKey: "key", model: { id: "composer-2.5" }, local: { cwd: "/repo" } },
+    emitter,
+    sdkModule,
+  });
+
+  assert.deepEqual(emitter.calls, [
+    ["sessionId", "agent-wait-error"],
+    ["text", "partial"],
+    ["error", "quota exceeded"],
   ]);
 });
 

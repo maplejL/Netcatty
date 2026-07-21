@@ -6,9 +6,35 @@
  * Cursor SDK local agents use Agent.create({ apiKey, model, local:{cwd},
  * mcpServers }) and stream SDKMessage events from run.stream().
  */
+const os = require("os");
+const path = require("path");
 const { mcpEnvPairsToObject } = require("./injectMcp.cjs");
 
 const DEFAULT_CURSOR_MODEL = "composer-2.5";
+
+/**
+ * Electron packaged apps often launch with cwd = System32 / Windows.
+ * Cursor local agents need a real writable workspace directory.
+ */
+function resolveCursorLocalCwd(cwd) {
+  const candidate = String(cwd || "").trim();
+  if (candidate) {
+    const normalized = path.resolve(candidate).toLowerCase();
+    const systemRoot = String(process.env.SystemRoot || "C:\\Windows").toLowerCase();
+    const isWindowsSystemDir =
+      process.platform === "win32" &&
+      (normalized === systemRoot ||
+        normalized.startsWith(systemRoot + path.sep) ||
+        normalized.includes(`${path.sep}system32`) ||
+        normalized.includes(`${path.sep}syswow64`));
+    if (!isWindowsSystemDir) return candidate;
+  }
+  try {
+    return os.homedir();
+  } catch {
+    return process.cwd();
+  }
+}
 
 function toCursorMcpServers(injectedMcpServers) {
   const servers = {};
@@ -44,7 +70,7 @@ function buildCursorAgentOptions({ apiKey, env, model, cwd, injectedMcpServers }
     apiKey: effectiveApiKey,
     model: parseCursorModelSelection(model),
     local: {
-      cwd: cwd || process.cwd(),
+      cwd: resolveCursorLocalCwd(cwd || process.cwd()),
       autoReview: false,
     },
   };
@@ -189,12 +215,43 @@ function getCursorDisplayToolName(rawName, args) {
   return name || nestedToolName || "tool";
 }
 
-function formatCursorErrorForUser(message) {
+function formatCursorErrorForUser(message, diagnostics) {
   const text = String(message || "").trim();
-  if (/api.?key|auth|unauthorized/i.test(text)) {
+  if (/api.?key|auth|unauthorized|unauthenticated/i.test(text)) {
     return "Cursor authentication failed. Update the Cursor API Key in Settings -> AI.";
   }
-  return text || "Cursor turn failed";
+  if (text) return text;
+
+  const parts = [];
+  if (diagnostics?.code) parts.push(`code=${diagnostics.code}`);
+  if (diagnostics?.status != null) parts.push(`status=${diagnostics.status}`);
+  if (diagnostics?.operation) parts.push(`op=${diagnostics.operation}`);
+  if (diagnostics?.requestId) parts.push(`requestId=${diagnostics.requestId}`);
+  if (diagnostics?.cause?.message) parts.push(String(diagnostics.cause.message).trim());
+  if (parts.length > 0) {
+    return `Cursor turn failed (${parts.join(", ")})`;
+  }
+  return "Cursor turn failed. Check Settings -> AI Cursor API Key, model, and network.";
+}
+
+function extractCursorStatusErrorMessage(event) {
+  if (!event || typeof event !== "object") return "";
+  const candidates = [
+    event.message,
+    event.error,
+    event.error?.message,
+    event.detail,
+    event.details,
+    event.reason,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    if (candidate && typeof candidate === "object" && typeof candidate.message === "string") {
+      const nested = candidate.message.trim();
+      if (nested) return nested;
+    }
+  }
+  return "";
 }
 
 function translateCursorEvent(event, emitter, state = {}) {
@@ -241,14 +298,17 @@ function translateCursorEvent(event, emitter, state = {}) {
       return;
     }
     case "status":
-      if (event.status === "ERROR") {
+      if (event.status === "ERROR" || event.status === "error" || event.status === "FAILED") {
         closeReasoning(state, emitter);
         state.failed = true;
-        state.errorMessage = String(event.message || "");
+        const statusMessage = extractCursorStatusErrorMessage(event);
+        state.errorMessage = statusMessage;
         console.warn("[Cursor SDK] status error", {
-          message: redactCursorSecret(event.message || ""),
+          message: redactCursorSecret(statusMessage),
+          status: event.status || null,
+          code: event.code || event.error?.code || null,
         });
-        emitter.emitError(formatCursorErrorForUser(event.message));
+        emitter.emitError(formatCursorErrorForUser(statusMessage, cursorErrorDiagnostics(event)));
         return true;
       }
       return false;
@@ -309,6 +369,11 @@ async function runCursorTurn({
     }
   }
 
+  if (!String(agentOptions?.apiKey || "").trim()) {
+    emitter.emitError("Cursor API Key is missing. Add it in Settings -> AI.");
+    return { sessionId: resumeSessionId || null };
+  }
+
   const { Agent } = resolvedModule;
   let agent = null;
   let run = null;
@@ -362,6 +427,37 @@ async function runCursorTurn({
           break;
         }
       }
+
+      // SDK docs: stream observes; wait() is the terminal result and catches
+      // mid-flight failures that may not appear as stream status events.
+      if (!failed && !signal?.aborted && run && typeof run.wait === "function") {
+        const waitResult = await abortable(run.wait(), signal);
+        const waitStatus = String(waitResult?.status || "").toLowerCase();
+        if (waitStatus === "error" || waitStatus === "failed") {
+          failed = true;
+          const waitMessage =
+            extractCursorStatusErrorMessage(waitResult) ||
+            waitResult?.error ||
+            waitResult?.message ||
+            `Cursor run ended with status=${waitResult?.status || "error"}`;
+          state.errorMessage = String(waitMessage || "");
+          console.warn("[Cursor SDK] wait() error", {
+            status: waitResult?.status || null,
+            message: redactCursorSecret(state.errorMessage),
+            runId: waitResult?.id || run?.id || null,
+          });
+          emitter.emitError(formatCursorErrorForUser(state.errorMessage, cursorErrorDiagnostics(waitResult)));
+        } else if (!hasContent && waitResult?.result) {
+          // Some SDK builds deliver final text only via wait().
+          const finalText = typeof waitResult.result === "string"
+            ? waitResult.result
+            : resultToText(waitResult.result);
+          if (finalText) {
+            emitter.text(finalText);
+            hasContent = true;
+          }
+        }
+      }
     } finally {
       if (signal) signal.removeEventListener("abort", onAbort);
     }
@@ -383,12 +479,13 @@ async function runCursorTurn({
       return { sessionId };
     }
     {
-      const message = error?.message || String(error);
-      console.warn("[Cursor SDK] run error", cursorErrorDiagnostics(error));
+      const diagnostics = cursorErrorDiagnostics(error);
+      const message = diagnostics.message || error?.message || String(error);
+      console.warn("[Cursor SDK] run error", diagnostics);
       if (isCursorAuthMessage(message)) {
         await logCursorApiKeyValidation(resolvedModule, agentOptions?.apiKey);
       }
-      emitter.emitError(formatCursorErrorForUser(message));
+      emitter.emitError(formatCursorErrorForUser(message, diagnostics));
     }
     return { sessionId };
   } finally {
@@ -449,10 +546,12 @@ module.exports = {
   applyTemporaryProcessEnv,
   buildCursorAgentOptions,
   buildCursorSendMessage,
+  extractCursorStatusErrorMessage,
   formatCursorErrorForUser,
   listCursorModels,
   mapCursorModels,
   parseCursorModelSelection,
+  resolveCursorLocalCwd,
   runCursorTurn,
   toCursorMcpServers,
   translateCursorEvent,
