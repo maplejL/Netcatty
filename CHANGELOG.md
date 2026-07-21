@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.1.2] - 2026-07-21
+
+本 fork 第三版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。
+
+### 本 fork 修复 / 增强
+
+#### 日常效率
+- 断开连接 / Ctrl+D 后保留终端标签（可回看滚动缓冲、再连）
+- SFTP 路径可插入终端（中键 / 右键，带 shell 安全引号）
+- SFTP 追随终端 CWD：多会话同主机时路径绑定更准确
+
+#### 终端体验
+- 多行粘贴可确认并编辑（设置项默认开启）
+- 补全菜单避开当前输入行，不再挡住光标
+
+#### SFTP / 编辑器
+- 远程文件「编辑」打开为独立顶层编辑器标签
+- 编辑器标签右键「与当前编辑器对照」左右分栏
+- Vault 多选主机 → 批量 SFTP 上传同一批本地文件
+
+#### AI / Cursor
+- Cursor turn 失败时展示更具体诊断（缺 Key、code/status 等）
+- Cursor SDK 调用 `run.wait()`，并避免 System32 作为本地 cwd
+- 更新检测与发布源指向本 fork（maplejL/Netcatty）
+
+### 构建
+- 正式安装包：`electron-builder --config electron-builder.release-win-x64.cjs`
+- 本地热更 asar：`npm run pack:asar`
+
+---
+
 ## [0.1.1] - 2026-07-17
 
 本 fork 第二版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。  

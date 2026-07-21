@@ -1,5 +1,5 @@
 /**
- * Temporary electron-builder config for fork release v0.1.1 (Windows x64 only).
+ * Temporary electron-builder config for fork release (Windows x64 only).
  * Disables npmRebuild to avoid MSVC Spectre-mitigated libs requirement on this machine.
  */
 const base = require('./electron-builder.config.cjs');
