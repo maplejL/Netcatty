@@ -47,6 +47,7 @@ export const ruCoreMessages: Messages = {
   'sort.za': 'Я-А',
   'sort.newest': 'Сначала новые',
   'sort.oldest': 'Сначала старые',
+  'sort.recent': 'Недавно подключенные',
   'sort.group': 'По группе',
   'field.label': 'Метка',
   'field.type': 'Тип',

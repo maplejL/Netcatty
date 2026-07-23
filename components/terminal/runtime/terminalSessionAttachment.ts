@@ -29,6 +29,12 @@ import {
 } from "./terminalSyncBlockFilter";
 import { appendEraseScrollbackAfterFullErases } from "../clearTerminalViewport";
 import {
+  consumePendingInterruptScroll,
+  forceTerminalScrollToBottomForInterrupt,
+  markPendingInterruptScroll,
+  shouldForceScrollAfterInterruptDisplay,
+} from "./terminalInterruptScroll";
+import {
   type CoalescedTerminalWriteOptions,
   enqueueCoalescedTerminalWrite,
   flushTerminalWriteCoalescer,
@@ -97,13 +103,19 @@ export const buildTermEnv = (host: Host, terminalSettings?: TerminalSettings) =>
 const handleTerminalOutputAutoScroll = (
   ctx: TerminalSessionStartersContext,
   term: XTerm,
+  force = false,
 ) => {
   const settings = ctx.terminalSettingsRef?.current ?? ctx.terminalSettings;
-  if (!shouldScrollOnTerminalOutput(settings)) {
+  if (!force && !shouldScrollOnTerminalOutput(settings)) {
     return;
   }
 
   if (ctx.isVisibleRef?.current === false) {
+    if (force) {
+      // Keep the sticky interrupt intent so tab focus can catch up.
+      markPendingInterruptScroll(term);
+      return;
+    }
     notePendingOutputScrollIfEnabled(ctx);
     return;
   }
@@ -306,8 +318,8 @@ const writeSessionDataImmediate = (
       clearPasteResidualAndCapture();
       syncPrompt();
       maybeEndCommandTiming();
-      if (shouldScrollOnTerminalOutput(settings)) {
-        handleTerminalOutputAutoScroll(ctx, term);
+      if (shouldScrollOnTerminalOutput(settings) || consumePendingInterruptScroll(term)) {
+        handleTerminalOutputAutoScroll(ctx, term, true);
       }
       if (ctx.isVisibleRef?.current !== false) {
         scheduleTerminalRepaintWhenUnfocused(term);
@@ -480,6 +492,10 @@ export const attachSessionToTerminal = (
       acknowledgeDroppedTerminalDisplayBytes(ctx, filtered.droppedBytes);
       if (!filtered.accepted) return;
 
+      if (shouldForceScrollAfterInterruptDisplay(filtered.reason)) {
+        markPendingInterruptScroll(term);
+      }
+
       const ingressBytes = filtered.acceptedBytes ?? filtered.data.length;
       let data = filtered.data;
       if (opts?.convertLfToCrlf) {
@@ -487,6 +503,9 @@ export const attachSessionToTerminal = (
       }
       data = sudoAutofill?.handleOutput(data) ?? data;
       writeSessionData(ctx, term, data, ingressBytes);
+      if (shouldForceScrollAfterInterruptDisplay(filtered.reason)) {
+        forceTerminalScrollToBottomForInterrupt(term);
+      }
       ctx.onTerminalOutput?.(data, meta);
       if (!ctx.hasConnectedRef.current) {
         ctx.updateStatus("connected");

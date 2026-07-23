@@ -742,13 +742,48 @@ html[data-theme-transition] *::after {
   color: var(--top-tabs-muted, hsl(var(--muted-foreground)));
 }
 
-/* Side work-tab rail: full-width titles, no horizontal truncate caps */
+/* Side work-tab rail: list-style rows with full titles (not top-bar chrome) */
 [data-work-tabs-location="left"] .netcatty-tab,
 [data-work-tabs-location="right"] .netcatty-tab {
   width: 100%;
   min-width: 0;
   max-width: none;
-  border-radius: 0.375rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.375rem;
+  flex-shrink: 0;
+}
+
+[data-work-tabs-location="left"] .netcatty-tab[data-state="active"],
+[data-work-tabs-location="right"] .netcatty-tab[data-state="active"] {
+  box-shadow: inset 2px 0 0 var(--top-tabs-accent, hsl(var(--accent)));
+}
+
+[data-work-tabs-location="left"] .top-tab-root-label,
+[data-work-tabs-location="right"] .top-tab-root-label,
+[data-work-tabs-location="left"] .top-tab-root-label-compact,
+[data-work-tabs-location="right"] .top-tab-root-label-compact {
+  max-width: none;
+  opacity: 1;
+  margin-left: 0;
+}
+
+[data-work-tabs-location="left"] .top-tab-host-tree-toggle-slot,
+[data-work-tabs-location="right"] .top-tab-host-tree-toggle-slot {
+  width: 100%;
+  opacity: 1;
+}
+
+[data-work-tabs-location="left"] .top-tab-host-tree-toggle-slot[data-visible="false"],
+[data-work-tabs-location="right"] .top-tab-host-tree-toggle-slot[data-visible="false"] {
+  width: 0;
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
 }
 
 .no-scrollbar {

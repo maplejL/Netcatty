@@ -47,6 +47,7 @@ export const enCoreMessages: Messages = {
   'sort.za': 'Z-a',
   'sort.newest': 'Newest to oldest',
   'sort.oldest': 'Oldest to newest',
+  'sort.recent': 'Recently connected',
   'sort.group': 'By group',
   'field.label': 'Label',
   'field.type': 'Type',

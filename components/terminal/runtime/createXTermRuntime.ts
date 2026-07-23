@@ -23,6 +23,7 @@ import {
   shouldEnableNativeUserInputAutoScroll,
   shouldScrollOnTerminalInput,
   shouldScrollOnTerminalPaste,
+  isTerminalInterruptInput,
 } from "../../../domain/terminalScroll";
 import {
   resolveHostTerminalFontFamilyId,
@@ -79,6 +80,7 @@ import {
   logTerminalInterruptTrace,
 } from "./terminalInterruptDiagnostics";
 import { clearTerminalInputStateForInterrupt } from "./terminalInterruptInputState";
+import { forceTerminalScrollToBottomForInterrupt } from "./terminalInterruptScroll";
 import { getFlowControllerForTerm } from "./terminalSessionAttachment";
 import {
   prioritizeTerminalInput,
@@ -840,11 +842,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
     }
 
     // Autocomplete key handler (must be checked before other handlers)
-    if (ctx.onAutocompleteKeyEvent) {
-      const consumed = ctx.onAutocompleteKeyEvent(e);
-      if (!consumed) return false; // Event was consumed by autocomplete
-    }
-
+    // Ctrl+C interrupt runs first so popup/ghost state cannot block scroll-to-bottom.
     if (shouldUseUrgentTerminalInterrupt(e, { hasSelection: term.hasSelection() })) {
       const id = ctx.sessionRef.current;
       if (id && ctx.statusRef.current === "connected") {
@@ -884,9 +882,14 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         if (ctx.isBroadcastEnabledRef.current && ctx.onBroadcastInputRef.current) {
           ctx.onBroadcastInputRef.current("\x03", ctx.sessionId);
         }
-        scrollToBottomAfterInput("\x03");
+        forceTerminalScrollToBottomForInterrupt(term);
         return false;
       }
+    }
+
+    if (ctx.onAutocompleteKeyEvent) {
+      const consumed = ctx.onAutocompleteKeyEvent(e);
+      if (!consumed) return false; // Event was consumed by autocomplete
     }
 
     const currentScheme = ctx.hotkeySchemeRef.current;
@@ -1181,7 +1184,9 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         onBroadcastInput?.(broadcastData, ctx.sessionId);
       }
 
-      if (!shouldSuppressTerminalInputScrollForUserPaste(term, data)) {
+      if (isTerminalInterruptInput(data)) {
+        forceTerminalScrollToBottomForInterrupt(term);
+      } else if (!shouldSuppressTerminalInputScrollForUserPaste(term, data)) {
         scrollToBottomAfterInput(data);
       }
 

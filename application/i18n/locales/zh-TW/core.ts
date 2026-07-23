@@ -34,6 +34,7 @@ export const zhTWCoreMessages: Messages = {
   'sort.za': 'Z-a',
   'sort.newest': '從新到舊',
   'sort.oldest': '從舊到新',
+  'sort.recent': '最近連線',
   'sort.group': '按分組',
   'field.label': 'Label',
   'field.type': '型別',

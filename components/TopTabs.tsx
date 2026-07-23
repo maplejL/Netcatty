@@ -388,11 +388,16 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       });
     }
 
-    if (!rootTabsCompact) {
+    // Side rails always show Vault/SFTP labels — compact icon-only mode is for
+    // the top bar when the host-tree toggle competes for horizontal space.
+    if (!isSideTabs && !rootTabsCompact) {
       cancelRootTabsCompactRef.current = scheduleChromeLayoutAnimation(() => {
         cancelRootTabsCompactRef.current = null;
         setRootTabsCompact(true);
       });
+    }
+    if (isSideTabs && rootTabsCompact) {
+      setRootTabsCompact(false);
     }
 
     return () => {
@@ -401,7 +406,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       cancelRootTabsCompactRef.current?.();
       cancelRootTabsCompactRef.current = null;
     };
-  }, [hostTreeChromeReady, rootTabsCompact, showHostTreeToggle]);
+  }, [hostTreeChromeReady, isSideTabs, rootTabsCompact, showHostTreeToggle]);
 
   const updateHostTreeTabGutter = useCallback((options?: { deferClose?: boolean }) => {
     if (hostTreeGutterExiting) return;
@@ -880,7 +885,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       className={cn(
         'relative bg-secondary app-drag',
         isSideTabs
-          ? 'h-full w-[200px] min-w-[160px] max-w-[280px] flex-shrink-0 border-border/60'
+          ? 'h-full w-[220px] min-w-[200px] max-w-[300px] flex-shrink-0 border-border/60'
           : 'w-full',
         workTabsLocation === 'left' && 'border-r',
         workTabsLocation === 'right' && 'border-l',
@@ -904,7 +909,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       <div
         className={cn(
           'app-drag overflow-visible',
-          isSideTabs ? 'h-full flex flex-col gap-1 px-1.5 py-2' : 'h-9 flex items-end gap-0',
+          isSideTabs ? 'h-full flex flex-col gap-2 px-2 py-2.5' : 'h-9 flex items-end gap-0',
         )}
         style={{
           ...dragRegionStyle,
@@ -921,15 +926,53 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
           ref={fixedLeftTabsRef}
           className={cn(
             'flex-shrink-0 app-drag',
-            isSideTabs ? 'flex flex-col gap-0.5 w-full' : 'flex items-end gap-0',
+            isSideTabs ? 'flex flex-col gap-1 w-full' : 'flex items-end gap-0',
           )}
         >
+          {isSideTabs && hasHostTreeToggleSurface && (
+            <div
+              ref={hostTreeToggleSlotRef}
+              className="top-tab-host-tree-toggle-slot flex-shrink-0 app-no-drag self-stretch mb-0.5"
+              data-section="top-tabs-host-tree-toggle"
+              data-visible={effectiveShowHostTreeToggle ? 'true' : 'false'}
+              style={noDragRegionStyle}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-tab-type="host-tree-toggle"
+                    data-state={isHostTreeOpen ? 'active' : 'inactive'}
+                    className="h-8 w-full justify-start gap-2 px-2 app-no-drag rounded-md hover:bg-transparent"
+                    style={{
+                      color: isHostTreeOpen
+                        ? 'var(--top-tabs-fg, hsl(var(--foreground)))'
+                        : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))',
+                      pointerEvents: effectiveShowHostTreeToggle ? 'auto' : 'none',
+                      ...noDragRegionStyle,
+                    }}
+                    onPointerDown={handleHostTreeTogglePointerDown}
+                    onClick={handleHostTreeToggleClick}
+                  >
+                    <Menu size={14} />
+                    <span className="text-xs font-semibold truncate">
+                      {isHostTreeOpen ? t('terminal.layer.hostTree.collapse') : t('terminal.layer.hostTree.expand')}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isHostTreeOpen ? t('terminal.layer.hostTree.collapse') : t('terminal.layer.hostTree.expand')}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
           <RootTopTab
             tabId="vault"
             label="Vaults"
             icon={<FolderLock size={14} />}
             className={cn('rounded', isSideTabs && 'w-full max-w-none min-w-0 rounded-md')}
-            compact={rootTabsCompact}
+            compact={!isSideTabs && rootTabsCompact}
           />
           {showSftpTab && (
             <RootTopTab
@@ -937,7 +980,14 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
               label="SFTP"
               icon={<Folder size={14} />}
               className={cn(isSideTabs ? 'w-full max-w-none min-w-0 rounded-md' : 'rounded-t-md')}
-              compact={rootTabsCompact}
+              compact={!isSideTabs && rootTabsCompact}
+            />
+          )}
+          {isSideTabs && (
+            <div
+              className="mx-1 mt-1 mb-0.5 h-px flex-shrink-0"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--top-tabs-fg, hsl(var(--foreground))) 12%, transparent)' }}
+              aria-hidden
             />
           )}
         </div>
@@ -964,12 +1014,12 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
           }}
           onDrop={handleTabBarDrop}
         >
-          {hasHostTreeToggleSurface && (
+          {hasHostTreeToggleSurface && !isSideTabs && (
             <div
               ref={hostTreeToggleSlotRef}
               className={cn(
                 'top-tab-host-tree-toggle-slot flex-shrink-0 app-no-drag',
-                isSideTabs ? 'self-start' : 'mb-0 self-end',
+                'mb-0 self-end',
               )}
               data-section="top-tabs-host-tree-toggle"
               data-visible={effectiveShowHostTreeToggle ? 'true' : 'false'}
@@ -1043,7 +1093,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
               className={cn(
                 'app-drag scrollbar-none',
                 isSideTabs
-                  ? 'flex flex-col gap-0.5 overflow-y-auto overflow-x-hidden max-h-full w-full'
+                  ? 'flex flex-col gap-1 overflow-y-auto overflow-x-hidden max-h-full w-full'
                   : 'flex items-end gap-0 overflow-x-auto max-w-full',
               )}
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -1063,16 +1113,23 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size={isSideTabs ? 'sm' : 'icon'}
                       data-section="top-tabs-quick-switcher-toggle"
                       className={cn(
-                        'h-7 w-7 flex-shrink-0 app-no-drag rounded-none',
-                        isSideTabs ? 'self-start' : 'mb-0',
+                        'flex-shrink-0 app-no-drag',
+                        isSideTabs
+                          ? 'mt-1 h-8 w-full justify-start gap-2 rounded-md px-2'
+                          : 'h-7 w-7 rounded-none mb-0',
                       )}
                       style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
                       onClick={onOpenQuickSwitcher}
                     >
                       <Plus size={14} />
+                      {isSideTabs && (
+                        <span className="text-xs font-medium truncate">
+                          {t('topTabs.openQuickSwitcher')}
+                        </span>
+                      )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{t('topTabs.openQuickSwitcher')}</TooltipContent>

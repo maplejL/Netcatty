@@ -5,6 +5,7 @@ import type { EditorTab } from '../state/editorTabStore';
 import type { LogView } from '../state/logViewState';
 import { useManualTerminalChromeSurfaceInjection } from '../state/useManualTerminalChromeSurfaceInjection';
 import { TerminalHostTreeSidebar } from '../../components/terminalLayer/TerminalHostTreeSidebar';
+import { buildHostSessionPresenceMap } from '../../domain/hostSessionPresence';
 import type {
   ResolvedAppearance,
   TerminalAppearanceHostScope,
@@ -93,6 +94,11 @@ export const AppHostTreeLayer: React.FC<AppHostTreeLayerProps> = ({
     workspaces,
   }), [activeTabId, editorTabs, sessions, workspaces]);
 
+  const hostPresenceMap = useMemo(
+    () => buildHostSessionPresenceMap(sessions),
+    [sessions],
+  );
+
   const hostTreeTheme = useMemo(() => (
     resolveActiveChromeTheme({
       accentMode,
@@ -142,6 +148,7 @@ export const AppHostTreeLayer: React.FC<AppHostTreeLayerProps> = ({
         groupConfigs={groupConfigs}
         resolvedPreviewTheme={hostTreeTheme}
         activeHostId={activeHostId}
+        hostPresenceMap={hostPresenceMap}
         onConnect={onConnect}
         onCreateLocalTerminal={onCreateLocalTerminal}
       />

@@ -169,6 +169,7 @@ const isSortMode = (value: string): value is SortMode =>
   value === "za" ||
   value === "newest" ||
   value === "oldest" ||
+  value === "recent" ||
   value === "group";
 
 // Props without isActive - it's now subscribed internally

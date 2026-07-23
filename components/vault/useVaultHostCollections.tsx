@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 
 import { deriveIpGroupPath } from "../../domain/hostIpGroup";
+import { compareHostLabels, compareHostsBySortMode } from "../../domain/hostSort";
 import { upsertKnownHost } from "../../domain/knownHosts";
 import { sortByVaultOrder, sortVaultStringsByOrder } from "../../domain/vaultOrder";
 import { matchesHostSearchQuery, matchesSearchQuery } from "../../lib/searchMatcher";
@@ -108,26 +109,7 @@ export function useVaultHostCollections({
 
   const sortHosts = useCallback((input: readonly Host[]): Host[] => {
     if (sortMode === "manual") return sortByVaultOrder(input);
-    return [...input].sort((a, b) => {
-      switch (sortMode) {
-        case "az":
-          return a.label.localeCompare(b.label);
-        case "za":
-          return b.label.localeCompare(a.label);
-        case "newest":
-          return (b.createdAt || 0) - (a.createdAt || 0);
-        case "oldest":
-          return (a.createdAt || 0) - (b.createdAt || 0);
-        case "group": {
-          const groupA = a.group || "";
-          const groupB = b.group || "";
-          const groupCmp = groupA.localeCompare(groupB);
-          return groupCmp !== 0 ? groupCmp : a.label.localeCompare(b.label);
-        }
-        default:
-          return 0;
-      }
-    });
+    return [...input].sort((a, b) => compareHostsBySortMode(a, b, sortMode));
   }, [sortMode]);
 
   const orderedCustomGroups = useMemo(() => {
@@ -242,7 +224,7 @@ export function useVaultHostCollections({
     const pinnedHosts = useMemo(() => {
       if (selectedGroupPath) return [];
       const filtered = filteredHosts.filter((h) => h.pinned);
-      return filtered.sort((a, b) => a.label.localeCompare(b.label));
+      return filtered.sort((a, b) => compareHostLabels(a.label, b.label));
     }, [filteredHosts, selectedGroupPath]);
   
   // Recently connected hosts for root-level display
@@ -282,7 +264,7 @@ export function useVaultHostCollections({
         groupMap.get(groupName)!.push(host);
       }
   
-      const sortedKeys = [...groupMap.keys()].sort((a, b) => a.localeCompare(b));
+      const sortedKeys = [...groupMap.keys()].sort((a, b) => compareHostLabels(a, b));
       for (const key of sortedKeys) {
         groups.push({ name: key, hosts: groupMap.get(key)! });
       }
@@ -333,7 +315,7 @@ export function useVaultHostCollections({
   const treeViewGroupTree = useMemo<GroupNode[]>(() => {
       const nodes = Object.values(buildTreeViewGroupTree) as GroupNode[];
       if (sortMode === "manual") return sortGroupNodes(nodes);
-      return nodes.sort((a, b) => a.name.localeCompare(b.name));
+      return nodes.sort((a, b) => compareHostLabels(a.name, b.name));
     }, [buildTreeViewGroupTree, sortGroupNodes, sortMode]);
 
   const treeViewUngroupedHosts = useMemo(() => {
@@ -397,13 +379,13 @@ export function useVaultHostCollections({
             return false;
           });
         if (sortMode === "manual") return sortGroupNodes(nodes);
-        return nodes.sort((a, b) => a.name.localeCompare(b.name));
+        return nodes.sort((a, b) => compareHostLabels(a.name, b.name));
       }
       const node = findGroupNode(selectedGroupPath);
       if (!node || !node.children) return [];
       const children = Object.values(node.children) as GroupNode[];
       if (sortMode === "manual") return sortGroupNodes(children);
-      return children.sort((a, b) => a.name.localeCompare(b.name));
+      return children.sort((a, b) => compareHostLabels(a.name, b.name));
       // eslint-disable-next-line react-hooks/exhaustive-deps -- findGroupNode is derived from buildGroupTree
     }, [buildGroupTree, selectedGroupPath, customGroups, sortGroupNodes, sortMode]);
   

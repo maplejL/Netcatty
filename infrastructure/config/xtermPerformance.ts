@@ -187,8 +187,10 @@ export function resolveXTermPerformanceConfig({
   } else if (rendererType === "webgl") {
     resolvedPreferDOM = false;
   } else {
-    // Auto mode: use DOM on low-memory devices
-    resolvedPreferDOM = baseConfig.webgl.preferDOM || lowMem;
+    // Auto mode: DOM on low-memory devices, and on Windows where WebGL + large
+    // scrollback makes key-repeat (arrows/backspace) freeze until key-up
+    // (#2278 / #2251). Users can still force WebGL in terminal settings.
+    resolvedPreferDOM = baseConfig.webgl.preferDOM || lowMem || platform === "win32";
   }
 
   const scrollbackProfile = lowMem

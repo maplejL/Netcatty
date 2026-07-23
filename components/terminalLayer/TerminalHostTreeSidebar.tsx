@@ -45,6 +45,11 @@ import { HostTreeGroupContextMenuContent, HostTreeHostContextMenuContent } from 
 import { HostTreeGroupInlineRenameInput } from '../host/HostTreeGroupInlineRenameInput';
 import { LazyMessageResponse } from '../ai-elements/LazyMessageResponse';
 import { DistroAvatar } from '../DistroAvatar';
+import { HostAvatarWithPresence } from '../host/HostSessionPresenceDot';
+import {
+  getHostSessionPresence,
+  type HostSessionPresence,
+} from '../../domain/hostSessionPresence';
 import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { TREE_ROW_HEIGHT } from '../sftp/SftpPaneTreeNode';
@@ -107,6 +112,7 @@ interface TerminalHostTreeSidebarProps {
   groupConfigs?: GroupConfig[];
   resolvedPreviewTheme: TerminalTheme;
   activeHostId?: string | null;
+  hostPresenceMap?: ReadonlyMap<string, HostSessionPresence>;
   onConnect: (host: Host) => void;
   onCreateLocalTerminal?: () => void;
 }
@@ -306,6 +312,7 @@ type HostTreeFlatRowProps = {
   isDragOver: boolean;
   isInlineEditing: boolean;
   inlineEditInitialName?: string;
+  hostPresence?: HostSessionPresence;
   onConnect: (host: Host) => void;
   onTogglePath: (path: string) => void;
   onDragOverTarget: (target: HostTreeDropTarget) => void;
@@ -326,6 +333,7 @@ const HostTreeFlatRowItem = memo<HostTreeFlatRowProps>(({
   isDragOver,
   isInlineEditing,
   inlineEditInitialName,
+  hostPresence = 'none',
   onConnect,
   onTogglePath,
   onDragOverTarget,
@@ -394,7 +402,7 @@ const HostTreeFlatRowItem = memo<HostTreeFlatRowProps>(({
         onMouseLeave={(event) => {
           if (!isActive && !isDragOver) event.currentTarget.style.backgroundColor = '';
         }}
-        onDoubleClick={() => {
+        onClick={() => {
           if (!isInlineEditing) onConnect(row.host);
         }}
         onKeyDown={(event) => {
@@ -407,7 +415,9 @@ const HostTreeFlatRowItem = memo<HostTreeFlatRowProps>(({
       >
         <span className="flex h-5 w-4 shrink-0 items-center" />
         <span className="flex h-5 shrink-0 items-center justify-center">
-          <DistroAvatar host={row.host} size="xs" fallback={row.host.label.slice(0, 1).toUpperCase()} />
+          <HostAvatarWithPresence presence={hostPresence}>
+            <DistroAvatar host={row.host} size="xs" fallback={row.host.label.slice(0, 1).toUpperCase()} />
+          </HostAvatarWithPresence>
         </span>
         {isInlineEditing && menuActions && inlineEditInitialName ? (
           <HostTreeGroupInlineRenameInput
@@ -612,6 +622,7 @@ const TerminalHostTreeSidebarInner: React.FC<TerminalHostTreeSidebarProps> = ({
   groupConfigs = [],
   resolvedPreviewTheme,
   activeHostId,
+  hostPresenceMap,
   onConnect,
   onCreateLocalTerminal,
 }) => {
@@ -870,6 +881,11 @@ const TerminalHostTreeSidebarInner: React.FC<TerminalHostTreeSidebarProps> = ({
             ? inlineHostEdit.initialName
             : undefined
       }
+      hostPresence={
+        row.kind === 'host'
+          ? getHostSessionPresence(hostPresenceMap, row.host.id)
+          : 'none'
+      }
       onConnect={onConnect}
       onTogglePath={togglePath}
       onDragOverTarget={handleDragOverTarget}
@@ -885,6 +901,7 @@ const TerminalHostTreeSidebarInner: React.FC<TerminalHostTreeSidebarProps> = ({
     canDrag,
     clearDragOver,
     expandedPaths,
+    hostPresenceMap,
     inlineEdit,
     inlineHostEdit,
     handleDragLeaveRow,
@@ -1127,6 +1144,7 @@ export const TerminalHostTreeSidebar = memo(
     && prev.surfaceVisible === next.surfaceVisible
     && prev.customGroups === next.customGroups
     && prev.activeHostId === next.activeHostId
+    && prev.hostPresenceMap === next.hostPresenceMap
     && themeFingerprint(prev.resolvedPreviewTheme) === themeFingerprint(next.resolvedPreviewTheme)
     && prev.onConnect === next.onConnect
     && prev.onCreateLocalTerminal === next.onCreateLocalTerminal

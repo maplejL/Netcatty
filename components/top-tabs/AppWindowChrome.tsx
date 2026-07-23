@@ -23,6 +23,33 @@ interface AppWindowChromeProps {
   className?: string;
 }
 
+/** Soft titlebar fill for the empty drag region when work tabs sit on the side. */
+const TitlebarPatternFill: React.FC = () => (
+  <div
+    className="pointer-events-none absolute inset-0 overflow-hidden"
+    aria-hidden
+  >
+    <div
+      className="absolute inset-0 opacity-[0.55]"
+      style={{
+        backgroundImage: [
+          'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--top-tabs-fg, hsl(var(--foreground))) 14%, transparent) 1px, transparent 0)',
+          'linear-gradient(115deg, color-mix(in srgb, var(--top-tabs-accent, hsl(var(--accent))) 8%, transparent), transparent 42%)',
+        ].join(', '),
+        backgroundSize: '11px 11px, 100% 100%',
+        backgroundPosition: '0 0, 0 0',
+      }}
+    />
+    <div
+      className="absolute inset-y-0 right-0 w-40"
+      style={{
+        background:
+          'linear-gradient(to right, transparent, var(--top-tabs-bg, hsl(var(--secondary))))',
+      }}
+    />
+  </div>
+);
+
 export const AppWindowChrome: React.FC<AppWindowChromeProps> = memo(({
   theme,
   isMacClient,
@@ -49,7 +76,13 @@ export const AppWindowChrome: React.FC<AppWindowChromeProps> = memo(({
         paddingRight: showWindowControls ? 0 : 12,
       }}
     >
-      <div className="flex-1 h-full app-drag" style={dragRegionStyle} aria-hidden />
+      <div
+        className="relative flex-1 h-full min-w-0 app-drag overflow-hidden"
+        style={dragRegionStyle}
+        aria-hidden
+      >
+        <TitlebarPatternFill />
+      </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

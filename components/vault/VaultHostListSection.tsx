@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
+import {
+  buildHostSessionPresenceMap,
+  getHostSessionPresence,
+} from "../../domain/hostSessionPresence";
+import { HostAvatarWithPresence } from "../host/HostSessionPresenceDot";
 import { HostNotesIndicator } from "../host/HostNotesIndicator";
 import { HostNotesSummaryLine } from "../host/HostNotesSummaryLine";
 import { VaultEntityIcon, vaultPrimaryIconClass } from "./VaultEntityIcon";
@@ -34,6 +39,10 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
   const draggingHostIdRef = React.useRef<string | null>(null);
   const lastPreviewReorderRef = React.useRef<string | null>(null);
   const prepareGridLayoutAnimation = useVaultGridLayoutAnimation(hostListScrollRef);
+  const hostPresenceMap = React.useMemo(
+    () => buildHostSessionPresenceMap(sessions ?? []),
+    [sessions],
+  );
 
   const handleHostDragStart = React.useCallback((e: React.DragEvent, hostId: string) => {
     e.dataTransfer.effectAllowed = "move";
@@ -291,7 +300,9 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                         )}
                                       </div>
                                     )}
-                                    <DistroAvatar host={safeHost} fallback={distroBadge.text} size="lg" />
+                                    <HostAvatarWithPresence presence={getHostSessionPresence(hostPresenceMap, host.id)}>
+                                      <DistroAvatar host={safeHost} fallback={distroBadge.text} size="lg" />
+                                    </HostAvatarWithPresence>
                                     <div className="min-w-0 flex flex-col justify-center gap-0.5 flex-1">
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-sm font-semibold truncate leading-5">
@@ -402,7 +413,9 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                         )}
                                       </div>
                                     )}
-                                    <DistroAvatar host={safeHost} fallback={distroBadge.text} size="lg" />
+                                    <HostAvatarWithPresence presence={getHostSessionPresence(hostPresenceMap, host.id)}>
+                                      <DistroAvatar host={safeHost} fallback={distroBadge.text} size="lg" />
+                                    </HostAvatarWithPresence>
                                     <div className="min-w-0 flex flex-col justify-center gap-0.5 flex-1">
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-sm font-semibold truncate leading-5">
@@ -670,6 +683,7 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
 	                      }
 	                      setDragOverDropTarget={setGroupDragOverDropTarget}
 	                      groupConfigs={groupConfigs}
+                      hostPresenceMap={hostPresenceMap}
 	                    />
                     </div>
                   ) : sortMode === "group" && groupedDisplayHosts ? (
@@ -747,11 +761,13 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                               )}
                                             </div>
                                           )}
-                                          <DistroAvatar
-                                            host={safeHost}
-                                            fallback={distroBadge.text}
-                                            size="lg"
-                                          />
+                                          <HostAvatarWithPresence presence={getHostSessionPresence(hostPresenceMap, host.id)}>
+                                            <DistroAvatar
+                                              host={safeHost}
+                                              fallback={distroBadge.text}
+                                              size="lg"
+                                            />
+                                          </HostAvatarWithPresence>
                                           <div className="min-w-0 flex flex-col justify-center gap-0.5 flex-1">
                                             <div className="flex items-center gap-1.5">
                                               <span className="text-sm font-semibold truncate leading-5">
@@ -897,11 +913,13 @@ export function VaultHostListSection({ ctx }: { ctx: VaultHostListSectionContext
                                         )}
                                       </div>
                                     )}
-                                    <DistroAvatar
-                                      host={safeHost}
-                                      fallback={distroBadge.text}
-                                      size="lg"
-                                    />
+                                    <HostAvatarWithPresence presence={getHostSessionPresence(hostPresenceMap, host.id)}>
+                                      <DistroAvatar
+                                        host={safeHost}
+                                        fallback={distroBadge.text}
+                                        size="lg"
+                                      />
+                                    </HostAvatarWithPresence>
                                     <div className="min-w-0 flex flex-col justify-center gap-0.5 flex-1">
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-sm font-semibold truncate leading-5">

@@ -9,6 +9,12 @@ import { useVaultHostTreeActions } from '../application/state/vaultHostTreeActio
 import { useTreeExpandedState } from '../application/state/useTreeExpandedState';
 import { applyGroupDefaults, resolveGroupDefaults } from '../domain/groupConfig';
 import { resolveTelnetPort, resolveTelnetUsername, sanitizeHost } from '../domain/host';
+import type { HostSortMode } from '../domain/hostSort';
+import { compareHostLabels, compareHostsBySortMode } from '../domain/hostSort';
+import {
+  getHostSessionPresence,
+  type HostSessionPresence,
+} from '../domain/hostSessionPresence';
 import { sortByVaultOrder } from '../domain/vaultOrder';
 import { STORAGE_KEY_VAULT_HOSTS_TREE_EXPANDED } from '../infrastructure/config/storageKeys';
 import { GroupConfig, GroupNode, Host } from '../types';
@@ -16,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { HostTreeGroupContextMenuContent, HostTreeHostContextMenuContent } from './host/HostTreeContextMenus';
 import { ContextMenu, ContextMenuTrigger } from './ui/context-menu';
 import { DistroAvatar } from './DistroAvatar';
+import { HostAvatarWithPresence } from './host/HostSessionPresenceDot';
 import { HostNotesIndicator } from './host/HostNotesIndicator';
 import { HostNotesSummaryLine } from './host/HostNotesSummaryLine';
 import { Button } from './ui/button';
@@ -39,7 +46,7 @@ interface HostTreeViewProps {
   groupTree: GroupNode[];
   hosts: Host[];
   ungroupedHosts?: Host[];
-  sortMode?: 'manual' | 'az' | 'za' | 'newest' | 'oldest' | 'group';
+  sortMode?: HostSortMode;
   expandedPaths?: Set<string>;
   onTogglePath?: (path: string) => void;
   onExpandAll?: (paths: string[]) => void;
@@ -66,12 +73,13 @@ interface HostTreeViewProps {
   getDropTargetClasses?: (target: string) => string;
   setDragOverDropTarget?: (target: string | null) => void;
   groupConfigs?: GroupConfig[];
+  hostPresenceMap?: ReadonlyMap<string, HostSessionPresence>;
 }
 
 interface TreeNodeProps {
   node: GroupNode;
   depth: number;
-  sortMode: 'manual' | 'az' | 'za' | 'newest' | 'oldest' | 'group';
+  sortMode: HostSortMode;
   expandedPaths: Set<string>;
   onToggle: (path: string) => void;
   onConnect: (host: Host) => void;
@@ -97,6 +105,7 @@ interface TreeNodeProps {
   setDragOverDropTarget?: (target: string | null) => void;
   groupConfigs: GroupConfig[];
   groupDefaultsByPath: ReadonlyMap<string, Partial<GroupConfig>>;
+  hostPresenceMap?: ReadonlyMap<string, HostSessionPresence>;
 }
 
 
@@ -129,6 +138,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   setDragOverDropTarget,
   groupConfigs,
   groupDefaultsByPath,
+  hostPresenceMap,
 }) => {
   const inlineEdit = useHostTreeInlineGroupEdit();
   const vaultTreeActions = useVaultHostTreeActions();
@@ -162,7 +172,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     return nodes.sort((a, b) => {
       switch (sortMode) {
         case 'za':
-          return b.name.localeCompare(a.name);
+          return compareHostLabels(b.name, a.name);
         case 'manual': {
           const orderA = orderByPath.get(a.path);
           const orderB = orderByPath.get(b.path);
@@ -175,34 +185,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         }
         case 'newest':
         case 'oldest':
-          // For groups, fall back to name sorting since groups don't have creation dates
-          return a.name.localeCompare(b.name);
+        case 'recent':
+          // For groups, fall back to name sorting since groups don't have connection dates
+          return compareHostLabels(a.name, b.name);
         case 'az':
         default:
-          return a.name.localeCompare(b.name);
+          return compareHostLabels(a.name, b.name);
       }
     });
   }, [groupConfigs, node.children, sortMode]);
 
   const sortedHosts = useMemo(() => {
-    const sorted = [...node.hosts].sort((a, b) => {
-      switch (sortMode) {
-        case 'az':
-          return a.label.localeCompare(b.label);
-        case 'za':
-          return b.label.localeCompare(a.label);
-        case 'newest':
-          return (b.createdAt || 0) - (a.createdAt || 0);
-        case 'oldest':
-          return (a.createdAt || 0) - (b.createdAt || 0);
-        case 'manual':
-          return 0;
-        default:
-          return a.label.localeCompare(b.label);
-      }
-    });
-    if (sortMode === 'manual') return sortByVaultOrder(sorted);
-    return sorted;
+    if (sortMode === 'manual') return sortByVaultOrder([...node.hosts]);
+    return [...node.hosts].sort((a, b) => compareHostsBySortMode(a, b, sortMode));
   }, [node.hosts, sortMode]);
 
   return (
@@ -331,6 +326,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 	              setDragOverDropTarget={setDragOverDropTarget}
 	              groupConfigs={groupConfigs}
 	              groupDefaultsByPath={groupDefaultsByPath}
+              hostPresenceMap={hostPresenceMap}
 	            />
 	          ))}
 
@@ -352,6 +348,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 	              toggleHostSelection={toggleHostSelection}
 	              groupConfigs={groupConfigs}
 	              groupDefaultsByPath={groupDefaultsByPath}
+              hostPresenceMap={hostPresenceMap}
 	            />
 	          ))}
         </CollapsibleContent>
@@ -375,6 +372,7 @@ interface HostTreeItemProps {
   toggleHostSelection?: (hostId: string) => void;
   groupConfigs: GroupConfig[];
   groupDefaultsByPath: ReadonlyMap<string, Partial<GroupConfig>>;
+  hostPresenceMap?: ReadonlyMap<string, HostSessionPresence>;
 }
 
 export const getHostTreeDisplayDetails = (
@@ -412,6 +410,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
   toggleHostSelection,
   groupConfigs,
   groupDefaultsByPath,
+  hostPresenceMap,
 }) => {
   const safeHost = sanitizeHost(host);
   const tags = host.tags || [];
@@ -423,6 +422,7 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
   const displayUsername = displayDetails.username;
   const displayPort = displayDetails.port;
   const isSelected = isMultiSelectMode && selectedHostIds?.has(host.id);
+  const presence = getHostSessionPresence(hostPresenceMap, host.id);
 
   return (
     <ContextMenu>
@@ -459,7 +459,9 @@ const HostTreeItem: React.FC<HostTreeItemProps> = ({
             <div className="mr-2 h-4 w-4 flex-shrink-0" />
           )}
           icon={(
-            <DistroAvatar host={host} fallback={(host.os || "L")[0].toUpperCase()} size="tree" />
+            <HostAvatarWithPresence presence={presence}>
+              <DistroAvatar host={host} fallback={(host.os || "L")[0].toUpperCase()} size="tree" />
+            </HostAvatarWithPresence>
           )}
           content={(
             <div className="min-w-0 flex-1 leading-tight">
@@ -541,6 +543,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
   getDropTargetClasses,
   setDragOverDropTarget,
   groupConfigs = [],
+  hostPresenceMap,
 }) => {
   const { t } = useI18n();
   const inlineEdit = useHostTreeInlineGroupEdit();
@@ -609,24 +612,8 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
   // Get ungrouped hosts (hosts without a group or with empty group) and sort them
   const ungroupedHosts = useMemo(() => {
     const hosts_without_group = (ungroupedHostsOverride ?? hosts.filter(host => !host.group || host.group === ''));
-    const sorted = hosts_without_group.sort((a, b) => {
-      switch (sortMode) {
-        case 'az':
-          return a.label.localeCompare(b.label);
-        case 'za':
-          return b.label.localeCompare(a.label);
-        case 'newest':
-          return (b.createdAt || 0) - (a.createdAt || 0);
-        case 'oldest':
-          return (a.createdAt || 0) - (b.createdAt || 0);
-        case 'manual':
-          return 0;
-        default:
-          return a.label.localeCompare(b.label);
-      }
-    });
-    if (sortMode === 'manual') return sortByVaultOrder(sorted);
-    return sorted;
+    if (sortMode === 'manual') return sortByVaultOrder([...hosts_without_group]);
+    return [...hosts_without_group].sort((a, b) => compareHostsBySortMode(a, b, sortMode));
   }, [hosts, sortMode, ungroupedHostsOverride]);
 
   // Sort group tree based on sort mode
@@ -705,6 +692,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
 	          setDragOverDropTarget={setDragOverDropTarget}
 	          groupConfigs={groupConfigs}
 	          groupDefaultsByPath={groupDefaultsByPath}
+          hostPresenceMap={hostPresenceMap}
 	        />
       ))}
 
@@ -725,6 +713,7 @@ export const HostTreeView: React.FC<HostTreeViewProps> = ({
 	          toggleHostSelection={toggleHostSelection}
 	          groupConfigs={groupConfigs}
 	          groupDefaultsByPath={groupDefaultsByPath}
+          hostPresenceMap={hostPresenceMap}
 	        />
       ))}
       

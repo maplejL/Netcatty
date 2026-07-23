@@ -34,6 +34,7 @@ export const zhCNCoreMessages: Messages = {
   'sort.za': 'Z-a',
   'sort.newest': '从新到旧',
   'sort.oldest': '从旧到新',
+  'sort.recent': '最近连接',
   'sort.group': '按分组',
   'field.label': 'Label',
   'field.type': '类型',

@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type React from 'react';
-import type { Host, HostProtocol } from '../../types';
+import type { Host, HostProtocol, TerminalSession } from '../../types';
 import type { PassphraseRequest } from '../../components/PassphraseModal';
 import { getEffectiveHostDistro } from '../../domain/host';
 import { sanitizeHostIconFields } from '../../domain/hostIcon';
+import { findBestSessionForHost } from '../../domain/hostSessionPresence';
 import { getTerminalPassthroughActions } from '../state/useGlobalHotkeys';
 import { buildNumberShortcutTabTargets } from './tabShortcutTargets';
 
@@ -22,6 +23,24 @@ export const getLogHostVisualSnapshot = (host: Host) => {
     ...(icon.iconColorCustom ? { hostIconColorCustom: icon.iconColorCustom } : {}),
   };
 };
+
+/** Focus an existing host session tab when present (issue #1434). */
+export function focusExistingHostSession(
+  sessions: readonly TerminalSession[],
+  hostId: string,
+  setActiveTabId: (tabId: string) => void,
+  setWorkspaceFocusedSession?: (workspaceId: string, sessionId: string) => void,
+): string | undefined {
+  const existing = findBestSessionForHost(sessions, hostId);
+  if (!existing) return undefined;
+  if (existing.workspaceId) {
+    setActiveTabId(existing.workspaceId);
+    setWorkspaceFocusedSession?.(existing.workspaceId, existing.id);
+  } else {
+    setActiveTabId(existing.id);
+  }
+  return existing.id;
+}
 
 export function handleTrayJumpToSessionImpl(getCtx: AppContextGetter, sessionId: string) {
   const { sessions, setActiveTabId, setWorkspaceFocusedSession } = getCtx();
@@ -60,12 +79,36 @@ export function handleTrayTogglePortForwardImpl(getCtx: AppContextGetter, ruleId
 }
 
 export function handleTrayPanelConnectImpl(getCtx: AppContextGetter, hostId: string) {
-  const { addConnectionLog, connectToHost, hosts, identities, keys, resolveEffectiveHost, resolveHostAuth, systemInfoRef, t, toast } = getCtx();
+  const {
+    addConnectionLog,
+    connectToHost,
+    hosts,
+    identities,
+    keys,
+    resolveEffectiveHost,
+    resolveHostAuth,
+    sessions,
+    setActiveTabId,
+    setWorkspaceFocusedSession,
+    systemInfoRef,
+    t,
+    toast,
+  } = getCtx();
 {
     const host = hosts.find((item) => item.id === hostId);
     if (!host) {
       toast.error(t("pf.error.hostNotFound"));
       return;
+    }
+
+    if (sessions && setActiveTabId) {
+      const focusedId = focusExistingHostSession(
+        sessions,
+        host.id,
+        setActiveTabId,
+        setWorkspaceFocusedSession,
+      );
+      if (focusedId) return focusedId;
     }
 
     const effectiveHost = resolveEffectiveHost(host);
@@ -797,8 +840,29 @@ export function handleCreateLocalTerminalImpl(
 }
 
 export function handleConnectToHostImpl(getCtx: AppContextGetter, host: Host) {
-  const { addConnectionLog, connectToHost, identities, keys, resolveEffectiveHost, resolveHostAuth, systemInfoRef } = getCtx();
+  const {
+    addConnectionLog,
+    connectToHost,
+    identities,
+    keys,
+    resolveEffectiveHost,
+    resolveHostAuth,
+    sessions,
+    setActiveTabId,
+    setWorkspaceFocusedSession,
+    systemInfoRef,
+  } = getCtx();
 {
+    if (sessions && setActiveTabId) {
+      const focusedId = focusExistingHostSession(
+        sessions,
+        host.id,
+        setActiveTabId,
+        setWorkspaceFocusedSession,
+      );
+      if (focusedId) return focusedId;
+    }
+
     const { username, hostname: localHost } = systemInfoRef.current;
 
     const effectiveHost = resolveEffectiveHost(host);

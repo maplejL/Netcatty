@@ -366,8 +366,9 @@ test("workspace session drag no longer uses a full tab-bar drop zone", () => {
 test("host tree chrome enters after theme switch settles so root labels can animate", () => {
   assert.match(topTabsSource, /hostTreeChromeReady/);
   assert.match(topTabsSource, /scheduleAfterInstantThemeSwitch\(\(\) => \{\s*cancelHostTreeChromeReadyRef\.current = null;\s*setHostTreeChromeReady\(true\);/);
+  assert.match(topTabsSource, /!isSideTabs && !rootTabsCompact/);
   assert.match(topTabsSource, /scheduleChromeLayoutAnimation\(\(\) => \{\s*cancelRootTabsCompactRef\.current = null;\s*setRootTabsCompact\(true\);/);
-  assert.match(topTabsSource, /compact=\{rootTabsCompact\}/);
+  assert.match(topTabsSource, /compact=\{!isSideTabs && rootTabsCompact\}/);
   assert.match(topTabsSource, /data-visible=\{effectiveShowHostTreeToggle \? 'true' : 'false'\}/);
 });
 

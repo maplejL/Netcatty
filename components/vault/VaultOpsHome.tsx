@@ -18,9 +18,15 @@ import {
   pickPinnedHosts,
   pickRecentHosts,
 } from '../../domain/opsHome';
+import {
+  buildHostSessionPresenceMap,
+  getHostSessionPresence,
+  type HostSessionPresence,
+} from '../../domain/hostSessionPresence';
 import type { Host, TerminalSession, Workspace } from '../../types';
 import { formatRelativeTime } from '../AIChatSessionHistoryDrawer';
 import { DistroAvatar } from '../DistroAvatar';
+import { HostAvatarWithPresence } from '../host/HostSessionPresenceDot';
 import { HostNotesIndicator } from '../host/HostNotesIndicator';
 import { HostNotesSummaryLine } from '../host/HostNotesSummaryLine';
 import { SelectHostDialog } from '../SelectHostDialog';
@@ -43,10 +49,12 @@ export type VaultOpsHomeProps = {
 
 function HostQuickTile({
   host,
+  presence,
   onConnect,
   getEffectiveHostDistro,
 }: {
   host: Host;
+  presence: HostSessionPresence;
   onConnect: (host: Host) => void;
   getEffectiveHostDistro: (host: Host) => string | undefined;
 }) {
@@ -64,7 +72,9 @@ function HostQuickTile({
       onClick={() => onConnect(host)}
     >
       <div className="flex items-center gap-3 h-full">
-        <DistroAvatar host={host} fallback={badge} size="lg" />
+        <HostAvatarWithPresence presence={presence}>
+          <DistroAvatar host={host} fallback={badge} size="lg" />
+        </HostAvatarWithPresence>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
             <div className="text-sm font-semibold truncate">{host.label}</div>
@@ -115,6 +125,10 @@ export function VaultOpsHome({
   t,
 }: VaultOpsHomeProps) {
   const activeHostIds = useMemo(() => collectActiveHostIds(sessions), [sessions]);
+  const hostPresenceMap = useMemo(
+    () => buildHostSessionPresenceMap(sessions),
+    [sessions],
+  );
   const resumeItems = useMemo(
     () => buildOpsResumeItems(sessions, workspaces),
     [sessions, workspaces],
@@ -216,6 +230,7 @@ export function VaultOpsHome({
               <HostQuickTile
                 key={host.id}
                 host={host}
+                presence={getHostSessionPresence(hostPresenceMap, host.id)}
                 onConnect={onHostConnect}
                 getEffectiveHostDistro={getEffectiveHostDistro}
               />
@@ -232,6 +247,7 @@ export function VaultOpsHome({
               <HostQuickTile
                 key={host.id}
                 host={host}
+                presence={getHostSessionPresence(hostPresenceMap, host.id)}
                 onConnect={onHostConnect}
                 getEffectiveHostDistro={getEffectiveHostDistro}
               />
