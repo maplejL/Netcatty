@@ -22,6 +22,7 @@ import {
   STORAGE_KEY_RESTORE_TERMINAL_CWD,
   STORAGE_KEY_SFTP_AUTO_OPEN_SIDEBAR,
   STORAGE_KEY_SFTP_FOLLOW_TERMINAL_CWD,
+  STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL,
   STORAGE_KEY_SFTP_AUTO_SYNC,
   STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE,
   STORAGE_KEY_SFTP_DOUBLE_CLICK_BEHAVIOR,
@@ -86,6 +87,7 @@ interface UseSettingsStorageSyncParams {
   sftpUseCompressedUpload: boolean;
   sftpAutoOpenSidebar: boolean;
   sftpFollowTerminalCwd: boolean;
+  sftpAutoRefreshOnTerminal: boolean;
   sftpDefaultViewMode: 'list' | 'tree';
   showRecentHosts: boolean;
   showOnlyUngroupedHostsInRoot: boolean;
@@ -131,6 +133,7 @@ interface UseSettingsStorageSyncParams {
   setSftpUseCompressedUpload: Dispatch<SetStateAction<boolean>>;
   setSftpAutoOpenSidebar: Dispatch<SetStateAction<boolean>>;
   setSftpFollowTerminalCwd: Dispatch<SetStateAction<boolean>>;
+  setSftpAutoRefreshOnTerminal: Dispatch<SetStateAction<boolean>>;
   setSftpDefaultViewMode: Dispatch<SetStateAction<'list' | 'tree'>>;
   setShowRecentHostsState: Dispatch<SetStateAction<boolean>>;
   setShowOnlyUngroupedHostsInRootState: Dispatch<SetStateAction<boolean>>;
@@ -167,7 +170,7 @@ export function useSettingsStorageSync({
   customCSS, uiFontFamilyId, hotkeyScheme, uiLanguage,
   terminalThemeId, followAppTerminalTheme, terminalFontFamilyId, terminalFontSize,
   sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
-  sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
+  sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
   showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
   editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
   globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
@@ -176,7 +179,7 @@ export function useSettingsStorageSync({
   setTerminalThemeId, setTerminalThemeDarkId, setTerminalThemeLightId,
   setFollowAppTerminalThemeState, setTerminalFontFamilyId, setTerminalFontSize,
   setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
-  setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpDefaultViewMode,
+  setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpAutoRefreshOnTerminal, setSftpDefaultViewMode,
   setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setWorkTabsLocationState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
   setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState,
   setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
@@ -190,7 +193,7 @@ export function useSettingsStorageSync({
     customCSS, uiFontFamilyId, hotkeyScheme, uiLanguage,
     terminalThemeId, followAppTerminalTheme, terminalFontFamilyId, terminalFontSize,
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
-    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
+    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
     editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
@@ -200,7 +203,7 @@ export function useSettingsStorageSync({
     customCSS, uiFontFamilyId, hotkeyScheme, uiLanguage,
     terminalThemeId, followAppTerminalTheme, terminalFontFamilyId, terminalFontSize,
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
-    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
+    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
     editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
@@ -398,6 +401,12 @@ export function useSettingsStorageSync({
           setSftpFollowTerminalCwd(newValue);
         }
       }
+      if (e.key === STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL && e.newValue !== null) {
+        const newValue = e.newValue === 'true';
+        if (newValue !== s.sftpAutoRefreshOnTerminal) {
+          setSftpAutoRefreshOnTerminal(newValue);
+        }
+      }
       // Sync SFTP default view mode from other windows
       if (e.key === STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE && e.newValue) {
         if ((e.newValue === 'list' || e.newValue === 'tree') && e.newValue !== s.sftpDefaultViewMode) {
@@ -536,6 +545,7 @@ export function useSettingsStorageSync({
     setTerminalCommandTimingDebugEnabled,
     setSftpAutoOpenSidebar,
     setSftpFollowTerminalCwd,
+    setSftpAutoRefreshOnTerminal,
     setSftpAutoSync,
     setSftpDefaultViewMode,
     setSftpDoubleClickBehavior,

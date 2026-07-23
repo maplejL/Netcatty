@@ -189,6 +189,10 @@ import {
 } from "./terminal/terminalHelpers";
 import { terminalPropsAreEqual } from "./terminal/terminalMemo";
 
+// Detect password/passphrase prompts in output so the next keystroke is treated
+// as sensitive. Hoisted to module scope so the pattern is compiled once.
+const PASSWORD_PROMPT_PATTERN = /password|passphrase|口令/i;
+
 const TerminalComponent: React.FC<TerminalProps> = ({
   host,
   keys,
@@ -1465,20 +1469,15 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       scheduleAutoReconnect({ evt });
     },
     onTerminalDataCapture: handleTerminalDataCaptureOnce,
-    onTerminalOutput: onTerminalOutput
-      ? (chunk: string, meta?: TerminalSessionDataMeta) => {
-          if (/password|passphrase|口令/i.test(chunk)) {
-            passwordPromptActiveRef.current = true;
-          }
-          appendOutputTriggerOutputRef.current(chunk, meta);
-          onTerminalOutput(sessionId, chunk);
-        }
-      : (chunk: string, meta?: TerminalSessionDataMeta) => {
-          if (/password|passphrase|口令/i.test(chunk)) {
-            passwordPromptActiveRef.current = true;
-          }
-          appendOutputTriggerOutputRef.current(chunk, meta);
-        },
+    onTerminalOutput: (chunk: string, meta?: TerminalSessionDataMeta) => {
+      if (PASSWORD_PROMPT_PATTERN.test(chunk)) {
+        passwordPromptActiveRef.current = true;
+      }
+      appendOutputTriggerOutputRef.current(chunk, meta);
+      if (onTerminalOutput) {
+        onTerminalOutput(sessionId, chunk);
+      }
+    },
     onTerminalLogData: captureTerminalLogData,
     onProgrammaticCommandLogRewrite: queueProgrammaticCommandLogRewrite,
     onOsDetected,

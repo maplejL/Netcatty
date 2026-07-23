@@ -95,6 +95,8 @@ interface SftpSidePanelProps {
     sessionId?: string | null;
   }) => Promise<string | null>;
   activeTerminalCwd?: string | null;
+  /** Bumps when terminal likely mutated files; soft-refresh current SFTP dir. */
+  sftpSoftRefreshRevision?: number;
   /** Last SFTP browse path for the currently linked terminal session (per-session memory). */
   rememberedPathForSession?: string | null;
   sftpFollowTerminalCwd?: boolean;
@@ -133,6 +135,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   setEditorWordWrap,
   onGetTerminalCwd,
   activeTerminalCwd = null,
+  sftpSoftRefreshRevision = 0,
   rememberedPathForSession = null,
   sftpFollowTerminalCwd = false,
   onSftpFollowTerminalCwdChange,
@@ -551,6 +554,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
         setEditorWordWrap={setEditorWordWrap}
         onGetTerminalCwd={onGetTerminalCwd}
         activeTerminalCwd={activeTerminalCwd}
+        sftpSoftRefreshRevision={sftpSoftRefreshRevision}
         sftpFollowTerminalCwd={sftpFollowTerminalCwd}
         onSftpFollowTerminalCwdChange={onSftpFollowTerminalCwdChange}
         onInsertPathToTerminal={onInsertPathToTerminal}
@@ -599,6 +603,7 @@ type SftpSidePanelInteractiveBodyProps = {
     sessionId?: string | null;
   }) => Promise<string | null>;
   activeTerminalCwd?: string | null;
+  sftpSoftRefreshRevision?: number;
   sftpFollowTerminalCwd: boolean;
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
   onInsertPathToTerminal?: (path: string) => void;
@@ -638,6 +643,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
   setEditorWordWrap,
   onGetTerminalCwd,
   activeTerminalCwd = null,
+  sftpSoftRefreshRevision = 0,
   sftpFollowTerminalCwd,
   onSftpFollowTerminalCwdChange,
   onInsertPathToTerminal,
@@ -1015,6 +1021,19 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     syncFollowToTerminalCwd,
   ]);
 
+  useEffect(() => {
+    if (!isVisible || sftpSoftRefreshRevision <= 0 || hasActiveWork) return;
+    if (!sftp.leftPane.connection || sftp.leftPane.loading) return;
+    void sftpRef.current.refresh("left", { preserveSelection: true });
+  }, [
+    hasActiveWork,
+    isVisible,
+    sftp.leftPane.connection,
+    sftp.leftPane.loading,
+    sftpRef,
+    sftpSoftRefreshRevision,
+  ]);
+
   const MAX_VISIBLE_TRANSFERS = 5;
   const visibleTransfers = useMemo(() => {
     const connection = sftp.leftPane.connection;
@@ -1265,6 +1284,7 @@ const sidePanelAreEqual = (prev: SftpSidePanelProps, next: SftpSidePanelProps): 
   prev.setEditorWordWrap === next.setEditorWordWrap &&
   prev.onGetTerminalCwd === next.onGetTerminalCwd &&
   prev.activeTerminalCwd === next.activeTerminalCwd &&
+  prev.sftpSoftRefreshRevision === next.sftpSoftRefreshRevision &&
   prev.rememberedPathForSession === next.rememberedPathForSession &&
   prev.sftpFollowTerminalCwd === next.sftpFollowTerminalCwd &&
   prev.onSftpFollowTerminalCwdChange === next.onSftpFollowTerminalCwdChange &&

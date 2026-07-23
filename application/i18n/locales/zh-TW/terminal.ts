@@ -135,6 +135,8 @@ export const zhTWTerminalMessages: Messages = {
   'settings.sftp.followTerminalCwd.desc': '在側欄 SFTP 中自動跟隨終端目前工作目錄變化（可在工具欄切換）',
   'settings.sftp.followTerminalCwd.enable': '預設開啟追隨終端目錄',
   'settings.sftp.followTerminalCwd.enableDesc': '開啟側欄 SFTP 時預設啟用追隨模式，終端執行 cd 後檔案瀏覽器會自動跳轉',
+  'settings.sftp.autoRefreshOnTerminal.enable': '終端改檔後自動重新整理 SFTP',
+  'settings.sftp.autoRefreshOnTerminal.enableDesc': '側欄 SFTP 開啟時，在 touch、mkdir、rm、wget、git clone 等命令後自動重新整理目前目錄',
 
   'settings.sftp.defaultViewMode': '預設檢視模式',
   'settings.sftp.defaultViewMode.desc': '選擇開啟新 SFTP 標籤頁時的預設檢視模式。每個主機的偏好設定會覆蓋此全域設定。',

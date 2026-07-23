@@ -135,6 +135,8 @@ export const zhCNTerminalMessages: Messages = {
   'settings.sftp.followTerminalCwd.desc': '在侧栏 SFTP 中自动跟随终端当前工作目录变化（可在工具栏切换）',
   'settings.sftp.followTerminalCwd.enable': '默认开启追随终端目录',
   'settings.sftp.followTerminalCwd.enableDesc': '打开侧栏 SFTP 时默认启用追随模式，终端执行 cd 后文件浏览器会自动跳转',
+  'settings.sftp.autoRefreshOnTerminal.enable': '终端改文件后自动刷新 SFTP',
+  'settings.sftp.autoRefreshOnTerminal.enableDesc': '侧栏 SFTP 打开时，在 touch、mkdir、rm、wget、git clone 等命令后自动刷新当前目录',
 
   'settings.sftp.defaultViewMode': '默认视图模式',
   'settings.sftp.defaultViewMode.desc': '选择打开新 SFTP 标签页时的默认视图模式。每个主机的偏好设置会覆盖此全局设置。',

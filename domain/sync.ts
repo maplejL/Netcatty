@@ -246,6 +246,7 @@ export interface SyncPayload {
     sftpUseCompressedUpload?: boolean;
     sftpAutoOpenSidebar?: boolean;
     sftpFollowTerminalCwd?: boolean;
+    sftpAutoRefreshOnTerminal?: boolean;
     sftpDefaultViewMode?: 'list' | 'tree';
     sftpGlobalBookmarks?: import('./models').SftpBookmark[];
     // Vault: show recently connected hosts

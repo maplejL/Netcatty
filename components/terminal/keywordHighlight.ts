@@ -142,20 +142,20 @@ export class KeywordHighlighter implements IDisposable {
       this.term.onWriteParsed(() => {
         const now = performance.now();
         const pressure = getTerminalOutputPressure(this.term);
-        // Hard-skip scanning under sustained flood / long-line / background.
-        // Debounced refresh still costs mark+schedule work on every write; for
-        // `tail -f` that tax dominates. Catch up once pressure clears.
+        this.updateWriteBurst();
+        // Hard-skip scanning under sustained flood / long-line / background /
+        // write-burst (apt-style CR-dribbled progress never trips largeOutput).
+        // Catch up once pressure clears.
         if (
           pressure.longLine
           || pressure.largeOutput
           || pressure.background
+          || this.isWriteBurstActive(now)
         ) {
-          this.updateWriteBurst();
           this.markHighlightCatchUpPending();
           return;
         }
-        if (this.isInputProtectionActive(now) || this.isWriteBurstActive(now)) {
-          this.updateWriteBurst();
+        if (this.isInputProtectionActive(now)) {
           this.markVisibleRangeDirty();
           this.triggerRefresh("debounced", "write");
           return;
@@ -997,7 +997,12 @@ export class KeywordHighlighter implements IDisposable {
       this.highlightCatchUpTimer = null;
       if (!this.enabled || !this.highlightCatchUpPending) return;
       const pressure = getTerminalOutputPressure(this.term);
-      if (pressure.longLine || pressure.largeOutput || pressure.background) {
+      if (
+        pressure.longLine
+        || pressure.largeOutput
+        || pressure.background
+        || this.isWriteBurstActive(performance.now())
+      ) {
         this.markHighlightCatchUpPending();
         return;
       }

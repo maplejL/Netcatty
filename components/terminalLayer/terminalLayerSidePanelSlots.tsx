@@ -203,6 +203,7 @@ function SidePanelSftpSlotInner({
         setEditorWordWrap={setEditorWordWrap}
         onGetTerminalCwd={getTerminalCwd}
         activeTerminalCwd={isVisible ? live.activeTerminalCwd : null}
+        sftpSoftRefreshRevision={isVisible ? live.sftpSoftRefreshRevision : 0}
         sftpFollowTerminalCwd={sftpFollowTerminalCwd}
         onSftpFollowTerminalCwdChange={handleFollowTerminalCwdChange}
         onInsertPathToTerminal={insertPathIntoTerminal ? handleInsertPathToTerminal : undefined}

@@ -88,6 +88,7 @@ import {
 } from '../domain/terminalSidePanelAutoOpen';
 import { shouldProbeCommandCwd } from './terminalLayer/commandCwdProbe';
 import { resolvePreferredTerminalCwd, scheduleBackendCwdProbeAfterCommand } from './terminal/sftpCwd';
+import { resolveSftpSoftRefreshDelayMs } from '../domain/terminalFilesystemMutatingCommand';
 import { classifyDistroId, shouldProbeSessionCwd } from '../domain/host';
 
 import {
@@ -221,6 +222,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   terminalSidePanelAutoOpenTab = DEFAULT_TERMINAL_SIDE_PANEL_AUTO_OPEN_TAB,
   sftpFollowTerminalCwd,
   setSftpFollowTerminalCwd,
+  sftpAutoRefreshOnTerminal = true,
   editorWordWrap,
   setEditorWordWrap,
   sessionLogsEnabled,
@@ -247,10 +249,42 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const focusedSessionIdRef = useRef<string | undefined>(undefined);
   const terminalCwdRevisionRef = useRef(0);
   const [terminalCwdRevision, setTerminalCwdRevision] = useState(0);
+  const sftpSoftRefreshRevisionRef = useRef(0);
+  const [sftpSoftRefreshRevision, setSftpSoftRefreshRevision] = useState(0);
+  const sftpSoftRefreshCancelersRef = useRef<Map<string, () => void>>(new Map());
+  const sftpSoftRefreshGenerationRef = useRef<Map<string, number>>(new Map());
+  const sftpAutoRefreshOnTerminalRef = useRef(sftpAutoRefreshOnTerminal);
+  sftpAutoRefreshOnTerminalRef.current = sftpAutoRefreshOnTerminal;
   const [commandHistoryPopupOpen, setCommandHistoryPopupOpen] = useState(false);
   const terminalOsc7SignalBySessionRef = useRef<Map<string, number>>(new Map());
   const cwdProbeCancelersRef = useRef<Map<string, () => void>>(new Map());
   const cwdProbeGenerationRef = useRef<Map<string, number>>(new Map());
+
+  const bumpSftpSoftRefresh = useCallback(() => {
+    sftpSoftRefreshRevisionRef.current += 1;
+    setSftpSoftRefreshRevision(sftpSoftRefreshRevisionRef.current);
+  }, []);
+
+  const scheduleSftpSoftRefresh = useCallback((sessionId: string, delayMs: number) => {
+    if (delayMs <= 0) return;
+    const generation = (sftpSoftRefreshGenerationRef.current.get(sessionId) ?? 0) + 1;
+    sftpSoftRefreshGenerationRef.current.set(sessionId, generation);
+    sftpSoftRefreshCancelersRef.current.get(sessionId)?.();
+    const timer = window.setTimeout(() => {
+      if (sftpSoftRefreshGenerationRef.current.get(sessionId) !== generation) return;
+      sftpSoftRefreshCancelersRef.current.delete(sessionId);
+      bumpSftpSoftRefresh();
+    }, delayMs);
+    sftpSoftRefreshCancelersRef.current.set(sessionId, () => {
+      window.clearTimeout(timer);
+    });
+  }, [bumpSftpSoftRefresh]);
+
+  const accelerateSftpSoftRefresh = useCallback((sessionId: string) => {
+    if (!sftpSoftRefreshCancelersRef.current.has(sessionId)) return;
+    // OSC 7 after a mutating command is a good proxy for prompt return.
+    scheduleSftpSoftRefresh(sessionId, 80);
+  }, [scheduleSftpSoftRefresh]);
 
   useEffect(() => {
     const runPrewarm = () => prewarmAIStateStorageSnapshots();
@@ -274,6 +308,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       // between OSC 7 cwd and login-shell fallback pwd (notably after sudo).
       const nextSignal = (terminalOsc7SignalBySessionRef.current.get(sessionId) ?? 0) + 1;
       terminalOsc7SignalBySessionRef.current.set(sessionId, nextSignal);
+      accelerateSftpSoftRefresh(sessionId);
     }
 
     const currentCwd = terminalRendererCwdBySessionRef.current.get(sessionId) ?? null;
@@ -288,7 +323,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onUpdateSessionRestoreCwd?.(sessionId, nextCwd);
     terminalCwdRevisionRef.current += 1;
     setTerminalCwdRevision(terminalCwdRevisionRef.current);
-  }, [onUpdateSessionRestoreCwd]);
+  }, [accelerateSftpSoftRefresh, onUpdateSessionRestoreCwd]);
 
   const codingCliOutputScannersRef = useRef<Map<string, CodingCliOutputScanner>>(new Map());
   const codingCliOutputScanDisabledRef = useRef<Set<string>>(new Set());
@@ -844,9 +879,18 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
     if (!session || !canReuseTerminalConnection(session)) return;
     const sessionHost = sessionHostsMapRef.current.get(sessionId);
-    const visibleSftpHost = tabId && sidePanelOpenTabsRef.current.get(tabId) === 'sftp'
-      ? sftpHostForTabRef.current.get(tabId) ?? null
+    const sftpPanelOpen = Boolean(tabId && sidePanelOpenTabsRef.current.get(tabId) === 'sftp');
+    const visibleSftpHost = sftpPanelOpen
+      ? sftpHostForTabRef.current.get(tabId!) ?? null
       : null;
+
+    if (sftpAutoRefreshOnTerminalRef.current && sftpPanelOpen) {
+      const delayMs = resolveSftpSoftRefreshDelayMs(command);
+      if (delayMs > 0) {
+        scheduleSftpSoftRefresh(sessionId, delayMs);
+      }
+    }
+
     if (!shouldProbeCommandCwd({
       restoreTerminalCwd,
       visibleSftpHost,
@@ -884,7 +928,13 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       },
     });
     cwdProbeCancelersRef.current.set(sessionId, cancelProbe);
-  }, [applySessionCodingCliProviderFromCommand, handleTerminalCwdChange, restoreTerminalCwd, terminalBackend]);
+  }, [
+    applySessionCodingCliProviderFromCommand,
+    handleTerminalCwdChange,
+    restoreTerminalCwd,
+    scheduleSftpSoftRefresh,
+    terminalBackend,
+  ]);
 
   const handleCommandExecuted = useCallback((command: string, hostId: string, hostLabel: string, sessionId: string) => {
     onCommandExecuted?.(command, hostId, hostLabel, sessionId);
@@ -895,6 +945,10 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       cancel();
     }
     cwdProbeCancelersRef.current.clear();
+    for (const cancel of sftpSoftRefreshCancelersRef.current.values()) {
+      cancel();
+    }
+    sftpSoftRefreshCancelersRef.current.clear();
   }, []);
   const sessionSudoAutofillPasswordsMap = useMemo(() => {
     const map = new Map<string, string | undefined>();
@@ -1811,6 +1865,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     sftpDefaultViewMode,
     sftpDoubleClickBehavior,
     sftpFollowTerminalCwd,
+    sftpAutoRefreshOnTerminal,
     sftpHostForTab,
     sftpInitialLocationForTab,
     sftpPendingUploadsForTab,
@@ -1835,6 +1890,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     TerminalComposeBar,
     TerminalPanesHost,
     terminalCwdRevision,
+    sftpSoftRefreshRevision,
     terminalFontFamilyId,
     terminalRendererCwdBySessionRef,
     terminalSettings,

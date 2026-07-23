@@ -119,7 +119,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
     resolveEmptyVaultConflict, resolvedTheme, resolveSessionAppearance, runSnippet, sessionLogsDir, sessionLogsEnabled, sessionLogsFormat, sessionLogsTimestampsEnabled, sessionRenameTarget, sshDebugLogsEnabled,
     sessionRenameValue, sessions, setActiveTabId, setDeepLinkHostDraft, setDraggingSessionId, setEditorWordWrap,
     setNavigateToSection, setSessionRenameValue, setTerminalFontFamilyId, setTerminalFontSize, setVaultFocusRequest, updateSessionFontSize, updateSessionRestoreCwd, updateSessionDynamicTitle, updateSessionCodingCliProvider, clearSessionFontSizeOverride,
-    setWorkspaceFocusedSession, setWorkspaceRenameValue, settings, sftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoSync, sftpDefaultViewMode, sftpDoubleClickBehavior,
+    setWorkspaceFocusedSession, setWorkspaceRenameValue, settings, sftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, setSftpAutoRefreshOnTerminal, sftpAutoSync, sftpDefaultViewMode, sftpDoubleClickBehavior,
     sftpShowHiddenFiles, sftpUseCompressedUpload, shellHistory, snippetPackages, snippets, splitSessionWithCurrentShell, startSessionRename,
     startWorkspaceRename, submitSessionRename, submitWorkspaceRename, t, terminalFontFamilyId, terminalFontSize, terminalSettings, terminalThemeId, themeById,
     toggleBroadcast, toggleConnectionLogSaved, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog,
@@ -458,6 +458,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           terminalSidePanelAutoOpen={settings.terminalSidePanelAutoOpen}
           terminalSidePanelAutoOpenTab={settings.terminalSidePanelAutoOpenTab}
           sftpFollowTerminalCwd={sftpFollowTerminalCwd}
+          sftpAutoRefreshOnTerminal={sftpAutoRefreshOnTerminal}
           setSftpFollowTerminalCwd={setSftpFollowTerminalCwd}
           editorWordWrap={editorWordWrap}
           setEditorWordWrap={setEditorWordWrap}

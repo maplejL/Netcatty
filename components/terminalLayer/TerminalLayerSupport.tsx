@@ -667,6 +667,8 @@ export interface TerminalLayerProps {
   terminalSidePanelAutoOpenTab?: TerminalSidePanelAutoOpenTab;
   sftpFollowTerminalCwd: boolean;
   setSftpFollowTerminalCwd: (enabled: boolean) => void;
+  /** Soft-refresh open SFTP after terminal file-mutating commands (#2383). Default on. */
+  sftpAutoRefreshOnTerminal?: boolean;
   editorWordWrap: boolean;
   setEditorWordWrap: (value: boolean) => void;
   // Session log settings for real-time streaming

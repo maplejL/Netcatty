@@ -28,6 +28,7 @@ import {
   STORAGE_KEY_SFTP_USE_COMPRESSED_UPLOAD,
   STORAGE_KEY_SFTP_AUTO_OPEN_SIDEBAR,
   STORAGE_KEY_SFTP_FOLLOW_TERMINAL_CWD,
+  STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL,
   STORAGE_KEY_SFTP_TRANSFER_CONCURRENCY,
   STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE,
   STORAGE_KEY_EDITOR_WORD_WRAP,
@@ -87,6 +88,7 @@ import {
   DEFAULT_SESSION_LOGS_TIMESTAMPS_ENABLED,
   DEFAULT_SFTP_AUTO_OPEN_SIDEBAR,
   DEFAULT_SFTP_FOLLOW_TERMINAL_CWD,
+  DEFAULT_SFTP_AUTO_REFRESH_ON_TERMINAL,
   DEFAULT_SFTP_AUTO_SYNC,
   DEFAULT_SFTP_DEFAULT_VIEW_MODE,
   DEFAULT_SFTP_DOUBLE_CLICK_BEHAVIOR,
@@ -248,6 +250,12 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
   const [sftpFollowTerminalCwd, setSftpFollowTerminalCwd] = useState<boolean>(() => {
     const stored = readStoredString(STORAGE_KEY_SFTP_FOLLOW_TERMINAL_CWD);
     return stored === 'true' ? true : DEFAULT_SFTP_FOLLOW_TERMINAL_CWD;
+  });
+  const [sftpAutoRefreshOnTerminal, setSftpAutoRefreshOnTerminal] = useState<boolean>(() => {
+    const stored = readStoredString(STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+    return DEFAULT_SFTP_AUTO_REFRESH_ON_TERMINAL;
   });
   const [sftpDefaultViewMode, setSftpDefaultViewMode] = useState<'list' | 'tree'>(() => {
     const stored = readStoredString(STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE);
@@ -633,6 +641,10 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     if (storedFollowTerminalCwd === 'true' || storedFollowTerminalCwd === 'false') {
       setSftpFollowTerminalCwd(storedFollowTerminalCwd === 'true');
     }
+    const storedAutoRefreshOnTerminal = readStoredString(STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL);
+    if (storedAutoRefreshOnTerminal === 'true' || storedAutoRefreshOnTerminal === 'false') {
+      setSftpAutoRefreshOnTerminal(storedAutoRefreshOnTerminal === 'true');
+    }
     const storedDefaultViewMode = readStoredString(STORAGE_KEY_SFTP_DEFAULT_VIEW_MODE);
     if (storedDefaultViewMode === 'list' || storedDefaultViewMode === 'tree') setSftpDefaultViewMode(storedDefaultViewMode);
     const storedShowRecentHosts = localStorageAdapter.readBoolean(STORAGE_KEY_SHOW_RECENT_HOSTS);
@@ -790,7 +802,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     customCSS, uiFontFamilyId, hotkeyScheme, uiLanguage,
     terminalThemeId, followAppTerminalTheme, terminalFontFamilyId, terminalFontSize,
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
-    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
+    sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
     editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
@@ -799,7 +811,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setTerminalThemeId, setTerminalThemeDarkId, setTerminalThemeLightId,
     setFollowAppTerminalThemeState, setTerminalFontFamilyId, setTerminalFontSize,
     setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
-    setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpDefaultViewMode,
+    setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpAutoRefreshOnTerminal, setSftpDefaultViewMode,
     setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setWorkTabsLocationState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
     setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
@@ -1018,6 +1030,16 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     if (!persistMountedRef.current) return;
     notifySettingsChanged(STORAGE_KEY_SFTP_FOLLOW_TERMINAL_CWD, sftpFollowTerminalCwd);
   }, [sftpFollowTerminalCwd, notifySettingsChanged]);
+
+  // Persist SFTP auto-refresh after terminal file ops
+  useEffect(() => {
+    localStorageAdapter.writeString(
+      STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL,
+      sftpAutoRefreshOnTerminal ? 'true' : 'false',
+    );
+    if (!persistMountedRef.current) return;
+    notifySettingsChanged(STORAGE_KEY_SFTP_AUTO_REFRESH_ON_TERMINAL, sftpAutoRefreshOnTerminal);
+  }, [sftpAutoRefreshOnTerminal, notifySettingsChanged]);
 
   // Persist SFTP default view mode
   useEffect(() => {
@@ -1276,6 +1298,8 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSftpAutoOpenSidebar,
     sftpFollowTerminalCwd,
     setSftpFollowTerminalCwd,
+    sftpAutoRefreshOnTerminal,
+    setSftpAutoRefreshOnTerminal,
     sftpDefaultViewMode,
     setSftpDefaultViewMode,
     showRecentHosts,
@@ -1349,7 +1373,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
       uiFontFamilyId, uiLanguage, customCSS,
       terminalThemeId, terminalFontFamilyId, terminalFontSize, terminalSettings,
       customKeyBindings, editorWordWrap,
-      sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles, sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpDefaultViewMode,
+      sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles, sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
       showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom,
       customThemes, workspaceFocusStyle, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     ]),

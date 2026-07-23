@@ -35,7 +35,7 @@ const getOpenerLabel = (
 export default function SettingsFileAssociationsTab() {
   const { t } = useI18n();
   const { getAllAssociations, removeAssociation, setOpenerForExtension, getDefaultOpener, setDefaultOpener, removeDefaultOpener } = useSftpFileAssociations();
-  const { sftpDoubleClickBehavior, setSftpDoubleClickBehavior, sftpAutoSync, setSftpAutoSync, sftpShowHiddenFiles, setSftpShowHiddenFiles, sftpUseCompressedUpload, setSftpUseCompressedUpload, sftpAutoOpenSidebar, setSftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpDefaultViewMode, setSftpDefaultViewMode, sftpTransferConcurrency, setSftpTransferConcurrency } = useSettingsState();
+  const { sftpDoubleClickBehavior, setSftpDoubleClickBehavior, sftpAutoSync, setSftpAutoSync, sftpShowHiddenFiles, setSftpShowHiddenFiles, sftpUseCompressedUpload, setSftpUseCompressedUpload, sftpAutoOpenSidebar, setSftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, setSftpAutoRefreshOnTerminal, sftpDefaultViewMode, setSftpDefaultViewMode, sftpTransferConcurrency, setSftpTransferConcurrency } = useSettingsState();
   const associations = getAllAssociations();
   const defaultOpener = getDefaultOpener();
   const [editingExtension, setEditingExtension] = useState<string | null>(null);
@@ -168,6 +168,12 @@ export default function SettingsFileAssociationsTab() {
           description={t('settings.sftp.followTerminalCwd.enableDesc')}
         >
           <Toggle checked={sftpFollowTerminalCwd} onChange={setSftpFollowTerminalCwd} />
+        </SettingRow>
+        <SettingRow
+          label={t('settings.sftp.autoRefreshOnTerminal.enable')}
+          description={t('settings.sftp.autoRefreshOnTerminal.enableDesc')}
+        >
+          <Toggle checked={sftpAutoRefreshOnTerminal} onChange={setSftpAutoRefreshOnTerminal} />
         </SettingRow>
       </SettingCard>
 

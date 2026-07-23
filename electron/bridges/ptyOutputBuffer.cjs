@@ -23,6 +23,8 @@
  *   maxBufferSize?: number,
  *   shouldAcceptOutput?: () => boolean,
  *   floodFlushDelayMs?: number,
+ *   burstCoalesceDelayMs?: number,
+ *   burstDetectionWindowMs?: number,
  *   maxFloodBufferSize?: number,
  *   maxPendingBytes?: number,
  *   onPendingBytesChange?: (bytes: number) => void,
@@ -38,6 +40,11 @@ function createPtyOutputBuffer(sendFn, options = {}) {
     options.maxPendingBytes ?? (2 * 1024 * 1024),
   );
   const floodFlushDelayMs = options.floodFlushDelayMs ?? 8;
+  const burstCoalesceDelayMs = Math.max(0, options.burstCoalesceDelayMs ?? 3);
+  const burstDetectionWindowMs = Math.max(
+    burstCoalesceDelayMs,
+    options.burstDetectionWindowMs ?? 8,
+  );
   const maxDroppedStateScanBytes = Math.max(256, options.maxDroppedStateScanBytes ?? 2048);
   const shouldAcceptOutput = options.shouldAcceptOutput ?? (() => true);
   const onPendingBytesChange = typeof options.onPendingBytesChange === "function"
@@ -49,6 +56,7 @@ function createPtyOutputBuffer(sendFn, options = {}) {
   let pendingBytes = 0;
   let scheduled = null;
   let scheduledType = null;
+  let lastOutputArrivalAt = null;
   let nextSendMeta = null;
   const drainCallbacks = [];
 
@@ -375,6 +383,12 @@ function createPtyOutputBuffer(sendFn, options = {}) {
     scheduled = setImmediate(flushNow);
   };
 
+  const scheduleBurstFlush = () => {
+    if (scheduled) return;
+    scheduledType = "burst";
+    scheduled = setTimeout(flushNow, burstCoalesceDelayMs);
+  };
+
   const scheduleFloodFlush = () => {
     if (scheduledType === "flood") return;
     cancelScheduled();
@@ -383,6 +397,12 @@ function createPtyOutputBuffer(sendFn, options = {}) {
   };
 
   const bufferData = (data, meta) => {
+    const arrivedAt = Date.now();
+    const followsRecentOutput = data.length > 0
+      && lastOutputArrivalAt !== null
+      && arrivedAt - lastOutputArrivalAt >= 0
+      && arrivedAt - lastOutputArrivalAt <= burstDetectionWindowMs;
+    if (data.length > 0) lastOutputArrivalAt = arrivedAt;
     mergeNextSendMeta(meta);
     appendBoundedData(data);
     if (!shouldAcceptOutput()) {
@@ -397,11 +417,19 @@ function createPtyOutputBuffer(sendFn, options = {}) {
     } else if (dataBuffer.length >= maxBufferSize) {
       scheduleFloodFlush();
     } else if (!scheduled) {
-      scheduleTurnFlush();
+      // Forward the first output immediately. If more network chunks arrive in
+      // adjacent turns, hold only the continuation for a couple of milliseconds
+      // so one remote burst does not fan out into hundreds of IPC messages.
+      if (followsRecentOutput && burstCoalesceDelayMs > 0) {
+        scheduleBurstFlush();
+      } else {
+        scheduleTurnFlush();
+      }
     }
   };
 
   const flush = () => {
+    lastOutputArrivalAt = null;
     cancelScheduled();
     flushNow();
   };
@@ -460,6 +488,7 @@ function createPtyOutputBuffer(sendFn, options = {}) {
   };
 
   const takePendingEntry = () => {
+    lastOutputArrivalAt = null;
     cancelScheduled();
     const pending = `${queuedBuffers.join("")}${dataBuffer}`;
     const meta = takeNextSendMeta();
@@ -476,6 +505,7 @@ function createPtyOutputBuffer(sendFn, options = {}) {
   };
 
   const discard = () => {
+    lastOutputArrivalAt = null;
     cancelScheduled();
     const discardedBytes = clearPendingBuffers();
     nextSendMeta = null;

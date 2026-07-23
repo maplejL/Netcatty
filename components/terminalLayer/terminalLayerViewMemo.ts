@@ -221,6 +221,7 @@ const SIDE_PANEL_STABLE_CTX_KEYS = [
   'sftpShowHiddenFiles',
   'sftpUseCompressedUpload',
   'sftpFollowTerminalCwd',
+  'sftpAutoRefreshOnTerminal',
   'setSftpFollowTerminalCwd',
   'hotkeyScheme',
   'keyBindings',

@@ -407,6 +407,8 @@ export const enVaultMessages: Messages = {
   'settings.sftp.followTerminalCwd.desc': 'Automatically sync the sidebar SFTP browser with the terminal working directory (toggle in toolbar)',
   'settings.sftp.followTerminalCwd.enable': 'Enable follow terminal directory by default',
   'settings.sftp.followTerminalCwd.enableDesc': 'When the SFTP sidebar is open, follow mode stays on by default and updates after terminal cd commands',
+  'settings.sftp.autoRefreshOnTerminal.enable': 'Auto-refresh SFTP after terminal file changes',
+  'settings.sftp.autoRefreshOnTerminal.enableDesc': 'When the SFTP sidebar is open, refresh the current folder after commands like touch, mkdir, rm, wget, or git clone',
 
   'settings.sftp.defaultViewMode': 'Default View Mode',
   'settings.sftp.defaultViewMode.desc': 'Choose the default view mode when opening a new SFTP tab. Per-host preferences override this setting.',

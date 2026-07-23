@@ -34,6 +34,7 @@ const baseProps = {
   terminalSidePanelAutoOpen: false,
   terminalSidePanelAutoOpenTab: "scripts",
   sftpFollowTerminalCwd: false,
+  sftpAutoRefreshOnTerminal: true,
   setSftpFollowTerminalCwd: () => {},
   editorWordWrap: false,
   sshDebugLogsEnabled: false,

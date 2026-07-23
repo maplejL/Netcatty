@@ -445,6 +445,8 @@ export const ruVaultMessages: Messages = {
   'settings.sftp.followTerminalCwd.desc': 'Автоматически синхронизировать боковую панель SFTP с рабочим каталогом терминала (переключатель на панели инструментов)',
   'settings.sftp.followTerminalCwd.enable': 'Включать следование по умолчанию',
   'settings.sftp.followTerminalCwd.enableDesc': 'При открытой боковой панели SFTP режим следования включён по умолчанию и обновляется после команд cd в терминале',
+  'settings.sftp.autoRefreshOnTerminal.enable': 'Автообновление SFTP после изменений в терминале',
+  'settings.sftp.autoRefreshOnTerminal.enableDesc': 'При открытой боковой панели SFTP обновлять текущую папку после команд вроде touch, mkdir, rm, wget или git clone',
 
   'settings.sftp.defaultViewMode': 'Режим просмотра по умолчанию',
   'settings.sftp.defaultViewMode.desc': 'Выберите режим просмотра по умолчанию при открытии новой вкладки SFTP. Настройки конкретного хоста имеют приоритет.',
