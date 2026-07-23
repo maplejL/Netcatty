@@ -252,7 +252,7 @@ const AutocompletePopup: React.FC<AutocompletePopupProps> = ({
   // neutral fg-mix, keeps older/partial theme payloads working. This is what
   // makes the popup's highlight follow the accent instead of a hardcoded blue.
   const accent = themeColors?.cursor || themeColors?.selection || fg;
-  const popupBg = `color-mix(in srgb, ${bg} 92%, ${fg} 8%)`;
+  const popupBg = `color-mix(in srgb, ${bg} 82%, transparent)`;
   const popupBorder = `color-mix(in srgb, ${bg} 75%, ${fg} 25%)`;
   const selectedBg = `color-mix(in srgb, ${accent} 26%, ${bg} 74%)`;
   const selectedBorderAccent = `color-mix(in srgb, ${accent} 60%, ${bg} 40%)`;
@@ -278,7 +278,8 @@ const AutocompletePopup: React.FC<AutocompletePopupProps> = ({
   const fixedLineBottom = anchorViewport.bottom;
 
   const viewportPadding = 8;
-  const anchorGap = 8;
+  // Keep a clearer gap off the typed input line so long `cd` paths stay readable (#2157).
+  const anchorGap = 12;
   const clampViewport = resolveAutocompleteClampViewport(containerRef?.current ?? null);
   const estimatedPopupHeight = Math.min(maxHeight, suggestions.length * 28 + 8);
   // Reserve the detail height for the whole set (not the hovered row) so the
@@ -345,6 +346,8 @@ const AutocompletePopup: React.FC<AutocompletePopupProps> = ({
     backgroundColor: popupBg,
     border: `1px solid ${popupBorder}`,
     borderRadius: "6px",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
     boxShadow: renderUpward
       ? "0 -2px 6px rgba(0, 0, 0, 0.15)"
       : "0 2px 6px rgba(0, 0, 0, 0.15)",

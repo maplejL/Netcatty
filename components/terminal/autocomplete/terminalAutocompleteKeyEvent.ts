@@ -317,18 +317,19 @@ export function handleTerminalAutocompleteKeyEvent(
     }
   }
 
-  // Escape: close popup and hide ghost text
-  // Only consume Escape if popup is visible; don't block Escape for vi-mode shells
-  // when only ghost text is showing (ghost text is passive/non-intrusive)
+  // Escape: dismiss autocomplete UI, but let Escape reach the PTY so shell
+  // Meta chords still work (Esc+. yank-last-arg / Esc+b word-back, #2364).
+  // Same fallthrough idea as Tab when we cannot safely complete (#745).
+  // Only act when the popup is visible; ghost-only Escape already falls through
+  // so vi-mode shells keep working.
   if (e.key === "Escape" && s.popupVisible) {
-    e.preventDefault();
     if (previewActiveRef.current) {
       renderPreviewSelection(-1); // restore the typed baseline
     }
     ghost?.hide();
     clearState();
     previewActiveRef.current = false;
-    return false;
+    return true;
   }
 
   return true;

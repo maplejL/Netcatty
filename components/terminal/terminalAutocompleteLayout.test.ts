@@ -501,3 +501,41 @@ test("resolveAutocompleteAnchorInViewport ignores the helper textarea horizontal
   assert.equal(anchor.anchorLeft, 640 + cellWidth * cursorColumn);
   assert.notEqual(anchor.anchorLeft, textarea.getBoundingClientRect().left);
 });
+
+test("final popup geometry keeps downward menus below the input line (#2157)", () => {
+  const pane = { left: 0, top: 0, width: 800, height: 600 };
+  const geometry = clampAutocompletePopupGeometry({
+    left: 40,
+    top: 100, // would cover the input line without anchor clamp
+    width: 360,
+    height: 180,
+    clampViewport: pane,
+    viewportPadding: 8,
+    anchorTop: 200,
+    anchorBottom: 220,
+    anchorGap: 12,
+    renderUpward: false,
+  });
+
+  assert.ok(geometry.top >= 220 + 12);
+  assert.ok(geometry.top + 180 <= pane.top + pane.height - 8 + 0.001);
+});
+
+test("final popup geometry keeps upward menus above the input line (#2157)", () => {
+  const pane = { left: 0, top: 0, width: 800, height: 600 };
+  const geometry = clampAutocompletePopupGeometry({
+    left: 40,
+    top: 180, // would cover the input line without anchor clamp
+    width: 360,
+    height: 180,
+    clampViewport: pane,
+    viewportPadding: 8,
+    anchorTop: 300,
+    anchorBottom: 320,
+    anchorGap: 12,
+    renderUpward: true,
+  });
+
+  assert.ok(geometry.top + 180 <= 300 - 12 + 0.001);
+  assert.ok(geometry.top >= pane.top + 8 - 0.001);
+});

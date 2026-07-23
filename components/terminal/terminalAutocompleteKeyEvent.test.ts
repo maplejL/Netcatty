@@ -145,3 +145,18 @@ test("serial-style popup Enter passes through when the selected candidate is sta
   assert.deepEqual(accepted, [0]);
   assert.deepEqual(clears, [1]);
 });
+
+test("Escape dismisses the popup but falls through so Esc+. reaches the shell", () => {
+  const { context, clears, previews } = createContext({
+    previewActiveRef: { current: true },
+  });
+  const event = keyEvent("Escape");
+
+  const result = handleTerminalAutocompleteKeyEvent(event, context);
+
+  assert.equal(result, true);
+  assert.equal(event.defaultPrevented, false);
+  assert.deepEqual(clears, [1]);
+  assert.deepEqual(previews, [-1]);
+  assert.equal(context.previewActiveRef.current, false);
+});
