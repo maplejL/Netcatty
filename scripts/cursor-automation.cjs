@@ -2630,6 +2630,22 @@ async function findOpenBotPrForIssue({ github, context, issueNumber }) {
   return pulls.find((pull) => isBotPrForIssue(pull, issueNumber)) || null;
 }
 
+/**
+ * Source-issue follow-up readiness is only meaningful for automation bot PRs.
+ * Maintainer/own-actor PRs that merely say `Fixes #N` must not stay draft
+ * forever because issue comments lack automation processed markers.
+ */
+function shouldGatePullOnSourceIssueFollowups(pull) {
+  if (!pull) return false;
+  if (!extractSourceIssueNumber(pull)) return false;
+  const body = String(pull.body || '');
+  if (isBotPrMarker(body)) return true;
+  return (pull.labels || []).some((label) => {
+    const name = typeof label === 'string' ? label : label?.name;
+    return name === BOT_PR_LABEL;
+  });
+}
+
 async function getPendingIssueFollowupsForPull({
   github,
   context,
@@ -2637,7 +2653,10 @@ async function getPendingIssueFollowupsForPull({
   botLogins = ['netcatty-bot', 'github-actions[bot]'],
 }) {
   const issueNumber = extractSourceIssueNumber(pull);
-  if (!issueNumber) return { issue: null, pending: [] };
+  if (!issueNumber) return { issue: null, pending: [], gated: false };
+  if (!shouldGatePullOnSourceIssueFollowups(pull)) {
+    return { issue: null, pending: [], gated: false };
+  }
   const { data: issue } = await github.rest.issues.get({
     ...context.repo,
     issue_number: issueNumber,
@@ -2650,6 +2669,7 @@ async function getPendingIssueFollowupsForPull({
   const commentList = Array.isArray(comments) ? comments.filter(Boolean) : [];
   return {
     issue,
+    gated: true,
     pending: findPendingIssueFollowups({
       comments: commentList,
       issueAuthorLogin: issue.user?.login,
@@ -3044,6 +3064,7 @@ module.exports = {
   markNeedsHuman,
   isBotPrForIssue,
   findOpenBotPrForIssue,
+  shouldGatePullOnSourceIssueFollowups,
   getPendingIssueFollowupsForPull,
   ensurePullRequestDraft,
   ensurePullRequestReady,
