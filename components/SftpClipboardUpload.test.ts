@@ -120,7 +120,7 @@ test("clipboard upload keeps directories for recursive folder paste", () => {
 test("SFTP paste keydown lets the native paste event handle OS clipboard files", () => {
   assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "Ctrl + V"), true);
   assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "⌘ + V"), true);
-  assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "Ctrl + Shift + V"), false);
+  assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "Ctrl + Shift + V"), true);
   assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "Cmd + Shift + V"), false);
   assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpPaste", "F9"), false);
   assert.equal(shouldLetNativePasteEventHandleSftpPaste("sftpCopy", "Ctrl + V"), false);
@@ -149,7 +149,7 @@ test("native clipboard paste follows SFTP paste shortcut availability", () => {
     isSftpNativeClipboardPasteEnabled("pc", [
       { id: "sftp-paste", action: "sftpPaste", label: "Paste", mac: "⌘ + V", pc: "Ctrl + Shift + V", category: "sftp" },
     ]),
-    false,
+    true,
   );
   assert.equal(
     isSftpNativeClipboardPasteEnabled("pc", [

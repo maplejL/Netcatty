@@ -23,7 +23,6 @@ import {
   shouldEnableNativeUserInputAutoScroll,
   shouldScrollOnTerminalInput,
   shouldScrollOnTerminalPaste,
-  isTerminalInterruptInput,
 } from "../../../domain/terminalScroll";
 import {
   resolveHostTerminalFontFamilyId,
@@ -76,11 +75,14 @@ import {
 import { shouldPassThroughCopyShortcut } from "./terminalCopyShortcut";
 import { shouldUseUrgentTerminalInterrupt } from "./terminalInterruptShortcut";
 import {
+  readTerminalClipboardText,
+  writeTerminalClipboardText,
+} from "./terminalClipboardAccess";
+import {
   createTerminalInterruptTrace,
   logTerminalInterruptTrace,
 } from "./terminalInterruptDiagnostics";
 import { clearTerminalInputStateForInterrupt } from "./terminalInterruptInputState";
-import { forceTerminalScrollToBottomForInterrupt } from "./terminalInterruptScroll";
 import { getFlowControllerForTerm } from "./terminalSessionAttachment";
 import {
   prioritizeTerminalInput,
@@ -842,8 +844,11 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
     }
 
     // Autocomplete key handler (must be checked before other handlers)
-    // Ctrl+C interrupt runs first so popup/ghost state cannot block scroll-to-bottom.
-    if (shouldUseUrgentTerminalInterrupt(e, { hasSelection: term.hasSelection() })) {
+    // Ctrl+C interrupt runs first so popup/ghost state cannot block the interrupt.
+    // Prefer getSelection() as a belt-and-suspenders check: some renderer paths can
+    // briefly disagree with hasSelection() while a mouse selection is still visible.
+    const hasTerminalSelection = term.hasSelection() || Boolean(term.getSelection());
+    if (shouldUseUrgentTerminalInterrupt(e, { hasSelection: hasTerminalSelection })) {
       const id = ctx.sessionRef.current;
       if (id && ctx.statusRef.current === "connected") {
         const rendererKeyAt = Date.now();
@@ -882,7 +887,6 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         if (ctx.isBroadcastEnabledRef.current && ctx.onBroadcastInputRef.current) {
           ctx.onBroadcastInputRef.current("\x03", ctx.sessionId);
         }
-        forceTerminalScrollToBottomForInterrupt(term);
         return false;
       }
     }
@@ -935,7 +939,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           }
           // When copy is bound specifically to Ctrl+C and there is no text
           // selected, pass the event through so xterm can send SIGINT.
-          if (shouldPassThroughCopyShortcut(action, term.hasSelection(), e)) {
+          if (shouldPassThroughCopyShortcut(action, hasTerminalSelection, e)) {
             return true;
           }
           e.preventDefault();
@@ -943,11 +947,17 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           switch (action) {
             case "copy": {
               const selection = getNormalizedTerminalSelection(term);
-              if (selection) navigator.clipboard.writeText(selection);
+              if (selection) {
+                void writeTerminalClipboardText(selection);
+              }
               break;
             }
             case "paste": {
-              navigator.clipboard.readText().then((text) => {
+              // Keyboard paste pastes immediately (no multiline confirm dialog).
+              // Confirm is reserved for context-menu / middle-click via onPaste,
+              // where a modal is less likely to fight xterm focus.
+              void readTerminalClipboardText().then((text) => {
+                if (!text) return;
                 const id = ctx.sessionRef.current;
                 if (id) {
                   pasteTextIntoTerminal(term, text, {
@@ -1184,9 +1194,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         onBroadcastInput?.(broadcastData, ctx.sessionId);
       }
 
-      if (isTerminalInterruptInput(data)) {
-        forceTerminalScrollToBottomForInterrupt(term);
-      } else if (!shouldSuppressTerminalInputScrollForUserPaste(term, data)) {
+      if (!shouldSuppressTerminalInputScrollForUserPaste(term, data)) {
         scrollToBottomAfterInput(data);
       }
 
@@ -1317,13 +1325,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         const sessionId = ctx.sessionRef.current;
         if (!sessionId) return true;
         // Use Electron bridge as primary, fall back to navigator.clipboard
-        const readClipboard = async (): Promise<string> => {
-          try {
-            const bridge = netcattyBridge.get();
-            if (bridge?.readClipboardText) return await bridge.readClipboardText();
-          } catch { /* fall through to navigator.clipboard */ }
-          return navigator.clipboard.readText();
-        };
+        const readClipboard = () => readTerminalClipboardText();
         const doRead = async () => {
           // In prompt mode, ask user first
           if (mode === 'prompt') {
@@ -1353,8 +1355,8 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
       const binary = atob(payload);
       const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
       const text = new TextDecoder().decode(bytes);
-      navigator.clipboard.writeText(text).catch((err) => {
-        logger.warn('[XTerm] OSC 52 clipboard write failed:', err);
+      void writeTerminalClipboardText(text).then((ok) => {
+        if (!ok) logger.warn('[XTerm] OSC 52 clipboard write failed');
       });
       logger.debug('[XTerm] OSC 52 clipboard write', { length: text.length });
     } catch (err) {

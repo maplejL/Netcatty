@@ -7,13 +7,17 @@ import {
   shouldEnableNativeUserInputAutoScroll,
 } from "./terminalScroll.ts";
 
-test("Ctrl+C interrupt always scrolls to bottom even when scrollOnKeyPress is off", () => {
+test("Ctrl+C follows normal key-press scroll settings (does not force bottom)", () => {
   assert.equal(
     shouldScrollOnTerminalInput({ scrollOnInput: true, scrollOnKeyPress: false }, "\x03"),
-    true,
+    false,
   );
   assert.equal(
     shouldScrollOnTerminalInput({ scrollOnInput: false, scrollOnKeyPress: false }, "\x03"),
+    false,
+  );
+  assert.equal(
+    shouldScrollOnTerminalInput({ scrollOnInput: false, scrollOnKeyPress: true }, "\x03"),
     true,
   );
 });

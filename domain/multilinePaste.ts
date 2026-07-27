@@ -5,7 +5,11 @@
 
 export function countPasteLines(text: string): number {
   if (!text) return 0;
-  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").length;
+  // Ignore trailing newlines so a single copied command like "ls\n" counts as
+  // one line (editors/terminals almost always include a final newline).
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n+$/g, "");
+  if (!normalized) return 0;
+  return normalized.split("\n").length;
 }
 
 export function shouldConfirmMultilinePaste(

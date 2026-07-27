@@ -11,8 +11,16 @@ test("countPasteLines handles CRLF and bare CR", () => {
   assert.equal(countPasteLines(""), 0);
 });
 
+test("countPasteLines ignores trailing newlines from typical copy", () => {
+  assert.equal(countPasteLines("ls\n"), 1);
+  assert.equal(countPasteLines("ls\r\n"), 1);
+  assert.equal(countPasteLines("one\ntwo\n"), 2);
+  assert.equal(countPasteLines("\n"), 0);
+});
+
 test("shouldConfirmMultilinePaste defaults to 2+ lines", () => {
   assert.equal(shouldConfirmMultilinePaste("one"), false);
+  assert.equal(shouldConfirmMultilinePaste("one\n"), false);
   assert.equal(shouldConfirmMultilinePaste("one\ntwo"), true);
   assert.equal(shouldConfirmMultilinePaste("one\r\ntwo\r\nthree"), true);
 });

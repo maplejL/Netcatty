@@ -11,6 +11,10 @@ import {
 } from "../clipboardImagePaste";
 import { handleTerminalClipboardPaste } from "../terminalClipboardPaste";
 import { getNormalizedTerminalSelection } from "../normalizeTerminalSelection";
+import {
+  readTerminalClipboardText,
+  writeTerminalClipboardText,
+} from "../runtime/terminalClipboardAccess";
 
 type BroadcastPasteRefs = {
   sourceSessionId: string;
@@ -79,7 +83,7 @@ export const useTerminalContextActions = ({
     if (!term) return;
     const selection = getNormalizedTerminalSelection(term);
     if (selection) {
-      navigator.clipboard.writeText(selection);
+      void writeTerminalClipboardText(selection);
     }
   }, [termRef]);
 
@@ -91,7 +95,7 @@ export const useTerminalContextActions = ({
       await handleTerminalClipboardPaste({
         bridge,
         isLocalConnection,
-        readClipboardText: () => navigator.clipboard.readText(),
+        readClipboardText: readTerminalClipboardText,
         scrollOnPaste: scrollOnPasteRef?.current ?? false,
         confirmMultilinePaste: confirmMultilinePasteRef?.current ?? true,
         onPasteData: broadcastUserPasteData,
@@ -105,6 +109,34 @@ export const useTerminalContextActions = ({
   }, [
     broadcastUserPasteData,
     confirmMultilinePasteRef,
+    isLocalConnection,
+    sessionRef,
+    termRef,
+    scrollOnPasteRef,
+    terminalBackend,
+  ]);
+
+  const onPasteHotkey = useCallback(async () => {
+    const term = termRef.current;
+    if (!term) return;
+    try {
+      const bridge = netcattyBridge.get();
+      await handleTerminalClipboardPaste({
+        bridge,
+        isLocalConnection,
+        readClipboardText: readTerminalClipboardText,
+        scrollOnPaste: scrollOnPasteRef?.current ?? false,
+        confirmMultilinePaste: false,
+        onPasteData: broadcastUserPasteData,
+        sessionId: sessionRef.current,
+        terminalBackend,
+        term,
+      });
+    } catch (err) {
+      logger.warn("Failed to paste from clipboard hotkey", err);
+    }
+  }, [
+    broadcastUserPasteData,
     isLocalConnection,
     sessionRef,
     termRef,
@@ -174,6 +206,7 @@ export const useTerminalContextActions = ({
   return {
     onCopy,
     onPaste,
+    onPasteHotkey,
     onUploadClipboardImage: supportsRemoteImagePaste ? onUploadClipboardImage : undefined,
     onPasteSelection,
     onSelectAll,

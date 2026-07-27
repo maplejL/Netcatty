@@ -7,9 +7,31 @@ import { sanitizeHostIconFields } from '../../domain/hostIcon';
 import { findBestSessionForHost } from '../../domain/hostSessionPresence';
 import { getTerminalPassthroughActions } from '../state/useGlobalHotkeys';
 import { buildNumberShortcutTabTargets } from './tabShortcutTargets';
+import { runFocusedTerminalClipboardAction } from '../../components/terminal/focusedTerminalClipboardActions';
+import { isPlainCtrlCInterruptChord } from '../../components/terminal/runtime/terminalCopyShortcut';
 
 type AppContextGetter = () => Record<string, any>;
 const TERMINAL_PASSTHROUGH_ACTIONS = getTerminalPassthroughActions();
+
+const tryHandleFocusedTerminalClipboardHotkey = (
+  action: string,
+  e: KeyboardEvent,
+): boolean => {
+  // Plain Ctrl+C with no selection must reach xterm for SIGINT when copy is
+  // rebound to Ctrl+C; default copy is Ctrl+Shift+C so this rarely applies.
+  if (action === 'copy' && isPlainCtrlCInterruptChord(e)) {
+    return false;
+  }
+  if (!TERMINAL_PASSTHROUGH_ACTIONS.has(action)) {
+    return false;
+  }
+  if (!runFocusedTerminalClipboardAction(action)) {
+    return false;
+  }
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  return true;
+};
 
 export const getLogHostVisualSnapshot = (host: Host) => {
   const icon = sanitizeHostIconFields(host);
@@ -235,14 +257,36 @@ export function handleGlobalHotkeyKeyDownImpl(getCtx: AppContextGetter, e: Keybo
       const keyStr = isMac ? binding.mac : binding.pc;
       if (!matchesKeyBinding(e, keyStr, isMac)) continue;
       if (HOTKEY_DEBUG) console.log('[Hotkeys] Matched binding:', binding.action, keyStr);
-      if (binding.category === 'sftp') {
-        continue;
-      }
-      if (TERMINAL_PASSTHROUGH_ACTIONS.has(binding.action)) {
-        if (isTerminalElement) {
+
+      const terminalFocused = isTerminalElement || isTerminalInPath;
+
+      // Prefer last-focused terminal clipboard actions for paste/copy even when
+      // DOM focus checks miss. Do NOT map SFTP Ctrl+C/V onto terminal clipboard.
+      // Form/Monaco inputs already returned above.
+      if (
+        binding.action === 'paste'
+        || binding.action === 'pasteSelection'
+        || binding.action === 'copy'
+        || ((binding.action === 'selectAll' || binding.action === 'clearBuffer') && terminalFocused)
+      ) {
+        if (tryHandleFocusedTerminalClipboardHotkey(binding.action, e)) {
           finishModifierOnlyTracking();
           return;
         }
+      }
+      // Terminal focus: SFTP chords / remaining passthrough fall through to xterm
+      // when the registry could not handle them (e.g. font-size zoom).
+      if (terminalFocused) {
+        if (binding.category === 'sftp') {
+          continue;
+        }
+        if (TERMINAL_PASSTHROUGH_ACTIONS.has(binding.action)) {
+          finishModifierOnlyTracking();
+          return;
+        }
+      } else if (binding.category === 'sftp') {
+        continue;
+      } else if (TERMINAL_PASSTHROUGH_ACTIONS.has(binding.action)) {
         continue;
       }
 

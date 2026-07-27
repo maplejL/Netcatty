@@ -131,6 +131,7 @@ import { preserveTerminalViewportInScrollback } from "./terminal/clearTerminalVi
 import { XTERM_PERFORMANCE_CONFIG } from "../infrastructure/config/xtermPerformance";
 import { useTerminalSearch } from "./terminal/hooks/useTerminalSearch";
 import { useTerminalContextActions } from "./terminal/hooks/useTerminalContextActions";
+import { setFocusedTerminalClipboardActionsGetter, clearFocusedTerminalClipboardActionsGetter } from "./terminal/focusedTerminalClipboardActions";
 import { useTerminalAuthState } from "./terminal/hooks/useTerminalAuthState";
 import { useTerminalDragDrop } from "./terminal/hooks/useTerminalDragDrop";
 import { useTerminalFilePaste } from "./terminal/hooks/useTerminalFilePaste";
@@ -1978,6 +1979,33 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   // re-binding on every action identity change. See #941.
   const terminalContextActionsRef = useRef(terminalContextActions);
   terminalContextActionsRef.current = terminalContextActions;
+
+  // Keyboard paste (Ctrl+Shift+V) is dispatched from window hotkeys / Electron
+  // before-input via this registry — same onPaste as the context menu.
+  // Keep the last focused terminal until another pane takes over or we unmount.
+  useEffect(() => {
+    const container = containerRef.current;
+    const owner = sessionId;
+    const register = () => {
+      setFocusedTerminalClipboardActionsGetter(owner, () => terminalContextActionsRef.current);
+    };
+
+    if (!container) {
+      if (isFocused) register();
+      return () => clearFocusedTerminalClipboardActionsGetter(owner);
+    }
+
+    const onFocusIn = () => register();
+    container.addEventListener("focusin", onFocusIn);
+    if (isFocused || container.contains(document.activeElement)) {
+      register();
+    }
+
+    return () => {
+      container.removeEventListener("focusin", onFocusIn);
+      clearFocusedTerminalClipboardActionsGetter(owner);
+    };
+  }, [isFocused, sessionId]);
 
   const handleAddSelectionToAI = useCallback(() => {
     const term = termRef.current;

@@ -6,6 +6,7 @@ import { netcattyBridge } from "../../../infrastructure/services/netcattyBridge"
 import { logger } from "../../../lib/logger";
 import type { TerminalSession } from "../../../types";
 import { handleTerminalClipboardPaste } from "../terminalClipboardPaste";
+import { readTerminalClipboardText } from "../runtime/terminalClipboardAccess";
 
 interface UseTerminalFilePasteOptions {
   isLocalConnection: boolean;
@@ -58,7 +59,7 @@ export function useTerminalFilePaste({
           await handleTerminalClipboardPaste({
             bridge,
             isLocalConnection,
-            readClipboardText: () => navigator.clipboard.readText(),
+            readClipboardText: readTerminalClipboardText,
             scrollOnPaste: scrollOnPasteRef?.current ?? false,
             confirmMultilinePaste: confirmMultilinePasteRef?.current ?? true,
             onPasteData,

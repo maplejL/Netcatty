@@ -22,6 +22,7 @@ import {
 import { resolveHibernatePreferWasmSerialize } from '../../domain/terminalHibernate';
 import { applyUserCursorBlinkPreference } from './runtime/cursorPreference';
 import { getNormalizedTerminalSelection } from './normalizeTerminalSelection';
+import { writeTerminalClipboardText } from './runtime/terminalClipboardAccess';
 import { getFlowControllerForTerm } from './runtime/terminalSessionAttachment';
 import {
   prioritizeTerminalInput,
@@ -1381,8 +1382,8 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
         copyTimer = setTimeout(() => {
           const selection = getNormalizedTerminalSelection(term);
           if (!selection) return;
-          navigator.clipboard.writeText(selection).catch((err) => {
-            logger.warn("Copy on select failed:", err);
+          void writeTerminalClipboardText(selection).then((ok) => {
+            if (!ok) logger.warn("Copy on select failed");
           });
         }, 80);
       }

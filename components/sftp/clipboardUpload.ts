@@ -86,6 +86,7 @@ export function shouldLetNativePasteEventHandleSftpPaste(
   const normalized = key.toLowerCase().replace(/\s+/g, "");
   return [
     "ctrl+v",
+    "ctrl+shift+v",
     "⌘+v",
     "cmd+v",
     "command+v",
