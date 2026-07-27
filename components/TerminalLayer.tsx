@@ -1682,18 +1682,21 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     sessionId: string,
     command: string,
     snippet: Snippet,
-  ) => {
+  ): boolean => {
+    // Never inject into a peer tab sitting on a password/sensitive prompt.
+    if (isTerminalSensitiveInputActive(sessionId)) return false;
+
     const executor = snippetExecutorsRef.current.get(sessionId);
     if (executor) {
       executor(command, snippet.noAutoRun, {
         multiLineRunMode: snippet.multiLineRunMode,
         broadcast: false,
       });
-      return;
+      return true;
     }
 
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-    if (!session || !canUseDirectSessionWriteFallback(session)) return;
+    if (!session || !canUseDirectSessionWriteFallback(session)) return false;
 
     let data = normalizeLineEndings(command);
     if (!snippet.noAutoRun) data = `${data}\r`;
@@ -1705,9 +1708,10 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       : undefined;
     terminalBackend.writeToSession(sessionId, data, {
       automated: true,
-      sensitive: isTerminalSensitiveInputActive(sessionId),
+      sensitive: false,
       ...(lineDelayMs ? { lineDelayMs } : {}),
     });
+    return true;
   }, [terminalBackend]);
 
   const handleRunScriptOnWorkspace = useCallback(async (
@@ -1717,17 +1721,17 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     const workspace = activeWorkspaceRef.current;
     if (!workspace) {
       // Single terminal tab (no workspace): fall back to focused session.
+      const sessionId = getActiveTerminalSessionId();
+      if (!sessionId) {
+        toast.error(t('scripts.recording.noSession'));
+        return;
+      }
       if (!isScriptSnippet(snippet)) {
         const command = await resolveSnippetCommand(snippet);
         if (command === null) return;
         handleSnippetClickForFocusedSession(command, snippet.noAutoRun, {
           multiLineRunMode: snippet.multiLineRunMode,
         });
-        return;
-      }
-      const sessionId = getActiveTerminalSessionId();
-      if (!sessionId) {
-        toast.error(t('scripts.recording.noSession'));
         return;
       }
       try {
@@ -1761,12 +1765,24 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
 
     // Code snippets: paste/send the resolved command to every connected tab.
     // Sequential vs parallel only affects automation scripts (which await run
-    // completion); plain snippets are fire-and-forget writes, so order is enough.
+    // completion); plain snippets are fire-and-forget writes.
     if (!isScriptSnippet(snippet)) {
       const command = await resolveSnippetCommand(snippet);
       if (command === null) return;
+      let sent = 0;
+      let skippedSensitive = 0;
       for (const sid of sessionIds) {
-        sendCommandSnippetToSession(sid, command, snippet);
+        if (isTerminalSensitiveInputActive(sid)) {
+          skippedSensitive += 1;
+          continue;
+        }
+        if (sendCommandSnippetToSession(sid, command, snippet)) sent += 1;
+      }
+      if (skippedSensitive > 0) {
+        toast.info(t('scripts.actions.skippedSensitiveSessions', { count: skippedSensitive }));
+      }
+      if (sent === 0 && skippedSensitive === 0) {
+        toast.error(t('scripts.recording.noSession'));
       }
       return;
     }
