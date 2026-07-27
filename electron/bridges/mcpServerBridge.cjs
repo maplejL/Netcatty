@@ -223,6 +223,7 @@ const { createBackgroundJobApi } = require("./mcpServerBridge/backgroundJobs.cjs
 const backgroundJobApi = createBackgroundJobApi({
   get activeSftpOpSeq() { return activeSftpOpSeq; },
   set activeSftpOpSeq(value) { activeSftpOpSeq = value; },
+  get sessions() { return sessions; },
   backgroundJobs, activeSessionSftpOps, activeSessionExecutions, crypto,
   BACKGROUND_JOB_RETENTION_MS, DEFAULT_BACKGROUND_JOB_POLL_INTERVAL_MS, MAX_BACKGROUND_JOB_OUTPUT_CHARS,
   debugLog, sftpBridge,
