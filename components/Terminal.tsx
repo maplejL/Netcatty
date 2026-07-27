@@ -1900,6 +1900,16 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     // Return false so multi-tab callers can fall back to a direct backend write.
     if (!term || !id) return false;
 
+    // Multi-tab fan-out uses focus:false + broadcast:false. After wake, buffered
+    // output may have activated a password prompt — refuse to inject the snippet.
+    if (
+      options?.focus === false
+      && options?.broadcast === false
+      && passwordPromptActiveRef.current
+    ) {
+      return false;
+    }
+
     let data = normalizeLineEndings(command);
     const lineDelayMs = shouldDelayAutoRunSnippetInput(data, {
       noAutoRun,
