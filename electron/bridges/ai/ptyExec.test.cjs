@@ -8,10 +8,13 @@ const { join } = require("node:path");
 const {
   resolveEffectiveShellKind,
   execViaChannel,
+  execViaPty,
 } = require("./ptyExec.cjs");
 const {
   buildWrappedCommand,
 } = require("./ptyExecHelpers.cjs");
+const { EventEmitter } = require("node:events");
+const { INTERACTIVE_PROMPT_ERROR } = require("./interactivePromptDetect.cjs");
 
 test("uses PowerShell wrapping when a session with no confirmed shell sees a PowerShell prompt", () => {
   // SSH sessions don't set shellKind (sshBridge never assigns one), which
@@ -102,7 +105,7 @@ test("treats a CR-redrawn last line as the effective prompt, not the doubled str
   );
 });
 
-test("rejects spoofed `PS >` (literal space then `>`) — default PowerShell never emits this", () => {
+test("rejects spoofed `PS >` (literal space then `>`) � default PowerShell never emits this", () => {
   assert.equal(resolveEffectiveShellKind(undefined, "PS >"), "posix");
 });
 
@@ -303,4 +306,35 @@ test("execViaChannel short-circuits when cancel fires before the SSH channel ope
   assert.equal(result.error, "Cancelled");
   assert.equal(fakeExecStream.closed, true, "should close the now-unwanted stream");
   assert.equal(track.size, 0, "pending marker should be removed after callback runs");
+});
+
+test("execViaPty fails early on interactive Enter the value for� prompt", async () => {
+  const ee = new EventEmitter();
+  let quarantined = false;
+  const pty = {
+    write(data) {
+      const text = String(data);
+      const match = text.match(/(__NCMCP_[A-Za-z0-9_]+)=0/);
+      const marker = match?.[1];
+      setImmediate(() => {
+        if (!marker) return;
+        ee.emit("data", Buffer.from(`${marker}_S\nEnter the value for the driverclassname option>`));
+      });
+    },
+    on: ee.on.bind(ee),
+    removeListener: ee.removeListener.bind(ee),
+  };
+
+  const result = await execViaPty(pty, "iastool create --jdbc-resource", {
+    shellKind: "posix",
+    timeoutMs: 5_000,
+    onQuarantineNeeded: () => {
+      quarantined = true;
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, INTERACTIVE_PROMPT_ERROR);
+  assert.equal(quarantined, true);
+  assert.match(result.stdout || "", /Enter the value for the driverclassname option>/);
 });

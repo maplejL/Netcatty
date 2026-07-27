@@ -12,6 +12,11 @@ const {
   ensureSessionShellKind,
   ensureSessionShellKindForExec,
 } = require("../bridges/ai/sessionShellKind.cjs");
+const {
+  quarantineSession,
+  quarantineFromResult,
+  checkSessionQuarantine,
+} = require("../bridges/ai/sessionQuarantine.cjs");
 
 const DEFAULT_BACKGROUND_JOB_TIMEOUT_MS = 60 * 60 * 1000;
 const DEFAULT_BACKGROUND_JOB_POLL_INTERVAL_MS = 30 * 1000;
@@ -237,6 +242,8 @@ function createWorkerAiExecHandler({
     if (!session) {
       return { ok: false, error: "Session not found" };
     }
+    const quarantineErr = checkSessionQuarantine(sessionId, session);
+    if (quarantineErr) return quarantineErr;
     const busy = getActiveWorkerSessionJobError(activeSessionJobs, sessionId);
     if (busy) return busy;
 
@@ -288,6 +295,10 @@ function createWorkerAiExecHandler({
           });
         },
         enforceWallTimeout: enforceWallTimeout === true,
+        onQuarantineNeeded: () => quarantineSession(sessionId),
+      }).then((result) => {
+        quarantineFromResult(sessionId, result);
+        return result;
       });
     }
 
@@ -345,6 +356,8 @@ function createWorkerAiJobStartHandler({
     if (!session) {
       return { ok: false, error: "Session not found" };
     }
+    const quarantineErr = checkSessionQuarantine(sessionId, session);
+    if (quarantineErr) return quarantineErr;
     const busy = getActiveWorkerSessionJobError(activeSessionJobs, sessionId);
     if (busy) return busy;
 
@@ -456,6 +469,7 @@ function createWorkerAiJobStartHandler({
         },
         maxBufferedChars: MAX_BACKGROUND_JOB_OUTPUT_CHARS,
         normalizeFinalOutput: false,
+        onQuarantineNeeded: () => quarantineSession(sessionId),
       });
     } catch (err) {
       job.status = "failed";
@@ -473,6 +487,7 @@ function createWorkerAiJobStartHandler({
       job.updatedAt = Date.now();
       job.exitCode = result.exitCode ?? null;
       storeCompletedWorkerJobOutput(job, result.stdout || "", result);
+      quarantineFromResult(sessionId, result);
       const isForcedCancel = typeof result.error === "string" && result.error.includes("forced");
       if (result.error === "Cancelled" || isForcedCancel) {
         job.status = "cancelled";

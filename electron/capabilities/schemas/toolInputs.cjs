@@ -285,9 +285,9 @@ const TOOL_INPUT_FIELDS = Object.freeze({
 /** Long-form model guidance appended to terminal tool descriptions from catalog. */
 const MODEL_DESCRIPTION_HINTS = Object.freeze({
   "terminal.execute":
-    "Use only for commands expected to finish within about 60 seconds. For long-running commands use terminal_start and terminal_poll. Commands run in an isolated subshell of the visible terminal: the user sees the output live, but shell state such as cd, export, or set does not persist between calls — use absolute paths or combine cd with the command (cd /path && cmd).",
+    "Use only for commands expected to finish within about 60 seconds. For long-running commands use terminal_start and terminal_poll. Commands run in an isolated subshell of the visible terminal: the user sees the output live, but shell state such as cd, export, or set does not persist between calls — use absolute paths or combine cd with the command (cd /path && cmd). Never run interactive wizards or prompts that wait for stdin (password prompts, [Y/n], \"Enter the value for…\", installers, create --jdbc-resource style CLIs). Prefer non-interactive flags (--batch, -y, --yes, --force, full CLI args), yes|/printf pipes, or ask the user to run the interactive step. If output looks like it is waiting for input, stop and switch to a non-interactive approach or hand off to the user — do not type follow-up shell commands into that prompt.",
   "terminal.start":
-    "Prefer for builds, scans, log-following, or anything likely to exceed about 2 minutes. Shell state such as cd or export does not persist between calls — combine cd with the command.",
+    "Prefer for builds, scans, log-following, or anything likely to exceed about 2 minutes. Shell state such as cd or export does not persist between calls — combine cd with the command. Same rule as terminal_execute: do not start interactive stdin wizards; use non-interactive flags or hand off to the user.",
   "terminal.poll":
     "Wait at least about 30 seconds between polls unless output justifies checking sooner.",
   "vault.host.notes.get":

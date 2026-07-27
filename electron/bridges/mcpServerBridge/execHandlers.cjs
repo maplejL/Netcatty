@@ -5,6 +5,10 @@ const {
   ensureSessionShellKind,
   ensureSessionShellKindForExec,
 } = require("../ai/sessionShellKind.cjs");
+const {
+  quarantineSession,
+  quarantineFromResult,
+} = require("../ai/sessionQuarantine.cjs");
 
 function createExecHandlerApi(ctx) {
   with (ctx) {
@@ -156,6 +160,10 @@ function createExecHandlerApi(ctx) {
             // MCP callers have terminal_start as a fallback for long commands,
             // so enforce a hard wall-clock timeout here to match the MCP budget.
             enforceWallTimeout: true,
+            onQuarantineNeeded: () => quarantineSession(sessionId),
+          }).then((result) => {
+            quarantineFromResult(sessionId, result);
+            return result;
           });
         });
       }
@@ -299,6 +307,7 @@ function createExecHandlerApi(ctx) {
             echoCommand: (rawCommand) => echoCommandToSession(session, sessionId, rawCommand),
             maxBufferedChars: MAX_BACKGROUND_JOB_OUTPUT_CHARS,
             normalizeFinalOutput: false,
+            onQuarantineNeeded: () => quarantineSession(sessionId),
           });
         } catch (err) {
           job.status = "failed";
@@ -316,6 +325,7 @@ function createExecHandlerApi(ctx) {
           job.updatedAt = Date.now();
           job.exitCode = result.exitCode ?? null;
           storeCompletedJobOutput(job, result.stdout || "", result);
+          quarantineFromResult(sessionId, result);
           const isForcedCancel = typeof result.error === "string" && result.error.includes("forced");
           if (result.error === "Cancelled" || isForcedCancel) {
             // Forced cancel means the process ignored SIGINT for the cancel

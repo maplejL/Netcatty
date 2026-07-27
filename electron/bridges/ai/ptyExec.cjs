@@ -23,6 +23,12 @@ const {
   consumeVisibleText,
   stripAnsi,
 } = require("./ptyExecHelpers.cjs");
+const {
+  looksLikeInteractivePrompt,
+  isQuarantineWorthyError,
+  INTERACTIVE_PROMPT_ERROR,
+  FORCED_CANCEL_ERROR,
+} = require("./interactivePromptDetect.cjs");
 
 function startPtyJob(ptyStream, command, options) {
   const {
@@ -39,6 +45,7 @@ function startPtyJob(ptyStream, command, options) {
     maxBufferedChars = 0,
     normalizeFinalOutput = true,
     enforceWallTimeout = false,
+    onQuarantineNeeded = null,
   } = options || {};
 
   const marker = `__NCMCP_${Date.now().toString(36)}_${crypto.randomBytes(16).toString('hex')}__`;
@@ -196,7 +203,7 @@ function startPtyJob(ptyStream, command, options) {
     // Mark as "forced" so callers can tell the shell may still be busy.
     const tWall = setTimeout(() => {
       if (!finished) {
-        finish(foundStart ? output : preStartOutput, 130, "Cancelled (forced — process may still be running)");
+        finish(foundStart ? output : preStartOutput, 130, FORCED_CANCEL_ERROR);
       }
     }, CANCEL_WALL_TIMEOUT_MS);
     cancelOneShotTimers.push(tWall);
@@ -307,6 +314,13 @@ function startPtyJob(ptyStream, command, options) {
     }
     if (trackForCancellation) {
       trackForCancellation.delete(marker);
+    }
+    if (isQuarantineWorthyError(error)) {
+      try {
+        onQuarantineNeeded?.();
+      } catch {
+        // Quarantine bookkeeping must not break finish.
+      }
     }
 
     // Flush any incomplete marker carry — if it wasn't this job's marker, append it.
@@ -435,6 +449,11 @@ function startPtyJob(ptyStream, command, options) {
           appendToOutput(initialOutput);
         }
         preStartOutput = "";
+        if (!cancelRequested && !findEndMarker(output, marker) && looksLikeInteractivePrompt(output)) {
+          sendInterrupt();
+          finish(output, -1, INTERACTIVE_PROMPT_ERROR);
+          return;
+        }
         schedulePromptFallback();
         checkEnd();
         return;
@@ -468,6 +487,14 @@ function startPtyJob(ptyStream, command, options) {
     appendToOutput(text);
     if (!cancelRequested) {
       schedulePromptFallback();
+      // Fail early when a CLI is clearly waiting for stdin — waiting for the
+      // end marker / full timeout leaves the PTY wedged and subsequent AI
+      // commands get eaten as prompt field values.
+      if (!findEndMarker(output, marker) && looksLikeInteractivePrompt(output)) {
+        sendInterrupt();
+        finish(output, -1, INTERACTIVE_PROMPT_ERROR);
+        return;
+      }
     } else if (hasExpectedPromptSuffix(output, expectedPrompt)) {
       finish(output, 130, "Cancelled");
       return;

@@ -1,4 +1,8 @@
 /* eslint-disable no-undef */
+const {
+  checkSessionQuarantine,
+} = require("../ai/sessionQuarantine.cjs");
+
 function createBackgroundJobApi(ctx) {
   with (ctx) {
     function createBackgroundJobId() {
@@ -216,6 +220,9 @@ function createBackgroundJobApi(ctx) {
     }
     
     function getSessionBusyError(sessionId) {
+      const session = typeof sessions?.get === "function" ? sessions.get(sessionId) : null;
+      const quarantineErr = checkSessionQuarantine(sessionId, session);
+      if (quarantineErr) return quarantineErr;
       const active = activeSessionExecutions.get(sessionId);
       if (!active) return null;
       return {

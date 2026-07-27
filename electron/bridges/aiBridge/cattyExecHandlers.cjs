@@ -4,6 +4,10 @@
 // (based in electron/bridges/). Requiring here keeps the path unambiguous.
 const { formatSyntheticEcho } = require("../ai/shellUtils.cjs");
 const { ensureSessionShellKindForExec } = require("../ai/sessionShellKind.cjs");
+const {
+  quarantineSession,
+  quarantineFromResult,
+} = require("../ai/sessionQuarantine.cjs");
 
 function getWorkerExecutionMeta(mcpServerBridge, sessionId, chatSessionId) {
   return mcpServerBridge.getSessionMeta?.(sessionId, chatSessionId) || {};
@@ -48,7 +52,7 @@ async function proxyCattyExecToWorker({
   };
 
   try {
-    return await terminalWorkerManager.request("netcatty:ai:exec", {
+    const result = await terminalWorkerManager.request("netcatty:ai:exec", {
       sessionId,
       command,
       chatSessionId,
@@ -57,6 +61,8 @@ async function proxyCattyExecToWorker({
     }, {
       webContentsId: event?.sender?.id,
     });
+    quarantineFromResult(sessionId, result);
+    return result;
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
   } finally {
@@ -189,6 +195,10 @@ function registerCattyExecHandlers(ctx) {
             // commands, so do NOT enforce a hard wall-clock timeout here.
             // The inactivity timeout still applies, so genuinely hung
             // processes are still terminated.
+            onQuarantineNeeded: () => quarantineSession(sessionId),
+          }).then((result) => {
+            quarantineFromResult(sessionId, result);
+            return result;
           });
         });
       }
