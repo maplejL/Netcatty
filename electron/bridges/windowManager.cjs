@@ -567,11 +567,23 @@ function applyWindowOpacityToWindow(win) {
   }
 }
 
+// Settings is a separate utility window that sits over the main app. Applying
+// the same translucency punches main-window chat/terminal content through form
+// controls (especially Select triggers). Keep it fully opaque for readability.
+function applySettingsWindowOpaque(win) {
+  if (!win || win.isDestroyed?.()) return;
+  try {
+    win.setOpacity?.(1);
+  } catch {
+    // ignore
+  }
+}
+
 function applyWindowOpacity(opacity) {
   currentWindowOpacity = clampWindowOpacity(opacity);
   forEachMainWindow(applyWindowOpacityToWindow);
   if (settingsWindow && !settingsWindow.isDestroyed()) {
-    applyWindowOpacityToWindow(settingsWindow);
+    applySettingsWindowOpaque(settingsWindow);
   }
   return currentWindowOpacity;
 }
@@ -1146,7 +1158,7 @@ const settingsWindowApi = createSettingsWindowApi({
   createExternalOnlyWindowOpenHandler,
   resolveLiveAppIcon,
   getDevRendererBaseUrl,
-  applyWindowOpacityToWindow,
+  applySettingsWindowOpaque,
 });
 const {
   restoreWindowInputFocus,

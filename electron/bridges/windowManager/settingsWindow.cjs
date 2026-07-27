@@ -238,7 +238,8 @@ function createSettingsWindowApi(ctx) {
         // ignore
       }
 
-      applyWindowOpacityToWindow(win);
+      // Keep settings opaque even when the main window uses reduced opacity.
+      applySettingsWindowOpaque(win);
     
       // Hide instead of close so the window can be reused instantly.
       // When the app is quitting, allow normal close/destroy.

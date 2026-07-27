@@ -51,13 +51,15 @@ export const Select: React.FC<SelectProps> = ({
   placeholder,
 }) => {
   const selectedOption = options.find((opt) => opt.value === value);
-  const fitSelectedText = typeof className !== "string" || !className.includes("w-full");
+  // Prefer content-fit width unless the caller already set an explicit width.
+  const hasExplicitWidth =
+    typeof className === "string" && /\bw-(?:full|\d+|\[)/.test(className);
   return (
     <SelectPrimitive.Root value={value} onValueChange={onChange} disabled={disabled}>
       <SelectPrimitive.Trigger
         className={cn(
           "flex h-9 max-w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate [&>span]:whitespace-nowrap",
-          fitSelectedText && "min-w-max",
+          !hasExplicitWidth && "min-w-max",
           className,
         )}
       >
