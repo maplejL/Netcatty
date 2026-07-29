@@ -82,6 +82,16 @@ declare global {
     // App info (name/version/platform) for About screens
     getAppInfo?(): Promise<{ name: string; version: string; platform: string }>;
     ptyGetChildProcesses?(sessionId: string): Promise<Array<{ pid: number; command: string }>>;
+    /** OS-wide coding CLI processes (Windows Terminal / external agents). */
+    listCodingCliExternalProcesses?(): Promise<{
+      processes: Array<{
+        pid: number;
+        name?: string;
+        commandLine?: string;
+        cwd?: string;
+      }>;
+      error?: string;
+    }>;
     confirmCloseBusy?(payload: {
       command: string;
       title?: string;

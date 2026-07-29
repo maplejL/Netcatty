@@ -42,6 +42,11 @@ const LazyProtocolSelectDialog = lazy(() => import('../../components/ProtocolSel
 const LazyQuickSwitcher = lazy(() =>
   import('../../components/QuickSwitcher').then((m) => ({ default: m.QuickSwitcher })),
 );
+const LazyCodingCliTerminalHistoryPanel = lazy(() =>
+  import('../../components/CodingCliTerminalHistoryPanel').then((m) => ({
+    default: m.CodingCliTerminalHistoryPanel,
+  })),
+);
 const LazyCreateWorkspaceDialog = lazy(() =>
   import('../../components/CreateWorkspaceDialog').then((m) => ({ default: m.CreateWorkspaceDialog })),
 );
@@ -114,6 +119,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
     handleOpenHostFromVaultNote, handleOpenQuickSwitcher, handleOpenSettings, handleOpenVaultHostFromChat, handleOpenVaultNoteFromChat, handleOpenVaultSectionFromChat, handleOpenVaultSnippetFromChat, handleRootContextMenu, handlePassphraseCancel, handlePassphraseSkip, handlePassphraseSubmit, handleProtocolSelect,
     handleRequestCloseEditorTabRef, handleSessionStatusChange, handleSyncNowManual, handleTerminalDataCapture, handleToggleTheme, handleUpdateHostFromTerminal,
     hostById, hosts, hotkeyScheme, identities, importOrReuseKey, isBroadcastEnabled, isCreateWorkspaceOpen, isMacClient, isQuickSwitcherOpen,
+    isCodingCliHistoryOpen, setIsCodingCliHistoryOpen, codingCliHistoryEntries, removeCodingCliHistoryEntry, clearCodingCliHistory, setCodingCliHistoryPinned, handleOpenCodingCliHistoryEntry, handleScanOpenCodingCliTerminals,
     keyBindings, keyboardInteractiveQueue, keys, logViews, managedSources, navigateToSection, noteGroups, notes, openLogView, openNoteRequest, orderedTabsWithEditors, orphanSessions,
     passphraseQueue, protocolSelectHost, proxyProfiles, portForwardingRules, quickResults, quickSearch, removeSessionFromWorkspace, reorderWorkTabs, reorderWorkspaceSessions,
     resolveEmptyVaultConflict, resolvedTheme, resolveSessionAppearance, runSnippet, sessionLogsDir, sessionLogsEnabled, sessionLogsFormat, sessionLogsTimestampsEnabled, sessionRenameTarget, sshDebugLogsEnabled,
@@ -206,6 +212,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           setWindowOpacity={settings.setWindowOpacity}
           onToggleTheme={handleToggleTheme}
           onOpenSettings={handleOpenSettings}
+          onOpenCodingCliHistory={() => setIsCodingCliHistoryOpen(true)}
           onSyncNow={handleSyncNowManual}
           paddingLeft={isMacClient ? 76 : 12}
         />
@@ -239,6 +246,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
         onOpenQuickSwitcher={handleOpenQuickSwitcher}
         onToggleTheme={handleToggleTheme}
         onOpenSettings={handleOpenSettings}
+        onOpenCodingCliHistory={() => setIsCodingCliHistoryOpen(true)}
         windowOpacity={settings.windowOpacity}
         setWindowOpacity={settings.setWindowOpacity}
         onSyncNow={handleSyncNowManual}
@@ -334,6 +342,12 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
             onClearUnsavedConnectionLogs={clearUnsavedConnectionLogs}
             onRunSnippet={runSnippet}
             onOpenLogView={openLogView}
+            codingCliHistoryEntries={codingCliHistoryEntries}
+            onOpenCodingCliHistoryEntry={handleOpenCodingCliHistoryEntry}
+            onRemoveCodingCliHistoryEntry={removeCodingCliHistoryEntry}
+            onToggleCodingCliHistoryPin={setCodingCliHistoryPinned}
+            onClearCodingCliHistory={clearCodingCliHistory}
+            onScanOpenCodingCliTerminals={handleScanOpenCodingCliTerminals}
             showRecentHosts={settings.showRecentHosts}
             showOnlyUngroupedHostsInRoot={settings.showOnlyUngroupedHostsInRoot}
             navigateToSection={navigateToSection}
@@ -620,6 +634,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
               results={quickResults}
               sessions={sessions}
               workspaces={workspaces}
+              codingCliHistory={codingCliHistoryEntries}
               showSftpTab={settings.showSftpTab}
               onQueryChange={setQuickSearch}
               onSelect={handleHostConnectWithProtocolCheck}
@@ -629,7 +644,17 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
                 setQuickSearch('');
               }}
               onCreateLocalTerminal={(shell) => {
-                handleCreateLocalTerminal(shell);
+                handleCreateLocalTerminal(
+                  shell
+                    ? {
+                        command: shell.command,
+                        args: shell.args,
+                        name: shell.name,
+                        icon: shell.icon,
+                      }
+                    : undefined,
+                  shell?.localStartDir ? { localStartDir: shell.localStartDir } : undefined,
+                );
                 setIsQuickSwitcherOpen(false);
                 setQuickSearch('');
               }}
@@ -638,12 +663,40 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
                 setQuickSearch('');
                 setAddToWorkspaceDialog({ mode: 'create' });
               }}
+              onOpenCodingCliHistoryPanel={() => {
+                setIsQuickSwitcherOpen(false);
+                setQuickSearch('');
+                setIsCodingCliHistoryOpen(true);
+              }}
+              onOpenCodingCliHistoryEntry={(entry) => {
+                setIsQuickSwitcherOpen(false);
+                setQuickSearch('');
+                handleOpenCodingCliHistoryEntry(entry);
+              }}
               onClose={() => {
                 setIsQuickSwitcherOpen(false);
                 setQuickSearch('');
               }}
               keyBindings={keyBindings}
               terminalSettings={terminalSettings}
+            />
+          </Suspense>
+        </LazyLoadBoundary>
+      )}
+
+      {isCodingCliHistoryOpen && (
+        <LazyLoadBoundary name="Agent terminal history" resetKey="coding-cli-history">
+          <Suspense fallback={null}>
+            <LazyCodingCliTerminalHistoryPanel
+              open={isCodingCliHistoryOpen}
+              entries={codingCliHistoryEntries}
+              onClose={() => setIsCodingCliHistoryOpen(false)}
+              onOpenEntry={handleOpenCodingCliHistoryEntry}
+              onRemoveEntry={removeCodingCliHistoryEntry}
+              onTogglePin={setCodingCliHistoryPinned}
+              onClearAll={clearCodingCliHistory}
+              onScanOpenTerminals={handleScanOpenCodingCliTerminals}
+              autoScanOnOpen
             />
           </Suspense>
         </LazyLoadBoundary>

@@ -4,6 +4,7 @@ import { useAutoSync } from './application/state/useAutoSync';
 import { useManagedSourceSync } from './application/state/useManagedSourceSync';
 import { usePortForwardingState } from './application/state/usePortForwardingState';
 import { useSessionState } from './application/state/useSessionState';
+import { useCodingCliTerminalHistory } from './application/state/useCodingCliTerminalHistory';
 import { useSettingsState } from './application/state/useSettingsState';
 import { useUpdateCheck } from './application/state/useUpdateCheck';
 import { useVaultState } from './application/state/useVaultState';
@@ -69,6 +70,11 @@ import { PassphraseRequest } from './components/PassphraseModal';
 import { classifyLocalShellType } from './lib/localShell';
 import { getHostSearchMatch } from './lib/searchMatcher';
 import { useDiscoveredShells, resolveShellSetting } from './lib/useDiscoveredShells';
+import {
+  buildCodingCliJumpPlan,
+  type CodingCliTerminalHistoryEntry,
+} from './domain/codingCliTerminalHistory';
+import { getCodingCliProvider, type CodingCliProviderId } from './domain/codingCliProviders';
 import { Host, HostProtocol, KnownHost, SerialConfig, Snippet, SSHKey, TerminalSession } from './types';
 import { resolveSnippetCommand } from './components/SnippetExecutionProvider';
 import { isScriptSnippet } from './domain/snippetScript.ts';
@@ -98,6 +104,7 @@ function App({ settings }: { settings: SettingsState }) {
   const { t } = useI18n();
 
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
+  const [isCodingCliHistoryOpen, setIsCodingCliHistoryOpen] = useState(false);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   // Combined state for the AddToWorkspaceDialog. null = closed; mode
   // determines whether picking targets appends them to an existing
@@ -294,6 +301,128 @@ function App({ settings }: { settings: SettingsState }) {
     updateSessionDynamicTitle,
     updateSessionCodingCliProvider,
   } = useSessionState({ persistSessionRestore: !isPeerSessionWindow });
+
+  const systemInfoRef = useRef<{ username: string; hostname: string; homeDir?: string }>({
+    username: 'user',
+    hostname: 'localhost',
+  });
+
+  const {
+    entries: codingCliHistoryEntries,
+    rememberSessionCwd,
+    rememberProvider: rememberCodingCliProvider,
+    rememberResumeCommand: rememberCodingCliResumeCommand,
+    bindSessionToHistoryEntry,
+    touchHistoryEntry,
+    recordFromSession,
+    recordSessions,
+    scanOpenSessions,
+    scanAll: scanAllCodingCliHistory,
+    forgetSession,
+    removeEntry: removeCodingCliHistoryEntry,
+    clearAll: clearCodingCliHistory,
+    setPinned: setCodingCliHistoryPinned,
+  } = useCodingCliTerminalHistory({
+    getFallbackLocalCwd: () => {
+      const home = systemInfoRef.current.homeDir?.trim();
+      if (home) return home;
+      const username = systemInfoRef.current.username?.trim();
+      if (!username || username === 'user') return null;
+      // Windows local shells commonly start in the profile directory.
+      if (typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent || navigator.platform || '')) {
+        return `C:\\Users\\${username}`;
+      }
+      return `/home/${username}`;
+    },
+  });
+
+  const handleUpdateSessionRestoreCwd = useCallback((sessionId: string, cwd: string | null) => {
+    updateSessionRestoreCwd(sessionId, cwd);
+    rememberSessionCwd(sessionId, cwd);
+    // When local prompt cwd becomes known (PowerShell PS C:\…>), refresh the
+    // history row so we don't keep the home-dir fallback forever.
+    if (!cwd?.trim()) return;
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    if (!session || session.protocol !== 'local') return;
+    if (!session.codingCliProviderId) return;
+    recordFromSession(session, cwd, session.codingCliProviderId);
+  }, [updateSessionRestoreCwd, rememberSessionCwd, recordFromSession, sessions]);
+
+  const handleUpdateSessionCodingCliProvider = useCallback((
+    sessionId: string,
+    providerId: CodingCliProviderId | null,
+  ) => {
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    if (session?.protocol === 'local') {
+      if (providerId) {
+        rememberCodingCliProvider(sessionId, providerId);
+        // Record as soon as a coding CLI is detected (cwd may fall back to home).
+        recordFromSession({ ...session, codingCliProviderId: providerId }, null, providerId);
+      } else if (session.codingCliProviderId) {
+        // CLI exited and sticky provider is clearing — keep the history entry.
+        recordFromSession(session, null, session.codingCliProviderId);
+        rememberCodingCliProvider(sessionId, session.codingCliProviderId);
+      }
+    }
+    updateSessionCodingCliProvider(sessionId, providerId);
+  }, [updateSessionCodingCliProvider, recordFromSession, rememberCodingCliProvider, sessions]);
+
+  useEffect(() => {
+    const onResumeHint = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        sessionId?: string;
+        providerId?: CodingCliProviderId;
+        resumeCommand?: string;
+      }>).detail;
+      if (!detail?.sessionId || !detail.resumeCommand) return;
+      rememberCodingCliResumeCommand(detail.sessionId, detail.resumeCommand);
+      const session = sessions.find((candidate) => candidate.id === detail.sessionId);
+      if (!session || session.protocol !== 'local') return;
+      const providerId = detail.providerId || session.codingCliProviderId;
+      if (!providerId) return;
+      recordFromSession(
+        { ...session, codingCliProviderId: providerId },
+        null,
+        providerId,
+        detail.resumeCommand,
+      );
+    };
+    window.addEventListener('netcatty:coding-cli-resume-hint', onResumeHint as EventListener);
+    return () => {
+      window.removeEventListener('netcatty:coding-cli-resume-hint', onResumeHint as EventListener);
+    };
+  }, [sessions, rememberCodingCliResumeCommand, recordFromSession]);
+
+  const handleCloseSessionsWithCodingCliHistory = useCallback((sessionIds: string[]) => {
+    const closing = sessions.filter((session) => sessionIds.includes(session.id));
+    recordSessions(closing);
+    for (const sessionId of sessionIds) forgetSession(sessionId);
+    closeSessions(sessionIds);
+  }, [sessions, recordSessions, forgetSession, closeSessions]);
+
+  const handleCloseSessionWithCodingCliHistory = useCallback((sessionId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    handleCloseSessionsWithCodingCliHistory([sessionId]);
+  }, [handleCloseSessionsWithCodingCliHistory]);
+
+  /**
+   * Scan Netcatty local terminals + OS-wide coding CLIs (Windows Terminal / external grok, …).
+   */
+  const handleScanOpenCodingCliTerminals = useCallback(async () => {
+    return scanAllCodingCliHistory(sessions);
+  }, [scanAllCodingCliHistory, sessions]);
+
+  // One-shot background scan after sessions settle (titles/cwd may lag a bit).
+  // Also picks up external Windows Terminal agents.
+  const didInitialCodingCliScanRef = useRef(false);
+  useEffect(() => {
+    if (isPeerSessionWindow || didInitialCodingCliScanRef.current) return;
+    const timer = window.setTimeout(() => {
+      didInitialCodingCliScanRef.current = true;
+      void scanAllCodingCliHistory(sessions);
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [isPeerSessionWindow, scanAllCodingCliHistory, sessions]);
 
   const handleRunSnippet = useCallback(
     async (snippet: Snippet, targetHosts: Host[]) => {
@@ -818,12 +947,27 @@ function App({ settings }: { settings: SettingsState }) {
   // Used by the "Close all / Close others / Close to the right" context-menu
   // actions on tabs (#748).
   const closeTabsBatch = useCallback(
-    async (targetIds: string[]) => { return closeTabsBatchImpl(() => ({ closeLogView, closeSessions, closeTabsInFlightRef, closeWorkspace, confirmIfBusyLocalTerminal, logViews, sessions, targetIds, workspaces }), targetIds); },
-    [workspaces, sessions, logViews, confirmIfBusyLocalTerminal, closeWorkspace, closeSessions, closeLogView],
+    async (targetIds: string[]) => {
+      return closeTabsBatchImpl(
+        () => ({
+          closeLogView,
+          closeSessions: handleCloseSessionsWithCodingCliHistory,
+          closeTabsInFlightRef,
+          closeWorkspace,
+          confirmIfBusyLocalTerminal,
+          logViews,
+          sessions,
+          targetIds,
+          workspaces,
+        }),
+        targetIds,
+      );
+    },
+    [workspaces, sessions, logViews, confirmIfBusyLocalTerminal, closeWorkspace, handleCloseSessionsWithCodingCliHistory, closeLogView],
   );
 
   // Shared hotkey action handler - used by both global handler and terminal callback
-  const executeHotkeyAction = useCallback((action: string, e: KeyboardEvent) => { return executeHotkeyActionImpl(() => ({ IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, action, activeTabStore, addConnectionLogRef, closeSession, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, e, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, splitSessionWithCurrentShell, systemInfoRef, toEditorTabId, toggleBroadcast, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, workspaces }), action, e); }, [orderedTabs, editorTabs, sessions, workspaces, isQuickSwitcherOpen, setActiveTabId, closeSession, closeWorkspace, createLocalTerminalWithCurrentShell, splitSessionWithCurrentShell, moveFocusInWorkspace, toggleBroadcast, toggleWorkspaceViewMode, settings, confirmIfBusyLocalTerminal]);
+  const executeHotkeyAction = useCallback((action: string, e: KeyboardEvent) => { return executeHotkeyActionImpl(() => ({ IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, action, activeTabStore, addConnectionLogRef, closeSession: handleCloseSessionWithCodingCliHistory, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, e, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, splitSessionWithCurrentShell, systemInfoRef, toEditorTabId, toggleBroadcast, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, workspaces }), action, e); }, [orderedTabs, editorTabs, sessions, workspaces, isQuickSwitcherOpen, setActiveTabId, handleCloseSessionWithCodingCliHistory, closeWorkspace, createLocalTerminalWithCurrentShell, splitSessionWithCurrentShell, moveFocusInWorkspace, toggleBroadcast, toggleWorkspaceViewMode, settings, confirmIfBusyLocalTerminal]);
 
   const handleWindowCommandCloseRequest = useCallback(async () => {
     const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-state="open"]'));
@@ -931,19 +1075,20 @@ function App({ settings }: { settings: SettingsState }) {
   const hostsRef = useRef(hosts);
   hostsRef.current = hosts;
 
-  const systemInfoRef = useRef<{ username: string; hostname: string }>({
-    username: 'user',
-    hostname: 'localhost',
-  });
-
-  // Fetch system info on mount
+  // Fetch system info on mount (ref declared near coding-CLI history for home fallback)
   useEffect(() => {
     void (async () => {
       try {
         const bridge = netcattyBridge.get();
         const info = await bridge?.getSystemInfo?.();
         if (info) {
-          systemInfoRef.current = info;
+          systemInfoRef.current = {
+            username: info.username || systemInfoRef.current.username,
+            hostname: info.hostname || systemInfoRef.current.hostname,
+            homeDir: (info as { homeDir?: string; home?: string }).homeDir
+              || (info as { homeDir?: string; home?: string }).home
+              || systemInfoRef.current.homeDir,
+          };
         }
       } catch {
         // Fallback to defaults
@@ -954,7 +1099,13 @@ function App({ settings }: { settings: SettingsState }) {
   // Wrapper to create local terminal with logging
   const handleCreateLocalTerminal = useCallback((
     shell?: { command: string; args?: string[]; name?: string; icon?: string },
-    options?: { localStartDir?: string },
+    options?: {
+      localStartDir?: string;
+      startupCommand?: string;
+      codingCliProviderId?: TerminalSession['codingCliProviderId'];
+      codingCliHistoryEntryId?: string;
+      customName?: string;
+    },
   ) => {
     return handleCreateLocalTerminalImpl(
       () => ({ addConnectionLog, classifyLocalShellType, createLocalTerminal, discoveredShells, resolveShellSetting, shell, systemInfoRef, terminalSettings, undefined }),
@@ -962,6 +1113,58 @@ function App({ settings }: { settings: SettingsState }) {
       options,
     );
   }, [addConnectionLog, createLocalTerminal, terminalSettings, discoveredShells]);
+
+  /**
+   * Quick jump tiers (confirmed product policy):
+   * 1) exact resumeCommand  2) provider continue-in-cwd  3) fresh CLI in cwd
+   * shell mode: open directory only.
+   * Always updates the same history row (no duplicate card).
+   */
+  const handleOpenCodingCliHistoryEntry = useCallback((
+    entry: CodingCliTerminalHistoryEntry,
+    mode: 'jump' | 'shell' = 'jump',
+  ) => {
+    const provider = getCodingCliProvider(entry.providerId);
+    const plan = mode === 'jump' ? buildCodingCliJumpPlan(entry) : null;
+    const label = entry.title?.trim()
+      || provider?.label
+      || entry.providerId;
+    // Bump the existing row immediately so the list doesn't look like a new item
+    // when the jumped session re-detects the same CLI.
+    touchHistoryEntry(entry.id);
+    const sessionId = handleCreateLocalTerminal(
+      entry.localShell
+        ? {
+            command: entry.localShell,
+            name: entry.localShellName,
+          }
+        : undefined,
+      {
+        localStartDir: entry.cwd,
+        codingCliHistoryEntryId: entry.id,
+        ...(plan
+          ? {
+              startupCommand: plan.command,
+              codingCliProviderId: entry.providerId,
+              customName: label,
+            }
+          : {
+              codingCliProviderId: entry.providerId,
+              customName: label,
+            }),
+      },
+    );
+    if (typeof sessionId === 'string' && sessionId) {
+      bindSessionToHistoryEntry(sessionId, entry.id);
+      rememberSessionCwd(sessionId, entry.cwd);
+    }
+    setIsCodingCliHistoryOpen(false);
+  }, [
+    handleCreateLocalTerminal,
+    touchHistoryEntry,
+    bindSessionToHistoryEntry,
+    rememberSessionCwd,
+  ]);
 
   const proxyProfileIdSet = useMemo(
     () => new Set(proxyProfiles.map((profile) => profile.id)),
@@ -1278,7 +1481,7 @@ function App({ settings }: { settings: SettingsState }) {
         resolveSessionAppearance={themeRuntime.resolveFocusedAppearance}
         t={t}
       />
-      <AppView ctx={{ accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace, batchExecDialogHosts, setBatchExecDialogHosts, batchSftpDialogHosts, setBatchSftpDialogHosts, clearAndRemoveSource, clearAndRemoveSources, clearUnsavedConnectionLogs, clearSessionFontSizeOverride, closeLogView, closeSession, closeTabsBatch, copySessionWithCurrentShell, copySessionToNewWindowWithCurrentShell, closeWorkspace, connectionLogs, convertKnownHostToHost, createWorkspaceFromSessions, createWorkspaceFromTargets, createWorkspaceWithHosts, customAccent, customGroups, currentTerminalTheme, deepLinkHostDraft, deleteConnectionLog, draggingSessionId, effectiveKnownHosts, editorTabs, editorWordWrap, emptyVaultConflict, followAppTerminalTheme, clearThemeIntent: themeRuntime.clearIntent, settleManualThemeIntent: themeRuntime.settleManualIntent, pickTerminalTheme: themeRuntime.pickTheme, resolveSessionAppearance: themeRuntime.resolveFocusedAppearance, groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateWorkspaceWithHostsFromVault, handleOpenBatchExec, handleOpenBatchSftp, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost, handleEndSessionDrag, handleFollowAppTerminalThemeChange, handleHostConnectWithProtocolCheck, handleHotkeyAction, handleOpenHostFromVaultNote, handleOpenVaultHostFromChat, handleOpenVaultNoteFromChat, handleOpenVaultSectionFromChat, handleOpenVaultSnippetFromChat, handleKeyboardInteractiveCancel, handleKeyboardInteractiveSubmit, handleOpenQuickSwitcher, handleOpenSettings, handleRootContextMenu, handlePassphraseCancel, handlePassphraseSkip, handlePassphraseSubmit, handleProtocolSelect, handleRequestCloseEditorTabRef, handleSessionStatusChange, handleSyncNowManual, handleTerminalDataCapture, handleToggleTheme, handleUpdateHostFromTerminal, hostById, hosts, hotkeyScheme, identities, importOrReuseKey, isBroadcastEnabled, isCreateWorkspaceOpen, isMacClient, isQuickSwitcherOpen, keyBindings, keyboardInteractiveQueue, keys, logViews, managedSources, navigateToSection, noteGroups, notes, openLogView, openNoteRequest, orderedTabsWithEditors, orphanSessions, passphraseQueue, protocolSelectHost, proxyProfiles, portForwardingRules, quickResults, quickSearch, removeSessionFromWorkspace, reorderWorkTabs, reorderWorkspaceSessions, resetSessionRename, resetWorkspaceRename, resolveEmptyVaultConflict, resolvedTheme, runSnippet: handleRunSnippet, sessionLogsDir, sessionLogsEnabled, sessionLogsFormat, sessionLogsTimestampsEnabled, sessionRenameTarget, sessionRenameValue, sessions, setActiveTabId, setAddToWorkspaceDialog, setDeepLinkHostDraft, setDraggingSessionId, setEditorWordWrap, setIsCreateWorkspaceOpen, setIsQuickSwitcherOpen, setNavigateToSection, setProtocolSelectHost, setQuickSearch, setSessionRenameValue, setTerminalFontFamilyId, setTerminalFontSize, setVaultFocusRequest, setWorkspaceFocusedSession, setWorkspaceRenameValue, settings, sftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, setSftpAutoRefreshOnTerminal, sftpAutoSync, sftpDefaultViewMode, sftpDoubleClickBehavior, sftpShowHiddenFiles, sftpUseCompressedUpload, shellHistory, snippetPackages, snippets, splitSessionWithCurrentShell, sshDebugLogsEnabled: settings.sshDebugLogsEnabled, startSessionRename, renameSessionInline, startWorkspaceRename, submitSessionRename, submitWorkspaceRename, t, terminalFontFamilyId, terminalFontSize, terminalSettings, terminalThemeId, themeById, toggleBroadcast, toggleConnectionLogSaved, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog, updateCustomGroups, updateGroupConfigs, updateHostDistro, updateHosts, updateIdentities, updateKeys, updateKnownHosts, updateManagedSources, updateNoteGroups, updateNotes, updateProxyProfiles, updateSnippetPackages, updateSnippets, updateSplitSizes, updateSessionFontSize, updateSessionRestoreCwd, updateSessionDynamicTitle, updateSessionCodingCliProvider, updateTerminalSetting, vaultFocusRequest, workspaceRenameTarget, workspaceRenameValue, workspaces, VaultViewContainer, SftpViewMount, TerminalLayerMount, LogViewWrapper }} />
+      <AppView ctx={{ accentMode, addShellHistoryEntry, addSessionToWorkspace, addToWorkspaceDialog, appendHostToWorkspace, appendLocalTerminalToWorkspace, batchExecDialogHosts, setBatchExecDialogHosts, batchSftpDialogHosts, setBatchSftpDialogHosts, clearAndRemoveSource, clearAndRemoveSources, clearUnsavedConnectionLogs, clearSessionFontSizeOverride, closeLogView, closeSession: handleCloseSessionWithCodingCliHistory, closeTabsBatch, copySessionWithCurrentShell, copySessionToNewWindowWithCurrentShell, closeWorkspace, connectionLogs, convertKnownHostToHost, createWorkspaceFromSessions, createWorkspaceFromTargets, createWorkspaceWithHosts, customAccent, customGroups, currentTerminalTheme, deepLinkHostDraft, deleteConnectionLog, draggingSessionId, effectiveKnownHosts, editorTabs, editorWordWrap, emptyVaultConflict, followAppTerminalTheme, clearThemeIntent: themeRuntime.clearIntent, settleManualThemeIntent: themeRuntime.settleManualIntent, pickTerminalTheme: themeRuntime.pickTheme, resolveSessionAppearance: themeRuntime.resolveFocusedAppearance, groupConfigs, handleAddKnownHost, handleConnectSerial, handleConnectToHost, handleCreateWorkspaceWithHostsFromVault, handleOpenBatchExec, handleOpenBatchSftp, handleCreateLocalTerminal, handleDefaultTerminalThemeChange, handleDeleteHost, handleEndSessionDrag, handleFollowAppTerminalThemeChange, handleHostConnectWithProtocolCheck, handleHotkeyAction, handleOpenHostFromVaultNote, handleOpenVaultHostFromChat, handleOpenVaultNoteFromChat, handleOpenVaultSectionFromChat, handleOpenVaultSnippetFromChat, handleKeyboardInteractiveCancel, handleKeyboardInteractiveSubmit, handleOpenQuickSwitcher, handleOpenSettings, handleRootContextMenu, handlePassphraseCancel, handlePassphraseSkip, handlePassphraseSubmit, handleProtocolSelect, handleRequestCloseEditorTabRef, handleSessionStatusChange, handleSyncNowManual, handleTerminalDataCapture, handleToggleTheme, handleUpdateHostFromTerminal, hostById, hosts, hotkeyScheme, identities, importOrReuseKey, isBroadcastEnabled, isCreateWorkspaceOpen, isMacClient, isQuickSwitcherOpen, isCodingCliHistoryOpen, setIsCodingCliHistoryOpen, codingCliHistoryEntries, removeCodingCliHistoryEntry, clearCodingCliHistory, setCodingCliHistoryPinned, handleOpenCodingCliHistoryEntry, handleScanOpenCodingCliTerminals, keyBindings, keyboardInteractiveQueue, keys, logViews, managedSources, navigateToSection, noteGroups, notes, openLogView, openNoteRequest, orderedTabsWithEditors, orphanSessions, passphraseQueue, protocolSelectHost, proxyProfiles, portForwardingRules, quickResults, quickSearch, removeSessionFromWorkspace, reorderWorkTabs, reorderWorkspaceSessions, resetSessionRename, resetWorkspaceRename, resolveEmptyVaultConflict, resolvedTheme, runSnippet: handleRunSnippet, sessionLogsDir, sessionLogsEnabled, sessionLogsFormat, sessionLogsTimestampsEnabled, sessionRenameTarget, sessionRenameValue, sessions, setActiveTabId, setAddToWorkspaceDialog, setDeepLinkHostDraft, setDraggingSessionId, setEditorWordWrap, setIsCreateWorkspaceOpen, setIsQuickSwitcherOpen, setNavigateToSection, setProtocolSelectHost, setQuickSearch, setSessionRenameValue, setTerminalFontFamilyId, setTerminalFontSize, setVaultFocusRequest, setWorkspaceFocusedSession, setWorkspaceRenameValue, settings, sftpAutoOpenSidebar, sftpFollowTerminalCwd, setSftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, setSftpAutoRefreshOnTerminal, sftpAutoSync, sftpDefaultViewMode, sftpDoubleClickBehavior, sftpShowHiddenFiles, sftpUseCompressedUpload, shellHistory, snippetPackages, snippets, splitSessionWithCurrentShell, sshDebugLogsEnabled: settings.sshDebugLogsEnabled, startSessionRename, renameSessionInline, startWorkspaceRename, submitSessionRename, submitWorkspaceRename, t, terminalFontFamilyId, terminalFontSize, terminalSettings, terminalThemeId, themeById, toggleBroadcast, toggleConnectionLogSaved, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog, updateCustomGroups, updateGroupConfigs, updateHostDistro, updateHosts, updateIdentities, updateKeys, updateKnownHosts, updateManagedSources, updateNoteGroups, updateNotes, updateProxyProfiles, updateSnippetPackages, updateSnippets, updateSplitSizes, updateSessionFontSize, updateSessionRestoreCwd: handleUpdateSessionRestoreCwd, updateSessionDynamicTitle, updateSessionCodingCliProvider: handleUpdateSessionCodingCliProvider, updateTerminalSetting, vaultFocusRequest, workspaceRenameTarget, workspaceRenameValue, workspaces, VaultViewContainer, SftpViewMount, TerminalLayerMount, LogViewWrapper }} />
     </>
   );
 }

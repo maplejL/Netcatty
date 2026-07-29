@@ -14,6 +14,10 @@ import { sessionActivityStore } from '../application/state/sessionActivityStore'
 import { matchCodingCliProviderFromCommand } from '../domain/codingCliProviderMatch';
 import { createCodingCliOutputScanner, type CodingCliOutputScanner } from '../domain/codingCliOutputDetect';
 import type { CodingCliProviderId } from '../domain/codingCliProviders';
+import {
+  extractCodingCliResumeCommand,
+  extractLocalShellCwdFromOutput,
+} from '../domain/codingCliTerminalHistory';
 import { inferCodingCliProviderFromTitleSignals, shouldClearCodingCliProviderForTitle } from '../domain/codingCliTitleParse';
 import { sessionCapabilitiesStore } from '../application/state/sessionCapabilitiesStore';
 import { useTerminalBackend } from '../application/state/useTerminalBackend';
@@ -327,6 +331,11 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
 
   const codingCliOutputScannersRef = useRef<Map<string, CodingCliOutputScanner>>(new Map());
   const codingCliOutputScanDisabledRef = useRef<Set<string>>(new Set());
+  /** Rolling text used only for resume-id capture after provider is already sticky. */
+  const codingCliResumeTailBySessionRef = useRef<Map<string, string>>(new Map());
+  const codingCliLastResumeBySessionRef = useRef<Map<string, string>>(new Map());
+  /** Sticky provider for a short window after title clears (resume banner may arrive then). */
+  const codingCliLastProviderBySessionRef = useRef<Map<string, CodingCliProviderId>>(new Map());
 
   const applySessionCodingCliProvider = useCallback((
     sessionId: string,
@@ -334,6 +343,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   ) => {
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
     if (!session || session.codingCliProviderId === providerId) return;
+    codingCliLastProviderBySessionRef.current.set(sessionId, providerId);
     onUpdateSessionCodingCliProvider?.(sessionId, providerId);
   }, [onUpdateSessionCodingCliProvider]);
 
@@ -376,6 +386,14 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     }
 
     if (providerId && dynamicTabTitleMode !== 'off') {
+      // Command/output sticky provider wins over a conflicting title match.
+      // (Titles often contain unrelated words like "Cursor Session" while the
+      // user is actually running `grok`.)
+      const sticky = session.codingCliProviderId
+        ?? codingCliLastProviderBySessionRef.current.get(sessionId);
+      if (sticky && sticky !== providerId) {
+        return;
+      }
       if (!session.codingCliProviderId || session.codingCliProviderId !== providerId) {
         codingCliOutputScannersRef.current.delete(sessionId);
         codingCliOutputScanDisabledRef.current.delete(sessionId);
@@ -394,11 +412,57 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     }
   }, [applySessionCodingCliProvider, onUpdateSessionCodingCliProvider, onUpdateSessionDynamicTitle, terminalSettings?.dynamicTabTitleMode]);
 
+  const emitCodingCliResumeHint = useCallback((
+    sessionId: string,
+    providerId: CodingCliProviderId,
+    resumeCommand: string,
+  ) => {
+    const previous = codingCliLastResumeBySessionRef.current.get(sessionId);
+    if (previous === resumeCommand) return;
+    codingCliLastResumeBySessionRef.current.set(sessionId, resumeCommand);
+    window.dispatchEvent(new CustomEvent('netcatty:coding-cli-resume-hint', {
+      detail: { sessionId, providerId, resumeCommand },
+    }));
+  }, []);
+
   const handleTerminalOutput = useCallback((sessionId: string, chunk: string) => {
-    if (!chunk || codingCliOutputScanDisabledRef.current.has(sessionId)) return;
+    if (!chunk) return;
 
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-    if (session?.codingCliProviderId) return;
+
+    // Local shells rarely emit OSC 7; learn cwd from the latest prompt (PS C:\…>).
+    if (session?.protocol === 'local') {
+      const previousTail = codingCliResumeTailBySessionRef.current.get(sessionId) ?? '';
+      const tailForCwd = `${previousTail}${chunk}`.slice(-8192);
+      const promptCwd = extractLocalShellCwdFromOutput(tailForCwd);
+      if (promptCwd) {
+        const existing = terminalRendererCwdBySessionRef.current.get(sessionId);
+        if (existing !== promptCwd) {
+          handleTerminalCwdChange(sessionId, promptCwd);
+        }
+      }
+    }
+
+    const stickyProvider = session?.codingCliProviderId
+      ?? codingCliLastProviderBySessionRef.current.get(sessionId);
+    // After a coding CLI is identified we still keep watching for resume hints
+    // (Grok prints `grok --resume <id>` when the session ends — often after
+    // sticky provider is already set, and sometimes after title clear).
+    if (stickyProvider) {
+      const previousTail = codingCliResumeTailBySessionRef.current.get(sessionId) ?? '';
+      const tail = `${previousTail}${chunk}`.slice(-4096);
+      codingCliResumeTailBySessionRef.current.set(sessionId, tail);
+      // Only parse resume lines that match this session's sticky CLI — never
+      // attach another terminal's `grok --resume` to a Cursor/Claude row.
+      const resumeCommand = extractCodingCliResumeCommand(tail, stickyProvider);
+      if (resumeCommand) {
+        emitCodingCliResumeHint(sessionId, stickyProvider, resumeCommand);
+      }
+      // Still allow discovery if provider is not sticky on the session yet.
+      if (session?.codingCliProviderId) return;
+    }
+
+    if (codingCliOutputScanDisabledRef.current.has(sessionId)) return;
 
     let scanner = codingCliOutputScannersRef.current.get(sessionId);
     if (!scanner) {
@@ -406,9 +470,20 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       codingCliOutputScannersRef.current.set(sessionId, scanner);
     }
 
-    const providerId = scanner.feed(chunk);
-    if (providerId) {
-      applySessionCodingCliProvider(sessionId, providerId);
+    const hit = scanner.feedDetailed
+      ? scanner.feedDetailed(chunk)
+      : (() => {
+          const providerId = scanner.feed(chunk);
+          return providerId ? { providerId } : undefined;
+        })();
+    if (hit?.providerId) {
+      applySessionCodingCliProvider(sessionId, hit.providerId);
+      if (hit.resumeCommand) {
+        emitCodingCliResumeHint(sessionId, hit.providerId, hit.resumeCommand);
+      }
+      // Seed resume tail so the exit banner that follows still matches.
+      const seeded = `${scanner.getBuffer?.() ?? ''}${chunk}`.slice(-4096);
+      codingCliResumeTailBySessionRef.current.set(sessionId, seeded);
       return;
     }
 
@@ -417,7 +492,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       codingCliOutputScanDisabledRef.current.delete(sessionId);
       codingCliOutputScanDisabledRef.current.add(sessionId);
     }
-  }, [applySessionCodingCliProvider]);
+  }, [applySessionCodingCliProvider, emitCodingCliResumeHint, handleTerminalCwdChange]);
 
   const handleTerminalBell = useCallback((sessionId: string) => {
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
@@ -430,6 +505,9 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const handleCloseSession = useCallback((sessionId: string) => {
     codingCliOutputScannersRef.current.delete(sessionId);
     codingCliOutputScanDisabledRef.current.delete(sessionId);
+    codingCliResumeTailBySessionRef.current.delete(sessionId);
+    codingCliLastResumeBySessionRef.current.delete(sessionId);
+    codingCliLastProviderBySessionRef.current.delete(sessionId);
     sessionCapabilitiesStore.delete(sessionId);
     onCloseSession(sessionId);
   }, [onCloseSession]);
@@ -874,6 +952,17 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
 
   const handleCommandSubmitted = useCallback((command: string, _hostId: string, _hostLabel: string, sessionId: string) => {
     applySessionCodingCliProviderFromCommand(sessionId, command);
+    // Resume extraction must follow the CLI named in *this command*, not a
+    // previously sticky provider (e.g. Cursor session where user typed
+    // `grok --resume …` must record under Grok only).
+    const commandProvider = matchCodingCliProviderFromCommand(command);
+    if (commandProvider) {
+      codingCliLastProviderBySessionRef.current.set(sessionId, commandProvider.id);
+      const resumeCommand = extractCodingCliResumeCommand(command, commandProvider.id);
+      if (resumeCommand) {
+        emitCodingCliResumeHint(sessionId, commandProvider.id, resumeCommand);
+      }
+    }
 
     const tabId = activeTabIdRef.current;
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
@@ -930,6 +1019,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     cwdProbeCancelersRef.current.set(sessionId, cancelProbe);
   }, [
     applySessionCodingCliProviderFromCommand,
+    emitCodingCliResumeHint,
     handleTerminalCwdChange,
     restoreTerminalCwd,
     scheduleSftpSoftRefresh,

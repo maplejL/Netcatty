@@ -821,6 +821,7 @@ Highlight the focused split pane:
   'vault.nav.notes': 'Notes',
   'vault.nav.knownHosts': 'Known Hosts',
   'vault.nav.logs': 'Logs',
+  'vault.nav.agentHistory': 'Agent History',
 
   'proxyProfiles.action.add': 'Add Proxy',
   'proxyProfiles.search.placeholder': 'Search proxies…',

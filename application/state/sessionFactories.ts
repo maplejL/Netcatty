@@ -7,6 +7,12 @@ export interface LocalTerminalOptions {
   shellName?: string;
   shellIcon?: string;
   localStartDir?: string;
+  /** Run after the local shell is ready (e.g. coding CLI jump). */
+  startupCommand?: string;
+  codingCliProviderId?: TerminalSession["codingCliProviderId"];
+  /** History row to update in place when this session was opened via jump. */
+  codingCliHistoryEntryId?: string;
+  customName?: string;
 }
 
 /**
@@ -24,7 +30,7 @@ export const createLocalTerminalSession = (
 ): TerminalSession => ({
   id: sessionId,
   hostId: LOCAL_TERMINAL_HOST_ID,
-  hostLabel: options?.shellName || "Local Terminal",
+  hostLabel: options?.customName || options?.shellName || "Local Terminal",
   hostname: "localhost",
   username: "local",
   status: "connecting",
@@ -35,6 +41,12 @@ export const createLocalTerminalSession = (
   localShellName: options?.shellName,
   localShellIcon: options?.shellIcon,
   localStartDir: options?.localStartDir,
+  ...(options?.startupCommand ? { startupCommand: options.startupCommand } : {}),
+  ...(options?.codingCliProviderId ? { codingCliProviderId: options.codingCliProviderId } : {}),
+  ...(options?.codingCliHistoryEntryId
+    ? { codingCliHistoryEntryId: options.codingCliHistoryEntryId }
+    : {}),
+  ...(options?.customName ? { customName: options.customName } : {}),
 });
 
 export const createSerialTerminalSession = (

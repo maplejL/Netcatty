@@ -897,7 +897,7 @@ const openConnectionApi = createOpenConnectionApi({
   buildAuthHandler, applyAuthToConnOpts, createKeyboardInteractiveHandler, passphraseHandler,
   isKeyEncrypted, randomUUID,
   sendSftpProgress, safeSend, authSafeSend, copySftpEncodingState, clearSftpEncodingState, normalizeEncoding,
-  resolveEncodingForRequest, updateResolvedEncoding, requireSftpChannel, realpathAsync,
+  resolveEncodingForRequest, updateResolvedEncoding, requireSftpChannel, tryOpenSftpChannel, realpathAsync,
   connectSudoSftp: undefined,
   acquireConnectionRef, releaseConnectionRef, findReusableSession, createSessionBackedSftpClient,
 });

@@ -1,4 +1,4 @@
-import { Moon, Settings, Sparkles, Sun } from 'lucide-react';
+import { Bot, Moon, Settings, Sparkles, Sun } from 'lucide-react';
 import React, { memo } from 'react';
 import { useI18n } from '../../application/i18n/I18nProvider';
 import { Button } from '../ui/button';
@@ -17,6 +17,7 @@ interface AppWindowChromeProps {
   setWindowOpacity: (opacity: number) => void;
   onToggleTheme: () => void;
   onOpenSettings: () => void;
+  onOpenCodingCliHistory?: () => void;
   onSyncNow?: () => Promise<void>;
   /** Extra left padding for macOS traffic lights when this bar is the titlebar. */
   paddingLeft?: number;
@@ -58,6 +59,7 @@ export const AppWindowChrome: React.FC<AppWindowChromeProps> = memo(({
   setWindowOpacity,
   onToggleTheme,
   onOpenSettings,
+  onOpenCodingCliHistory,
   onSyncNow,
   paddingLeft = 12,
   className,
@@ -97,6 +99,23 @@ export const AppWindowChrome: React.FC<AppWindowChromeProps> = memo(({
         </TooltipTrigger>
         <TooltipContent>{t('topTabs.aiAssistant')}</TooltipContent>
       </Tooltip>
+      {onOpenCodingCliHistory && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 app-no-drag top-tab-utility-btn"
+              style={{ color: 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' }}
+              onClick={onOpenCodingCliHistory}
+              aria-label={t('topTabs.codingCliHistory')}
+            >
+              <Bot size={16} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('topTabs.codingCliHistory')}</TooltipContent>
+        </Tooltip>
+      )}
       <WindowOpacityButton
         windowOpacity={windowOpacity}
         setWindowOpacity={setWindowOpacity}

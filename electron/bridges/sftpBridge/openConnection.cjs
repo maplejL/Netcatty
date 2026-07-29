@@ -891,12 +891,21 @@ function createOpenConnectionApi(ctx) {
                 }
               })();
             } else {
-              // Open standard SFTP subsystem channel
-              sshClient.sftp((err, sftp) => {
-                if (err) return reject(err);
-                client.sftp = sftp;
-                resolve();
-              });
+              // Servers with a missing or unresponsive Subsystem sftp can
+              // otherwise leave this callback pending forever. Use the bounded
+              // opener so the renderer can show a recoverable error.
+              (async () => {
+                try {
+                  const sftp = await tryOpenSftpChannel(client);
+                  if (!sftp) {
+                    throw new Error("SFTP subsystem is unavailable on this server.");
+                  }
+                  client.sftp = sftp;
+                  resolve();
+                } catch (err) {
+                  reject(err);
+                }
+              })();
             }
           });
     
@@ -929,6 +938,13 @@ function createOpenConnectionApi(ctx) {
         console.log(`[SFTP] Connection established: ${connId}`);
         return { sftpId: connId };
       } catch (err) {
+        // Ensure an SFTP subsystem timeout does not leave the underlying SSH
+        // connection alive after the renderer has received the failure.
+        try {
+          client.end();
+        } catch {
+          // Ignore client cleanup failures and preserve the connection error.
+        }
         // Cleanup jump connections on error
         cleanupPendingConnection();
         throw err;

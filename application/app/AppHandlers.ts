@@ -850,7 +850,13 @@ export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string
 export function handleCreateLocalTerminalImpl(
   getCtx: AppContextGetter,
   shell?: { command: string; args?: string[]; name?: string; icon?: string },
-  options?: { localStartDir?: string },
+  options?: {
+    localStartDir?: string;
+    startupCommand?: string;
+    codingCliProviderId?: import('../../domain/models').TerminalSession['codingCliProviderId'];
+    codingCliHistoryEntryId?: string;
+    customName?: string;
+  },
 ) {
   const { addConnectionLog, classifyLocalShellType, createLocalTerminal, discoveredShells, resolveShellSetting, systemInfoRef, terminalSettings } = getCtx();
 {
@@ -867,11 +873,15 @@ export function handleCreateLocalTerminalImpl(
       shellName,
       shellIcon,
       localStartDir: options?.localStartDir,
+      startupCommand: options?.startupCommand,
+      codingCliProviderId: options?.codingCliProviderId,
+      codingCliHistoryEntryId: options?.codingCliHistoryEntryId,
+      customName: options?.customName,
     });
     addConnectionLog({
       sessionId,
       hostId: '',
-      hostLabel: shellName || 'Local Terminal',
+      hostLabel: options?.customName || shellName || 'Local Terminal',
       hostname: 'localhost',
       username: username,
       protocol: 'local',
@@ -880,6 +890,7 @@ export function handleCreateLocalTerminalImpl(
       localHostname: hostname,
       saved: false,
     });
+    return sessionId;
   }
 }
 

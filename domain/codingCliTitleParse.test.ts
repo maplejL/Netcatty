@@ -26,6 +26,16 @@ test('inferCodingCliProviderFromTitleSignals ignores provider names inside longe
   assert.equal(inferCodingCliProviderFromTitleSignals('myopencodetooling'), undefined);
 });
 
+test('inferCodingCliProviderFromTitleSignals prefers grok over bare cursor in mixed titles', () => {
+  assert.equal(
+    inferCodingCliProviderFromTitleSignals('Resume Cursor Session89fe75fa - grok'),
+    'grok',
+  );
+  assert.equal(inferCodingCliProviderFromTitleSignals('cursor agent · netcatty'), 'cursor');
+  // Bare "cursor" in a session name is not enough.
+  assert.equal(inferCodingCliProviderFromTitleSignals('Resume Cursor Session89fe'), undefined);
+});
+
 test('resolveCodingCliActivityPhase treats spinner titles as busy', () => {
   assert.equal(
     resolveCodingCliActivityPhase('⠋ netcatty', 'codex'),

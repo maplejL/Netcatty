@@ -1,6 +1,7 @@
 import {
   Folder,
   FolderLock,
+  History,
   LayoutGrid,
   Plus,
   Search,
@@ -10,14 +11,20 @@ import {
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../application/i18n/I18nProvider";
 import { Host, TerminalSession, TerminalSettings, Workspace } from "../types";
+import {
+  filterCodingCliTerminalHistory,
+  type CodingCliTerminalHistoryEntry,
+} from "../domain/codingCliTerminalHistory";
+import { getCodingCliProvider } from "../domain/codingCliProviders";
 import { KeyBinding } from "../domain/models";
 import { matchesSearchQuery } from "../lib/searchMatcher";
 import { buildQuickSwitcherShells, useDiscoveredShells, getShellIconPath, isMonochromeShellIcon } from "../lib/useDiscoveredShells";
+import { AgentIconBadge } from "./ai/AgentIconBadge";
 
 type QuickSwitcherItem = {
-  type: "host" | "tab" | "workspace" | "action" | "shell";
+  type: "host" | "tab" | "workspace" | "action" | "shell" | "coding-cli-history";
   id: string;
-  data?: Host | TerminalSession | Workspace;
+  data?: Host | TerminalSession | Workspace | CodingCliTerminalHistoryEntry;
 };
 import { DistroAvatar } from "./DistroAvatar";
 import { Input } from "./ui/input";
@@ -65,12 +72,21 @@ interface QuickSwitcherProps {
   results: Host[];
   sessions: TerminalSession[];
   workspaces: Workspace[];
+  codingCliHistory?: CodingCliTerminalHistoryEntry[];
   onQueryChange: (value: string) => void;
   onSelect: (host: Host) => void;
   onSelectTab: (tabId: string) => void;
   onClose: () => void;
-  onCreateLocalTerminal?: (shell?: { command: string; args?: string[]; name?: string; icon?: string }) => void;
+  onCreateLocalTerminal?: (shell?: {
+    command: string;
+    args?: string[];
+    name?: string;
+    icon?: string;
+    localStartDir?: string;
+  }) => void;
   onCreateWorkspace?: () => void;
+  onOpenCodingCliHistoryPanel?: () => void;
+  onOpenCodingCliHistoryEntry?: (entry: CodingCliTerminalHistoryEntry) => void;
   keyBindings?: KeyBinding[];
   showSftpTab: boolean;
   terminalSettings?: Pick<TerminalSettings, "localShell" | "localShellArgs">;
@@ -82,12 +98,15 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
   results,
   sessions,
   workspaces,
+  codingCliHistory = [],
   onQueryChange,
   onSelect,
   onSelectTab,
   onClose,
   onCreateLocalTerminal,
   onCreateWorkspace,
+  onOpenCodingCliHistoryPanel,
+  onOpenCodingCliHistoryEntry,
   keyBindings,
   showSftpTab,
   terminalSettings,
@@ -191,6 +210,31 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
   }, [trimmedQuery, workspaces]);
   const shouldShowLocalTerminalFallback = filteredShells.length === 0 && !!onCreateLocalTerminal && !trimmedQuery;
 
+  const filteredCodingCliHistory = useMemo(() => {
+    if (!codingCliHistory.length) return [];
+    if (!trimmedQuery) return filterCodingCliTerminalHistory(codingCliHistory).slice(0, 8);
+    return filterCodingCliTerminalHistory(codingCliHistory, { query: trimmedQuery }).slice(0, 12);
+  }, [codingCliHistory, trimmedQuery]);
+
+  const shouldShowCodingCliHistoryPanelAction = Boolean(
+    onOpenCodingCliHistoryPanel
+    && (
+      !trimmedQuery
+      || matchesSearchQuery(
+        trimmedQuery,
+        "agent",
+        "cli",
+        "history",
+        "coding",
+        "claude",
+        "codex",
+        "grok",
+        "deepseek",
+        "agent terminal",
+      )
+    ),
+  );
+
   // Always show categorized view (Hosts/Tabs/Quick connect)
   const showCategorized = true;
 
@@ -221,6 +265,12 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
       } else if (shouldShowLocalTerminalFallback) {
         items.push({ type: "action", id: "local-terminal" });
       }
+      if (shouldShowCodingCliHistoryPanelAction) {
+        items.push({ type: "action", id: "coding-cli-history-panel" });
+      }
+      filteredCodingCliHistory.forEach((entry) => {
+        items.push({ type: "coding-cli-history", id: entry.id, data: entry });
+      });
     } else {
       // Recent connections only
       results.forEach((host) =>
@@ -239,7 +289,17 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
     });
 
     return { flatItems: items, itemIndexMap: indexMap };
-  }, [showCategorized, results, builtInTabs, filteredOrphanSessions, filteredWorkspaces, filteredShells, shouldShowLocalTerminalFallback]);
+  }, [
+    showCategorized,
+    results,
+    builtInTabs,
+    filteredOrphanSessions,
+    filteredWorkspaces,
+    filteredShells,
+    shouldShowLocalTerminalFallback,
+    shouldShowCodingCliHistoryPanelAction,
+    filteredCodingCliHistory,
+  ]);
 
   // O(1) index lookup
   const getItemIndex = useCallback((type: string, id: string) => {
@@ -276,12 +336,23 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
         if (item.id === "local-terminal" && onCreateLocalTerminal) {
           onCreateLocalTerminal();
           onClose();
+        } else if (item.id === "coding-cli-history-panel" && onOpenCodingCliHistoryPanel) {
+          onOpenCodingCliHistoryPanel();
+          onClose();
         }
         break;
       case "shell": {
         const shell = quickSwitcherShells.find(s => s.id === item.id);
         if (shell && onCreateLocalTerminal) {
           onCreateLocalTerminal({ command: shell.command, args: shell.args, name: shell.name, icon: shell.icon });
+          onClose();
+        }
+        break;
+      }
+      case "coding-cli-history": {
+        const entry = item.data as CodingCliTerminalHistoryEntry | undefined;
+        if (entry && onOpenCodingCliHistoryEntry) {
+          onOpenCodingCliHistoryEntry(entry);
           onClose();
         }
         break;
@@ -525,6 +596,74 @@ const QuickSwitcherInner: React.FC<QuickSwitcherProps> = ({
                   </div>
                   <span className="text-sm font-medium">{t("qs.localTerminal")}</span>
                 </div>
+              </div>
+            )}
+
+            {(shouldShowCodingCliHistoryPanelAction || filteredCodingCliHistory.length > 0) && (
+              <div>
+                <div className="px-4 py-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("qs.codingCliHistorySection")}
+                  </span>
+                </div>
+                {shouldShowCodingCliHistoryPanelAction && (
+                  <div
+                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
+                      getItemIndex("action", "coding-cli-history-panel") === selectedIndex
+                        ? "bg-primary/15"
+                        : "hover:bg-muted/50"
+                    }`}
+                    onClick={() => {
+                      onOpenCodingCliHistoryPanel?.();
+                      onClose();
+                    }}
+                    onMouseEnter={() =>
+                      setSelectedIndex(getItemIndex("action", "coding-cli-history-panel"))
+                    }
+                  >
+                    <div className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground">
+                      <History size={16} />
+                    </div>
+                    <span className="text-sm font-medium">
+                      {t("qs.codingCliHistoryOpenPanel")}
+                    </span>
+                  </div>
+                )}
+                {filteredCodingCliHistory.map((entry) => {
+                  const idx = getItemIndex("coding-cli-history", entry.id);
+                  const isSelected = idx === selectedIndex;
+                  const provider = getCodingCliProvider(entry.providerId);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
+                        isSelected ? "bg-primary/15" : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => {
+                        onOpenCodingCliHistoryEntry?.(entry);
+                        onClose();
+                      }}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                    >
+                      <AgentIconBadge
+                        agent={{
+                          id: entry.providerId,
+                          name: provider?.label,
+                          command: provider?.command,
+                        }}
+                        size="sm"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {entry.title || provider?.label || entry.providerId}
+                        </div>
+                        <div className="truncate font-mono text-[11px] text-muted-foreground">
+                          {entry.cwd}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

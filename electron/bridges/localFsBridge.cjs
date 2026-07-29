@@ -333,6 +333,7 @@ async function getSystemInfo() {
   return {
     username: os.userInfo().username,
     hostname: os.hostname(),
+    homeDir: os.homedir(),
   };
 }
 

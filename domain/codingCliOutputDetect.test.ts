@@ -21,6 +21,12 @@ test('inferCodingCliProviderFromOutput detects other CLI banners', () => {
   assert.equal(inferCodingCliProviderFromOutput('Welcome to Claude Code'), 'claude');
   assert.equal(inferCodingCliProviderFromOutput('GitHub Copilot CLI'), 'copilot');
   assert.equal(inferCodingCliProviderFromOutput('Factory Droid ready'), 'droid');
+  assert.equal(
+    inferCodingCliProviderFromOutput(
+      'Initial User Greeting Hello Session Start\nResume this session with:\n  grok --resume 019fa8bb',
+    ),
+    'grok',
+  );
 });
 
 test('createCodingCliOutputScanner finds providers across chunked output', () => {

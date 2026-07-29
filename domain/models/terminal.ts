@@ -472,6 +472,11 @@ export interface TerminalSession {
   dynamicTitle?: string;
   /** Sticky coding CLI provider detected from launch command or window title */
   codingCliProviderId?: CodingCliProviderId;
+  /**
+   * When this local session was opened via Agent history jump, keep writing
+   * updates back to that history row instead of creating a duplicate.
+   */
+  codingCliHistoryEntryId?: string;
   /** Runtime marker for sessions reconstructed from startup restore. */
   restoreState?: 'restored-disconnected';
   /** Latest known working directory captured from terminal cwd tracking. */

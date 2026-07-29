@@ -57,7 +57,16 @@ export const scheduleStartupCommand = (
   ctx.hasRunStartupCommandRef.current = true;
   const scheduledSessionId = id;
   const settings = ctx.terminalSettingsRef?.current ?? ctx.terminalSettings;
-  const delayMs = normalizeStartupCommandDelay(settings?.startupCommandDelayMs);
+  // Local coding-CLI jumps need the shell prompt ready before we type the
+  // resume/continue line; the default 600ms is often too short on Windows
+  // PowerShell cold starts and the command is swallowed.
+  const isLocalCodingCliJump = Boolean(
+    ctx.startupCommand
+    && (ctx.host?.protocol === 'local' || ctx.host?.id === 'local-terminal')
+    && /\b(grok|claude|codex)\b/i.test(commandToRun),
+  );
+  const baseDelay = normalizeStartupCommandDelay(settings?.startupCommandDelayMs);
+  const delayMs = isLocalCodingCliJump ? Math.max(baseDelay, 1200) : baseDelay;
 
   let cancelled = false;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;

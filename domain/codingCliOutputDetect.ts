@@ -1,4 +1,5 @@
 import type { CodingCliProviderId } from './codingCliProviders';
+import { extractCodingCliResumeCommand } from './codingCliTerminalHistory';
 
 const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);
@@ -53,6 +54,21 @@ const OUTPUT_SIGNATURES: readonly OutputSignature[] = [
     id: 'kimi',
     test: (text) => /\bMoonshot\b/i.test(text) || /\bKimi\b/i.test(text),
   },
+  {
+    // Grok Build often returns to the shell without an OSC title; detect via
+    // startup banner / resume hint printed in the TTY.
+    id: 'grok',
+    test: (text) => (
+      /Resume this session with:\s*grok\b/i.test(text)
+      || /\bgrok\s+--resume\b/i.test(text)
+      || /Initial User Greeting/i.test(text)
+      || /\bGrok Build\b/i.test(text)
+    ),
+  },
+  {
+    id: 'deepseek',
+    test: (text) => /\bDeepSeek\b/i.test(text) && (/\bCLI\b/i.test(text) || /\bcoding\b/i.test(text)),
+  },
 ] as const;
 
 const OUTPUT_SCAN_BUFFER_LIMIT = 8192;
@@ -71,8 +87,16 @@ export function inferCodingCliProviderFromOutput(text: string): CodingCliProvide
   return undefined;
 }
 
+export type CodingCliOutputScanHit = {
+  providerId: CodingCliProviderId;
+  resumeCommand?: string;
+};
+
 export type CodingCliOutputScanner = {
   feed: (chunk: string) => CodingCliProviderId | undefined;
+  /** Feed and return provider + optional resume command for history jump. */
+  feedDetailed: (chunk: string) => CodingCliOutputScanHit | undefined;
+  getBuffer: () => string;
   reset: () => void;
   isExhausted: () => boolean;
 };
@@ -83,13 +107,19 @@ export function createCodingCliOutputScanner(): CodingCliOutputScanner {
   let bytesFed = 0;
   let exhausted = false;
 
-  const feed = (chunk: string): CodingCliProviderId | undefined => {
+  const feedDetailed = (chunk: string): CodingCliOutputScanHit | undefined => {
     if (!chunk || exhausted) return undefined;
 
     bytesFed += chunk.length;
     buffer = `${buffer}${stripTerminalControlSequences(chunk)}`.slice(-OUTPUT_SCAN_BUFFER_LIMIT);
     const providerId = inferCodingCliProviderFromOutput(buffer);
-    if (providerId) return providerId;
+    if (providerId) {
+      const resumeCommand = extractCodingCliResumeCommand(buffer, providerId);
+      return {
+        providerId,
+        ...(resumeCommand ? { resumeCommand } : {}),
+      };
+    }
 
     if (bytesFed >= OUTPUT_SCAN_BYTE_LIMIT) {
       exhausted = true;
@@ -98,6 +128,10 @@ export function createCodingCliOutputScanner(): CodingCliOutputScanner {
     return undefined;
   };
 
+  const feed = (chunk: string): CodingCliProviderId | undefined => (
+    feedDetailed(chunk)?.providerId
+  );
+
   const reset = () => {
     buffer = '';
     bytesFed = 0;
@@ -105,6 +139,7 @@ export function createCodingCliOutputScanner(): CodingCliOutputScanner {
   };
 
   const isExhausted = () => exhausted;
+  const getBuffer = () => buffer;
 
-  return { feed, reset, isExhausted };
+  return { feed, feedDetailed, getBuffer, reset, isExhausted };
 }

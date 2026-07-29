@@ -10,7 +10,9 @@ export type CodingCliProviderId =
   | 'copilot'
   | 'cursor'
   | 'codebuddy'
-  | 'workbuddy';
+  | 'workbuddy'
+  | 'grok'
+  | 'deepseek';
 
 export type CodingCliProvider = {
   id: CodingCliProviderId;
@@ -100,6 +102,22 @@ export const CODING_CLI_PROVIDERS: readonly CodingCliProvider[] = [
     command: 'workbuddy',
     titleHints: ['workbuddy'],
     iconKey: 'workbuddy',
+  },
+  {
+    id: 'grok',
+    label: 'Grok Build',
+    command: 'grok',
+    aliases: ['grok-build'],
+    titleHints: ['grok build', 'grok'],
+    iconKey: 'grok',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    command: 'deepseek',
+    aliases: ['ds'],
+    titleHints: ['deepseek'],
+    iconKey: 'deepseek',
   },
 ] as const;
 

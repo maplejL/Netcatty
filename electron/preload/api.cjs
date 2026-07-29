@@ -659,6 +659,8 @@ function createPreloadApi(ctx) {
   getAppInfo: () => ipcRenderer.invoke("netcatty:app:getInfo"),
   ptyGetChildProcesses: (sessionId) =>
     ipcRenderer.invoke("netcatty:pty:childProcesses", sessionId),
+  listCodingCliExternalProcesses: () =>
+    ipcRenderer.invoke("netcatty:codingCli:listExternalProcesses"),
   confirmCloseBusy: (payload) =>
     ipcRenderer.invoke("netcatty:dialog:confirmCloseBusy", payload),
   getVaultBackupCapabilities: () =>

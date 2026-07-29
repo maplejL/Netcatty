@@ -56,7 +56,12 @@ export function inferCodingCliProviderFromTitleSignals(title: string): CodingCli
   if (titleIncludesPhrase(raw, 'moonshot') || titleIncludesPhrase(raw, 'kimi')) return 'kimi';
   if (titleIncludesPhrase(raw, 'factory droid') || titleIncludesPhrase(raw, 'factory ai')) return 'droid';
   if (titleIncludesPhrase(raw, 'droid')) return 'droid';
-  if (titleIncludesPhrase(raw, 'cursor agent') || titleIncludesPhrase(raw, 'cursor')) return 'cursor';
+  // Prefer Grok before Cursor: titles like "… - grok" or mixed banners must not
+  // be stolen by a bare "cursor" substring (e.g. "Resume Cursor Session … - grok").
+  if (titleIncludesPhrase(raw, 'grok build') || titleIncludesPhrase(raw, 'grok')) return 'grok';
+  if (titleIncludesPhrase(raw, 'deepseek')) return 'deepseek';
+  // Require "cursor agent" — bare "cursor" matches Windows titles / session names.
+  if (titleIncludesPhrase(raw, 'cursor agent')) return 'cursor';
 
   const stripped = normalizeCodingCliTitle(raw).toLowerCase();
   if (

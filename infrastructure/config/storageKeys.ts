@@ -32,6 +32,10 @@ export const STORAGE_KEY_PF_PREFER_FORM_MODE = 'netcatty_pf_prefer_form_mode_v1'
 export const STORAGE_KEY_PF_VIEW_MODE = 'netcatty_pf_view_mode_v1';
 export const STORAGE_KEY_KNOWN_HOSTS = 'netcatty_known_hosts_v1';
 export const STORAGE_KEY_SHELL_HISTORY = 'netcatty_shell_history_v1';
+/** Closed local coding-CLI terminal workdirs (Claude/Codex/Grok/…). */
+export const STORAGE_KEY_CODING_CLI_TERMINAL_HISTORY = 'netcatty_coding_cli_terminal_history_v1';
+/** Deleted history row ids / dedupe keys so live sessions cannot resurrect them. */
+export const STORAGE_KEY_CODING_CLI_TERMINAL_HISTORY_TOMBSTONES = 'netcatty_coding_cli_terminal_history_tombstones_v1';
 export const STORAGE_KEY_CONNECTION_LOGS = 'netcatty_connection_logs_v1';
 /** Side store for unsaved connection-log terminal replay buffers (main blob omits them for perf). */
 export const STORAGE_KEY_CONNECTION_LOG_TERMINAL_DATA = 'netcatty_connection_log_terminal_data_v1';

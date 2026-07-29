@@ -22,6 +22,8 @@ export type AgentIconKey =
   | 'kimi'
   | 'codebuddy'
   | 'workbuddy'
+  | 'grok'
+  | 'deepseek'
   | 'terminal'
   | 'plus';
 
@@ -120,6 +122,16 @@ export const AGENT_ICON_VISUALS: Record<AgentIconKey, AgentIconVisual> = {
   workbuddy: {
     src: '/ai/agents/workbuddy.svg',
     badgeClassName: 'border-sky-500/22 bg-sky-500/12',
+    imageClassName: 'object-contain dark:brightness-0 dark:invert opacity-90',
+  },
+  grok: {
+    src: '/ai/providers/grok.svg',
+    badgeClassName: 'border-zinc-500/22 bg-zinc-500/12',
+    imageClassName: 'object-contain dark:brightness-0 dark:invert opacity-90',
+  },
+  deepseek: {
+    src: '/ai/providers/deepseek.svg',
+    badgeClassName: 'border-blue-500/22 bg-blue-500/12',
     imageClassName: 'object-contain dark:brightness-0 dark:invert opacity-90',
   },
   terminal: {

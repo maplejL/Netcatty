@@ -118,7 +118,12 @@ function loadSftpBridgeWithMockedClients(t) {
         });
       };
       this.client.sftp = (cb) => {
-        setImmediate(() => cb(null, new EventEmitter()));
+        const sftp = new EventEmitter();
+        sftp.readdir = () => {};
+        sftp.stat = () => {};
+        sftp.mkdir = () => {};
+        sftp.unlink = () => {};
+        setImmediate(() => cb(null, sftp));
       };
       this.client.end = () => {};
       this.client.destroy = () => {};

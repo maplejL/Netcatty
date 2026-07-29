@@ -825,6 +825,7 @@ export const ruCoreMessages: Messages = {
   'vault.nav.notes': 'Заметки',
   'vault.nav.knownHosts': 'Известные хосты',
   'vault.nav.logs': 'Журналы',
+  'vault.nav.agentHistory': 'История терминалов',
 
   'proxyProfiles.action.add': 'Добавить прокси',
   'proxyProfiles.search.placeholder': 'Поиск прокси…',

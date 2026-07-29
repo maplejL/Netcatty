@@ -569,6 +569,35 @@ function createBridgeRegistrar(context) {
       if (typeof sessionId !== "string") return [];
       return ptyProcessTree.getChildProcesses(sessionId);
     });
+
+    // External coding CLI processes (Windows Terminal / system agents)
+    ipcMain.handle("netcatty:codingCli:listExternalProcesses", async () => {
+      const startedAt = Date.now();
+      try {
+        const { listExternalCodingCliProcesses } = require("../bridges/codingCliProcessScan.cjs");
+        const result = await listExternalCodingCliProcesses();
+        const processes = Array.isArray(result?.processes) ? result.processes : [];
+        console.info("[codingCliHistory:scan] main:listExternalProcesses", {
+          ms: Date.now() - startedAt,
+          count: processes.length,
+          error: result?.error || null,
+          sample: processes.slice(0, 8).map((p) => ({
+            pid: p.pid,
+            name: p.name,
+            cwd: p.cwd,
+            cmd: typeof p.commandLine === "string" ? p.commandLine.slice(0, 100) : undefined,
+          })),
+        });
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[codingCliHistory:scan] main:listExternalProcesses failed", message);
+        return {
+          processes: [],
+          error: message,
+        };
+      }
+    });
   
     // Native confirmation dialog when closing a session with a running process
     // Returns true only if the user explicitly clicks "Close". ESC/dialog-dismiss
