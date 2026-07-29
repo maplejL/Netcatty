@@ -5,6 +5,7 @@ import { createHostTerminalSession, createLocalTerminalSession, createSerialTerm
 import { isScriptSnippet } from '../../domain/snippetScript.ts';
 import {
 appendPaneToWorkspaceRoot,
+cloneWorkspaceTree,
 collectSessionIds,
 createWorkspaceFromSessions as createWorkspaceEntity,
 createWorkspaceFromSessionIds,
@@ -12,6 +13,7 @@ createWorkspaceFromSessionIds,
 FocusDirection,
 getNextFocusSessionId,
 insertPaneIntoWorkspace,
+pruneWorkspaceNode,
 reorderWorkspaceFocusSessionOrder,
 SplitDirection,
 SplitHint,
@@ -119,6 +121,60 @@ export function insertCopiedTabOrderIdOnce(
   return next;
 }
 
+export function buildCopiedWorkspace(
+  sourceWorkspace: Workspace,
+  prevSessions: TerminalSession[],
+  params: {
+    newWorkspaceId: string;
+    sessionIdMap: ReadonlyMap<string, string>;
+    localShellType?: TerminalSession['shellType'];
+    perPaneCwd?: Record<string, string | undefined>;
+  },
+): { newSessions: TerminalSession[]; newWorkspace: Workspace } | null {
+  const sourceIds = collectSessionIds(sourceWorkspace.root);
+  const liveIds = sourceIds.filter(id => prevSessions.some(s => s.id === id));
+  if (liveIds.length === 0) return null;
+
+  // Prune panes whose source session is gone so the clone never references a
+  // missing session.
+  let prunedRoot = sourceWorkspace.root;
+  for (const deadId of sourceIds.filter(id => !liveIds.includes(id))) {
+    const next = pruneWorkspaceNode(prunedRoot, deadId);
+    if (next) prunedRoot = next;
+  }
+
+  const liveIdMap = new Map<string, string>(
+    liveIds.map(id => [id, params.sessionIdMap.get(id) as string]),
+  );
+
+  const newSessions = liveIds.map(srcId => {
+    const src = prevSessions.find(s => s.id === srcId) as TerminalSession;
+    return createCopiedTerminalSessionClone(src, {
+      id: liveIdMap.get(srcId) as string,
+      workspaceId: params.newWorkspaceId,
+      localShellType: params.localShellType,
+      inheritedCwd: params.perPaneCwd?.[srcId],
+    });
+  });
+
+  const remap = (id?: string): string | undefined =>
+    id != null ? liveIdMap.get(id) : undefined;
+
+  const newWorkspace: Workspace = {
+    ...sourceWorkspace,
+    id: params.newWorkspaceId,
+    root: cloneWorkspaceTree(prunedRoot, liveIdMap),
+    focusedSessionId: remap(sourceWorkspace.focusedSessionId)
+      ?? liveIdMap.get(liveIds[0]),
+    focusSessionOrder: sourceWorkspace.focusSessionOrder
+      ? sourceWorkspace.focusSessionOrder
+          .map(id => liveIdMap.get(id))
+          .filter((id): id is string => Boolean(id))
+      : undefined,
+  };
+
+  return { newSessions, newWorkspace };
+}
 
 export const useSessionState = ({
   persistSessionRestore = true,
