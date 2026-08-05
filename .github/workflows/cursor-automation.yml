@@ -4317,8 +4317,7 @@ jobs:
               },
             );
             const forceRetry =
-              process.env.GITHUB_EVENT_NAME === 'workflow_dispatch';
-            if (
+              process.env.GITHUB_EVENT_NAME === 'workflow_dispatch';            if (
               !forceRetry &&
               auto.shouldSkipExternalCodexRerequest({
                 existingComments: comments,
