@@ -581,6 +581,7 @@ export function useSettingsStorageSync({
     setShowRecentHostsState,
     setShowSftpTabState,
     setShellOnlyTabNumberShortcutsState,
+    setShowTabNumberBadgesState,
     setDisableTerminalFontZoomState,
     setRestorePreviousSessionState,
     setRestoreTerminalCwdState,
