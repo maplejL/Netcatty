@@ -292,6 +292,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const connectScriptsConsumedRef = useRef(false);
   const connectScriptsCompletedIdsRef = useRef(new Set<string>());
   const connectScriptsInFlightRef = useRef(false);
+  const connectScriptsAbortRef = useRef<AbortController | null>(null);
   const pendingScriptRunIdRef = useRef<string | null>(null);
   const pendingScriptHandledRef = useRef<Snippet | null>(null);
   const [saveRecordingOpen, setSaveRecordingOpen] = useState(false);
@@ -1590,17 +1591,25 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         connectQueueNow.map((item) => item.id).filter((id): id is string => Boolean(id)),
       );
 
+      connectScriptsAbortRef.current?.abort();
+      const batchAbort = new AbortController();
+      connectScriptsAbortRef.current = batchAbort;
       connectScriptsInFlightRef.current = true;
+      const batchStillActive = () => (
+        !batchAbort.signal.aborted && connectScriptsAbortRef.current === batchAbort
+      );
 
       void runConnectScriptsSequential({
         scripts: scriptsToRun,
         sessionId,
+        signal: batchAbort.signal,
         sessionMeta: {
           connected: true,
           hostname: host.hostname,
           username: host.username,
         },
         onScriptComplete: (snippet) => {
+          if (!batchStillActive()) return;
           if (snippet.id && connectIdsInBatch.has(snippet.id)) {
             connectScriptsCompletedIdsRef.current.add(snippet.id);
           }
@@ -1614,6 +1623,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         },
       })
         .then(() => {
+          if (!batchStillActive()) return;
           const resolvedAfterRun = resolveConnectScriptsForHost(host, snippets);
           const doneAfterRun = resolvedAfterRun.length === 0
             || resolvedAfterRun.every(
@@ -1624,7 +1634,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           }
         })
         .catch(async (err) => {
+          if (!batchStillActive()) return;
           const message = err instanceof Error ? err.message : String(err);
+          if (message === 'Aborted') return;
           toast.error(message.includes('Observer mode') ? t('scripts.observer.blocked') : message);
           connectScriptsConsumedRef.current = true;
 
@@ -1639,12 +1651,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             await runConnectScriptsSequential({
               scripts: [pendingScriptToMark],
               sessionId,
+              signal: batchAbort.signal,
               sessionMeta: {
                 connected: true,
                 hostname: host.hostname,
                 username: host.username,
               },
               onScriptComplete: (snippet) => {
+                if (!batchStillActive()) return;
                 if (snippet.id) {
                   pendingScriptRunIdRef.current = snippet.id;
                 } else {
@@ -1653,12 +1667,17 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               },
             });
           } catch (pendingErr) {
+            if (!batchStillActive()) return;
             const pendingMessage = pendingErr instanceof Error ? pendingErr.message : String(pendingErr);
+            if (pendingMessage === 'Aborted') return;
             toast.error(pendingMessage.includes('Observer mode') ? t('scripts.observer.blocked') : pendingMessage);
           }
         })
         .finally(() => {
-          connectScriptsInFlightRef.current = false;
+          if (connectScriptsAbortRef.current === batchAbort) {
+            connectScriptsAbortRef.current = null;
+            connectScriptsInFlightRef.current = false;
+          }
         });
     }, 400);
 
@@ -2255,6 +2274,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       if (shouldResetConnectAutomationOnReconnect(
         restoreState === "restored-disconnected" ? "restored" : "manual",
       )) {
+        // Cancel any in-flight onConnect batch before clearing guards so its
+        // callbacks cannot mutate the newly allocated completed set / consumed flag.
+        connectScriptsAbortRef.current?.abort();
+        connectScriptsAbortRef.current = null;
         connectScriptsConsumedRef.current = false;
         connectScriptsCompletedIdsRef.current = new Set();
         connectScriptsInFlightRef.current = false;
