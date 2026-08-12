@@ -81,6 +81,7 @@ import { registerScreenSnapshotProvider } from "@/infrastructure/scripts/screenS
 import { useScriptRecorder } from "@/application/state/useScriptRecorder.ts";
 import { getScriptRecordingSnapshot, setScriptRecordingState } from "@/application/state/scriptRecordingStore.ts";
 import {
+  getActiveScriptRunForSession,
   runAutomationScript,
   runConnectScriptsSequential,
   selectScriptOverlayRun,
@@ -2276,8 +2277,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       )) {
         // Cancel any in-flight onConnect batch before clearing guards so its
         // callbacks cannot mutate the newly allocated completed set / consumed flag.
+        // Abort alone only abandons the renderer waiter — stop the backend run so a
+        // paused nct.session.sleep() cannot resume into the reconnected shell.
         connectScriptsAbortRef.current?.abort();
         connectScriptsAbortRef.current = null;
+        const activeConnectScript = getActiveScriptRunForSession(sessionId);
+        if (activeConnectScript) {
+          void stopScriptRun(activeConnectScript.runId);
+        }
         connectScriptsConsumedRef.current = false;
         connectScriptsCompletedIdsRef.current = new Set();
         connectScriptsInFlightRef.current = false;
