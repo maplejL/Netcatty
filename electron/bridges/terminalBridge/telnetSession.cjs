@@ -288,6 +288,9 @@ function createTelnetSessionApi(ctx) {
               }
             } catch { return true; }
           },
+          waitForTransportDrain() {
+            return waitForWritableDrain(socket);
+          },
           getWebContents() {
             return electronModule.webContents.fromId(telnetWebContentsId);
           },
