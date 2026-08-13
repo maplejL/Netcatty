@@ -737,7 +737,7 @@ async function startSerialSession(event, options) {
           writeToRemote(buf) {
             try { return serialPort.write(buf); } catch { return true; }
           },
-          waitForTransportDrain() {
+          waitForTransportDrain(drainOpts = {}) {
             // Low-baud serial needs longer than the generic SSH/TCP drain
             // budget: ZDLE can roughly double wire bytes, so one 64 KiB
             // upload chunk at 9600 8N1 can need ~137s on the wire.
@@ -748,6 +748,7 @@ async function startSerialSession(event, options) {
                 stopBits,
                 parity,
               }),
+              signal: drainOpts.signal,
             });
           },
           getWebContents() {
