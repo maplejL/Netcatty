@@ -76,3 +76,48 @@ test("split and copy session clones preserve local start directory", () => {
     "/Users/alice/project with spaces ",
   );
 });
+
+test("split and copy session clones inherit cwd onto remote pendingInitialCwd", () => {
+  const copied = createCopiedTerminalSessionClone(session(), {
+    id: "copy-cwd",
+    inheritedCwd: "/home/a",
+  });
+  const split = createSplitTerminalSessionClone(session(), {
+    id: "split-cwd",
+    inheritedCwd: "/home/b",
+  });
+
+  assert.equal(copied.pendingInitialCwd, "/home/a");
+  assert.equal(split.pendingInitialCwd, "/home/b");
+});
+
+test("local clones route inherited cwd to localStartDir instead of pendingInitialCwd", () => {
+  const source = session({
+    protocol: "local",
+    localStartDir: "/",
+  });
+  const cloned = createCopiedTerminalSessionClone(source, {
+    id: "copy-local-cwd",
+    inheritedCwd: "/home/a",
+  });
+
+  assert.equal(cloned.localStartDir, "/home/a");
+  assert.equal(cloned.pendingInitialCwd, undefined);
+});
+
+test("mosh and et clones do not keep a pending inherited cwd", () => {
+  assert.equal(
+    createCopiedTerminalSessionClone(session({ moshEnabled: true }), {
+      id: "copy-mosh",
+      inheritedCwd: "/home/a",
+    }).pendingInitialCwd,
+    undefined,
+  );
+  assert.equal(
+    createSplitTerminalSessionClone(session({ etEnabled: true }), {
+      id: "split-et",
+      inheritedCwd: "/home/a",
+    }).pendingInitialCwd,
+    undefined,
+  );
+});

@@ -110,6 +110,23 @@ test("restored disconnected sessions still create a terminal runtime before back
   );
 });
 
+test("first connect arms inherited cwd intent when the session is not a restored reconnect", () => {
+  const source = readFileSync(new URL("./useTerminalEffects.ts", import.meta.url), "utf8");
+  const restoredBranchIndex = source.indexOf("if (restoredReconnect) {");
+  const restoredPrepareIndex = source.indexOf("prepareRestoredReconnect?.()", restoredBranchIndex);
+  const elseIndex = source.indexOf("} else {", restoredPrepareIndex);
+  const inheritedPrepareIndex = source.indexOf("prepareInitialCwdIntent?.()", elseIndex);
+
+  assert.notEqual(restoredBranchIndex, -1);
+  assert.notEqual(restoredPrepareIndex, -1);
+  assert.notEqual(elseIndex, -1);
+  assert.notEqual(inheritedPrepareIndex, -1);
+  assert.ok(
+    restoredPrepareIndex < elseIndex && elseIndex < inheritedPrepareIndex,
+    "a fresh clone must arm inherited cwd on first connect, not only on manual retry",
+  );
+});
+
 test("auto reconnect prepares restored session state before clearing the restore marker", () => {
   const source = readFileSync(new URL("./useTerminalEffects.ts", import.meta.url), "utf8");
   const prepareIndex = source.indexOf("prepareRestoredReconnect?.()");

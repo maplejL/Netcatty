@@ -707,7 +707,6 @@ export const useSftpConnections = ({
           unsubSftpProgress?.();
         }
       }
-      return { connectionId, ok: false, sudo: false };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [

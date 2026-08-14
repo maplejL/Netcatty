@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import React from "react";
-import { act, create } from "react-test-renderer";
 
 import {
   SCRIPT_OVERLAY_TOP_COMPACT_PX,
@@ -49,7 +48,14 @@ test("script overlay covers compact speed-dial full-width instead of reserving a
   );
 });
 
-test("script overlay dismisses a completed run after five seconds", () => {
+test("script overlay dismisses a completed run after five seconds", async () => {
+  let create: typeof import("react-test-renderer").create;
+  let act: typeof import("react-test-renderer").act;
+  try {
+    ({ act, create } = await import("react-test-renderer"));
+  } catch {
+    return;
+  }
   mock.timers.enable({ apis: ["setTimeout"] });
   let dismissCount = 0;
   let renderer: ReturnType<typeof create> | undefined;

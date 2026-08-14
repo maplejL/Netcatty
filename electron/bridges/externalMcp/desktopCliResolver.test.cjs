@@ -43,7 +43,7 @@ function createFileDeps(files, directories = {}, options = {}) {
 
 describe("macOS desktop-managed CLI resolution", () => {
   it("finds the Codex CLI bundled with ChatGPT Desktop", () => {
-    const codexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
+    const codexPath = path.join("/Applications", "ChatGPT.app", "Contents", "Resources", "codex");
     assert.equal(resolveDesktopManagedCli("codex", {
       platform: "darwin",
       homeDir: "/Users/test",
@@ -52,7 +52,7 @@ describe("macOS desktop-managed CLI resolution", () => {
   });
 
   it("finds a user-installed Codex Desktop bundle", () => {
-    const codexPath = "/Users/test/Applications/Codex.app/Contents/Resources/codex";
+    const codexPath = path.join("/Users/test", "Applications", "Codex.app", "Contents", "Resources", "codex");
     assert.equal(resolveDesktopManagedCli("codex", {
       platform: "darwin",
       homeDir: "/Users/test",
@@ -117,8 +117,8 @@ describe("macOS desktop-managed CLI resolution", () => {
   });
 
   it("skips non-executable Codex desktop candidates", () => {
-    const systemPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
-    const userPath = "/Users/test/Applications/Codex.app/Contents/Resources/codex";
+    const systemPath = path.join("/Applications", "ChatGPT.app", "Contents", "Resources", "codex");
+    const userPath = path.join("/Users/test", "Applications", "Codex.app", "Contents", "Resources", "codex");
     assert.equal(resolveDesktopManagedCli("codex", {
       platform: "darwin",
       homeDir: "/Users/test",

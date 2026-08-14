@@ -11,12 +11,10 @@ const {
   startPtyJob,
   resolveEffectiveShellKind,
   execViaChannel,
-  execViaPty,
 } = require("./ptyExec.cjs");
 const {
   buildWrappedCommand,
 } = require("./ptyExecHelpers.cjs");
-const { EventEmitter } = require("node:events");
 const { INTERACTIVE_PROMPT_ERROR } = require("./interactivePromptDetect.cjs");
 
 class ShellBackedPty extends EventEmitter {

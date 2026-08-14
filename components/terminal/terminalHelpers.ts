@@ -127,6 +127,7 @@ export interface TerminalProps {
   restoreState?: TerminalSession["restoreState"];
   shellType?: TerminalSession["shellType"];
   lastCwd?: string;
+  pendingInitialCwd?: string;
   restoreTerminalCwd?: boolean;
   startupCommand?: string;
   noAutoRun?: boolean;

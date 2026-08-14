@@ -61,41 +61,6 @@ export function filterVaultHostsForDisplay({
   return filteredHosts;
 }
 
-export function hostBelongsToSelectedVaultGroup(host: Host, selectedGroupPath: string): boolean {
-  const hostGroup = host.group || "";
-  if (selectedGroupPath === "General") {
-    return hostGroup === "" || hostGroup === "General";
-  }
-  return hostGroup === selectedGroupPath;
-}
-
-export function filterVaultHostsForDisplay({
-  filteredHosts,
-  searchTerm,
-  selectedGroupPath,
-  showOnlyUngroupedHostsInRoot,
-}: {
-  filteredHosts: Host[];
-  searchTerm: string;
-  selectedGroupPath: string | null;
-  showOnlyUngroupedHostsInRoot: boolean;
-}): Host[] {
-  if (selectedGroupPath) {
-    return filteredHosts.filter((host) =>
-      hostBelongsToSelectedVaultGroup(host, selectedGroupPath),
-    );
-  }
-
-  if (!searchTerm && showOnlyUngroupedHostsInRoot) {
-    return filteredHosts.filter((host) => {
-      const hostGroup = (host.group || "").trim();
-      return hostGroup === "";
-    });
-  }
-
-  return filteredHosts;
-}
-
 export function useVaultHostCollections({
   customGroups,
   groupConfigs,

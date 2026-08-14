@@ -93,8 +93,6 @@ export const useSftpTransfers = ({
     completionHandlersRef,
     setConflicts,
     setTransfers,
-    releasePausedTransfer,
-    cleanupTaskArtifacts,
   });
 
   const { statTargetPath, getDuplicateTarget, deleteTargetPath } = useSftpTransferConflictOps();
