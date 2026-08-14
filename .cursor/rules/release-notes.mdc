@@ -1,0 +1,17 @@
+---
+description: Fork release must update changelog, GitHub notes, and README
+globs: CHANGELOG.md,README.md,README.zh-CN.md,RELEASE_NOTES*.md,package.json,scripts/release-win-x64.ps1
+alwaysApply: false
+---
+
+# Fork release notes
+
+When preparing or publishing a fork release (`vX.Y.Z` on `feature/ops_ai_enhancements`):
+
+1. Bump `package.json` `version`.
+2. Add `CHANGELOG.md` `[X.Y.Z]` at the top (Chinese).
+3. Write `RELEASE_NOTES_vX.Y.Z.draft.md` (English; this is the GitHub Release body).
+4. Replace `README.zh-CN.md` **本版更新** with this version's highlights.
+5. Fold lasting capabilities into `README.zh-CN.md` **本 fork 增强功能**, and sync the one-liner in `README.md`.
+
+Do not tag or run `npm run release:win-x64` until those files match the same version. Full history stays in `CHANGELOG.md`; README **本版更新** is current-version only.

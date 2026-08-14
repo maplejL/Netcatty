@@ -35,7 +35,7 @@
 | **本仓库** | 当前 GitHub 页面（顶部 **Code** 可复制克隆地址） |
 | **上游项目** | [github.com/binaricat/Netcatty](https://github.com/binaricat/Netcatty) · [netcatty.app](https://netcatty.app) |
 | **协议** | GPL-3.0（继承上游，修改部分同样开源） |
-| **发行方式** | 本仓库**不跟随上游自动发版**；请自行克隆、构建或打包（见下文） |
+| **发行方式** | 本仓库**不跟随上游自动发版**；Windows x64 安装包见 [Releases](https://github.com/maplejL/Netcatty/releases)（当前 `v0.1.5`） |
 
 上游 Netcatty 是功能完整的 SSH 工作台（官网 [netcatty.app](https://netcatty.app)）。**本仓库不删减上游能力**，仅在下方「本 fork 增强」一节叠加运维向功能。
 
@@ -48,9 +48,22 @@
 | WorkBuddy 等外部 Agent、同会话切换 Agent | — | ✅ |
 | 外部 Agent 模型列表与真实可用同步 | — | ✅ |
 | 命令历史浮层、终端命令计时调试 | — | ✅ |
-| SFTP 追随 / 定位终端目录 | 有基础能力 | ✅ 链路与 loading 加固 |
+| SFTP 追随 / 定位终端目录 | 有基础能力 | ✅ 链路、sudo 提权跟随与 loading 加固 |
+| Coding CLI 历史与运行阶段 | — | ✅ |
 | 长时间 `tail` 输出性能默认策略 | 上游有流控 | ✅ 进一步默认收紧 |
 | WebGL 多窗格乱码防护 | 上游有恢复 | ✅ atlas 隔离 + 丢失重建 |
+
+---
+
+## 本版更新（v0.1.5）
+
+完整列表见 [CHANGELOG.md](./CHANGELOG.md) 与 [GitHub Release](https://github.com/maplejL/Netcatty/releases/tag/v0.1.5)。下一版发版时**整节替换**为本版要点。
+
+- **SFTP 提权跟随**：交互式 `sudo -i` / `su` 后，侧栏 SFTP 自动提权并跟随 elevated cwd；卡住的列表 / 通道会超时重建
+- **Coding CLI**：记住本机 Claude / Codex / Grok 等工作目录（resume / continue / 新开），扫描应用内与外部进程；标签页显示 idle / running / waiting / completed / failed
+- **Vault Notes CLI**：tool CLI 可 `list` / `get` / `create` / `update` 笔记，不要写远端 `NOTES.md`
+- **Cursor**：下一轮前清掉残留 run，避免 `AgentBusyError`
+- **设置**：系统页可开诊断 TRACE 日志（写入 userData，可设保留天数）；终端滚轮默认 0.5x
 
 ---
 
@@ -153,6 +166,10 @@
 | **同会话切换 Agent** | 同一 scope 下切换 Agent 时**保留消息历史**，清除 `externalSessionId`，下一轮按 Netcatty 消息回放，避免误续旧 CLI 会话 |
 | **跨 Agent 历史清洗** | 回放前剥离易冲突的 tool-call 标记文本，降低换 Agent 后上下文污染 |
 | **侧栏打开稳定性** | 打包环境下 AI 面板与终端层协同加载；draft/session 结构规范化，避免附件/消息字段异常导致侧栏崩溃或卡死 |
+| **Coding CLI 工作目录历史** | 记住本机 Claude / Codex / Grok 等工作目录，支持 resume / continue / 新开；扫描应用内会话与外部进程（如 Windows Terminal 里的 grok） |
+| **运行阶段** | 标签页与 Focus 侧栏显示 idle / running / waiting / completed / failed |
+| **Cursor 连续对话** | 下一轮前清掉残留 run，避免 `AgentBusyError` |
+| **Vault Notes CLI** | tool CLI 可 `list` / `get` / `create` / `update` 应用内笔记；不要写远端 `NOTES.md` |
 
 设置中可配置多个外部 Agent（Claude Code、Codex、Copilot、Cursor、CodeBuddy、WorkBuddy、OpenCode 等，以当前版本托管列表为准）。
 
@@ -169,6 +186,7 @@
 | 能力 | 说明 |
 |------|------|
 | **追随终端目录** | 打开追随后，随终端 `cd` / OSC 7 同步 SFTP 路径；路径比较做规范化，减少误跳 `/root` 或「目录变了但面板不动」 |
+| **sudo 后提权跟随** | 交互式 `sudo -i` / `su` 后侧栏 SFTP 自动提权并跟随 elevated cwd（`/proc/<pid>/cwd`）；卡住的 `readdir` / 打开通道会超时重建 |
 | **定位到当前目录** | 工具栏一键跳转；优先新鲜后端探测，过程中显示 loading |
 | **会话绑定** | SFTP 与对应终端会话正确关联（含用户名等维度），避免多标签下取错 CWD |
 
@@ -204,6 +222,13 @@
 | **前台恢复清图集** | 窗口重新可见 / 获焦时清 atlas 并同步刷新 |
 
 临时规避：设置 → 终端 → 渲染改为 **DOM**。`npm run pack:asar` 会在打包前再次应用 atlas 隔离补丁。
+
+### 诊断日志与滚轮速度
+
+| 能力 | 入口 | 说明 |
+|------|------|------|
+| **诊断 TRACE 日志** | 设置 → 系统 | 应用级日志写入 userData，可设保留天数（默认 7 天） |
+| **滚轮滚动速度** | 设置 → 终端 → 行为 | 默认 0.5x，高流量远端输出更好读（可调 0.2–3） |
 
 ### Windows 托盘
 
@@ -271,6 +296,10 @@ npx vite build
 ```bash
 # 当前平台安装包
 npm run pack
+
+# 本 fork Windows x64 正式包（NSIS）；上传到 GitHub Release
+npm run pack:win-x64:release
+npm run release:win-x64
 
 # 仅输出目录（便携版，不生成 NSIS）
 npm run build

@@ -112,6 +112,20 @@ Placement rules (`resolveAgentKinds` in `toolSurfaces.cjs`):
 - On supported first-party paths, assume Netcatty's own launcher provides required integration environment such as `NETCATTY_TOOL_CLI_DISCOVERY_FILE`.
 - If a review concern depends on external exposure, third-party compatibility, or public API stability, call it out as out of scope unless the task explicitly includes that contract.
 
+## Fork Release Notes
+
+Every fork release (`chore(release): prepare vX.Y.Z`) must ship matching user-facing notes. Do not tag or upload until all of these are updated for the same version:
+
+| Artifact | What to write |
+|----------|----------------|
+| `package.json` `version` | Bump (e.g. `0.1.5`) |
+| `CHANGELOG.md` | New `[X.Y.Z]` section at the top (Chinese, same shape as prior fork entries) |
+| `RELEASE_NOTES_vX.Y.Z.draft.md` | English GitHub Release body; `scripts/release-win-x64.ps1 -Upload` reads this file |
+| `README.zh-CN.md` | Replace **本版更新** with this version's highlights; fold durable capabilities into **本 fork 增强功能** |
+| `README.md` | Keep the fork-enhancement one-liner in sync with `README.zh-CN.md` |
+
+`CHANGELOG.md` is the full history. README **本版更新** is only the current version. GitHub Release body comes from the draft, not from README.
+
 ---
 
 ## Aside Panel Design System

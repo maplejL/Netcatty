@@ -31,7 +31,13 @@ npm run pack
 npm run pack:mac
 npm run pack:win
 npm run pack:linux
+
+# Fork Windows x64 release (NSIS). Upload uses RELEASE_NOTES_vX.Y.Z.draft.md
+npm run pack:win-x64:release
+npm run release:win-x64
 ```
+
+Preparing a fork release must update `CHANGELOG.md`, `RELEASE_NOTES_vX.Y.Z.draft.md`, and `README.zh-CN.md` **本版更新** (plus durable rows in **本 fork 增强功能**). See `AGENTS.md` → Fork Release Notes.
 
 ## Architecture
 
