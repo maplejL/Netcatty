@@ -131,6 +131,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
     toggleBroadcast, toggleConnectionLogSaved, toggleHistorySidePanelRef, toggleScriptsSidePanelRef, toggleSidePanelRef, toggleWorkspaceViewMode, unmanageSource, updateConnectionLog,
     updateCustomGroups, updateGroupConfigs, updateHostDistro, updateHosts, updateIdentities, updateKeys, updateKnownHosts, updateManagedSources,
     updateNoteGroups, updateNotes, updateProxyProfiles, updateSnippetPackages, updateSnippets, updateSplitSizes, updateTerminalSetting, vaultFocusRequest, workspaceRenameTarget, workspaceRenameValue, workspaces,
+    updateSessionCodingCliRunPhase,
     VaultViewContainer, SftpViewMount, TerminalLayerMount, LogViewWrapper,
   } = ctx;
 
@@ -422,6 +423,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           onUpdateSessionRestoreCwd={updateSessionRestoreCwd}
           onUpdateSessionDynamicTitle={updateSessionDynamicTitle}
           onUpdateSessionCodingCliProvider={updateSessionCodingCliProvider}
+          onUpdateSessionCodingCliRunPhase={updateSessionCodingCliRunPhase}
           onClearSessionFontSizeOverride={clearSessionFontSizeOverride}
           onUpdateTerminalFontWeight={(w) => updateTerminalSetting('fontWeight', w)}
           onCloseSession={closeSession}

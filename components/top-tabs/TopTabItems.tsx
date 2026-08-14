@@ -15,10 +15,14 @@ import { useI18n } from '../../application/i18n/I18nProvider';
 import { getEffectiveHostDistro } from '../../domain/host';
 import { resolveHostIconAppearance, resolveHostIconColorAppearance } from '../../domain/hostIcon';
 import { resolveSessionCodingCliProvider } from '../../domain/codingCliProviderMatch';
-import { resolveCodingCliActivityPhase } from '../../domain/codingCliTitleParse';
+import {
+  codingCliActivityPhaseI18nKey,
+  resolveCodingCliActivityPhase,
+  type CodingCliActivityPhase,
+} from '../../domain/codingCliTitleParse';
 import { resolveSessionTabTitle } from '../../domain/sessionTabTitle';
 import type { DynamicTabTitleMode } from '../../domain/models';
-import { CodingCliProviderIcon } from '../icons/CodingCliProviderIcon';
+import { CodingCliProviderIcon, CodingCliStatusDot } from '../icons/CodingCliProviderIcon';
 import { cn } from '../../lib/utils';
 import { Host, TerminalSession, Workspace } from '../../types';
 import { DISTRO_LOGOS, DISTRO_COLORS } from '../DistroAvatar';
@@ -51,19 +55,23 @@ const SessionTabIcon: React.FC<{
   isActive: boolean;
   protocol?: string;
   shellIcon?: string;
-}> = memo(({ host, session, isActive, protocol, shellIcon }) => {
+  activityPhase?: CodingCliActivityPhase;
+  activityLabel?: string;
+}> = memo(({ host, session, isActive, protocol, shellIcon, activityPhase, activityLabel }) => {
   const boxBase = "shrink-0 h-4 w-4 rounded flex items-center justify-center";
   const iconSize = "h-2.5 w-2.5";
   const fallbackStyle = { color: isActive ? 'var(--top-tabs-accent, hsl(var(--accent)))' : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))' };
 
   const codingCliProvider = resolveSessionCodingCliProvider(session, host);
   if (codingCliProvider) {
-    const activityPhase = resolveCodingCliActivityPhase(session.dynamicTitle, codingCliProvider.id);
+    const phase = activityPhase
+      ?? resolveCodingCliActivityPhase(session.dynamicTitle, codingCliProvider.id);
     return (
       <CodingCliProviderIcon
         providerId={codingCliProvider.id}
         iconKey={codingCliProvider.iconKey}
-        activityPhase={activityPhase}
+        activityPhase={phase}
+        activityLabel={activityLabel}
       />
     );
   }
@@ -171,6 +179,14 @@ export const sessionStatusDot = (status: TerminalSession['status'], hasActivity:
     </span>
   );
 };
+
+/** Prominent coding-agent run-state indicator (idle / running / waiting / done / failed). */
+export const codingCliActivityStatusDot = (
+  phase: CodingCliActivityPhase,
+  label?: string,
+) => (
+  <CodingCliStatusDot phase={phase} size="md" title={label} />
+);
 
 const getSessionTopTabAddress = (
   session: Pick<TerminalSession, 'protocol' | 'hostname' | 'moshEnabled' | 'etEnabled'>,
@@ -655,6 +671,20 @@ export const SessionTopTab: React.FC<SessionTopTabProps> = memo(({
   );
   const addressTooltip = formatSessionTopTabTooltip(session);
   const tabTitle = formatSessionTopTabLabel(session, dynamicTabTitleMode);
+  const codingCliProvider = resolveSessionCodingCliProvider(session, host);
+  const codingCliPhase = codingCliProvider
+    ? resolveCodingCliActivityPhase(
+      session.dynamicTitle,
+      codingCliProvider.id,
+      session.codingCliRunPhase,
+    )
+    : null;
+  const codingCliPhaseLabel = codingCliPhase
+    ? t(codingCliActivityPhaseI18nKey(codingCliPhase))
+    : undefined;
+  const codingCliStatusTitle = codingCliProvider && codingCliPhaseLabel
+    ? `${codingCliProvider.label} · ${codingCliPhaseLabel}`
+    : codingCliPhaseLabel;
 
   const tabBody = (
     <div
@@ -712,9 +742,22 @@ export const SessionTopTab: React.FC<SessionTopTabProps> = memo(({
         />
       )}
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <SessionTabIcon host={host} session={session} isActive={isActive} protocol={session.protocol} shellIcon={session.localShellIcon} />
+        <SessionTabIcon
+          host={host}
+          session={session}
+          isActive={isActive}
+          protocol={session.protocol}
+          shellIcon={session.localShellIcon}
+          activityPhase={codingCliPhase ?? undefined}
+          activityLabel={codingCliStatusTitle}
+        />
         <span className="truncate">{tabTitle}</span>
-        <div className="flex-shrink-0">{sessionStatusDot(session.status, hasActivity)}</div>
+        {/* Coding agent: show explicit idle/running/done/failed; else connection status. */}
+        <div className="flex-shrink-0">
+          {codingCliPhase
+            ? codingCliActivityStatusDot(codingCliPhase, codingCliStatusTitle)
+            : sessionStatusDot(session.status, hasActivity)}
+        </div>
       </div>
       <button
         onClick={(e) => onCloseSession(session.id, e)}

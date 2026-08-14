@@ -589,6 +589,40 @@ html[data-theme-transition] *::after {
   animation: coding-cli-icon-pulse 1.6s ease-in-out infinite;
 }
 
+@keyframes coding-cli-status-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes coding-cli-status-halo {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+.coding-cli-status-dot-busy {
+  animation: coding-cli-status-pulse 1s ease-in-out infinite;
+}
+
+.coding-cli-status-dot-waiting {
+  animation: coding-cli-status-pulse 1.45s ease-in-out infinite;
+}
+
+.coding-cli-status-halo {
+  animation: coding-cli-status-halo 1.2s ease-out infinite;
+}
+
 .card-highlight {
   position: relative;
   overflow: hidden;

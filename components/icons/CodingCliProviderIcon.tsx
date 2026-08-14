@@ -1,14 +1,17 @@
 import React, { memo, type SVGProps } from 'react';
 import { cn } from '../../lib/utils';
 import type { CodingCliProviderId } from '../../domain/codingCliProviders';
-import type { CodingCliActivityPhase } from '../../domain/codingCliTitleParse';
+import {
+  codingCliActivityPhaseDotClass,
+  type CodingCliActivityPhase,
+} from '../../domain/codingCliTitleParse';
 import { getAgentIconVisual, type AgentIconKey } from '../../domain/agentIcon';
 
 type IconProps = SVGProps<SVGSVGElement>;
 
 const ClaudeIcon: React.FC<IconProps> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="75.73 64.08 872.25 872.25" fill="currentColor" {...props}>
-    <path d="M616.9,649.5h-209.7c0,0,0,104.7,0,104.7h-56.6c0,0,.2-104.5.2-104.5h-48.6s.2,104.5.2,104.5h-56.7c0,0,.2-104.4.2-104.4l-48.6-.7v-96.4c.1,0-104.8,0-104.8,0v-104.9s104.9,0,104.9,0v-201.6c0,0,628.9,0,628.9,0v201.6c0,0,104.9,0,104.9,0v104.9s-104.9,0-104.9,0v96.6c.1,0-56.5.4-56.5.4l.2,104.5h-48.6s.2-104.6.2-104.6h-56.6s.2,104.6.2,104.6h-48.6s.2-104.6.2-104.6ZM351.1,447.5l-.5-96.4h-48.4c0,0,0,96.6,0,96.6l48.8-.2ZM722,447.7l-.4-96.7h-56.5c0,0,0,96.8,0,96.8h56.9Z" />
+    <path d="M616.9,649.5h-209.7c0,0,0,104.7,0,104.7h-56.6c0,0,.2-104.5.2-104.5h-48.6s.2,104.5.2,104.5h-56.7c0,0,.2-104.4.2-104.4l-48.6-.7v-96.4c.1,0-104.8,0-104.8,0v-104.9s104.9,0,104.9,0v-201.6c0,0,628.9,0,628.9,0v201.6c0,0,104.9,0,104.9,0v96.6c.1,0-56.5.4-56.5.4l.2,104.5h-48.6s.2-104.6.2-104.6h-56.6s.2,104.6.2,104.6h-48.6s.2-104.6.2-104.6ZM351.1,447.5l-.5-96.4h-48.4c0,0,0,96.6,0,96.6l48.8-.2ZM722,447.7l-.4-96.7h-56.5c0,0,0,96.8,0,96.8h56.9Z" />
   </svg>
 );
 
@@ -39,45 +42,112 @@ const INLINE_PROVIDER_ICONS: Partial<Record<CodingCliProviderId, React.FC<IconPr
   kimi: KimiIcon,
 };
 
-const activityClassName: Record<CodingCliActivityPhase, string> = {
-  idle: 'text-foreground dark:text-foreground',
-  busy: 'text-sky-500 coding-cli-icon-busy',
-  waiting: 'text-amber-500 coding-cli-icon-waiting',
+const iconToneClass: Record<CodingCliActivityPhase, string> = {
+  idle: 'text-foreground opacity-90',
+  busy: 'text-sky-500',
+  waiting: 'text-amber-500',
+  completed: 'text-emerald-600 dark:text-emerald-400',
+  failed: 'text-rose-500',
 };
+
+export const CodingCliStatusDot: React.FC<{
+  phase: CodingCliActivityPhase;
+  /** Larger, more visible tab-level status (vs icon corner badge). */
+  size?: 'sm' | 'md';
+  className?: string;
+  title?: string;
+}> = memo(({ phase, size = 'md', className, title }) => {
+  const dim = size === 'md' ? 'h-2.5 w-2.5' : 'h-2 w-2';
+  return (
+    <span
+      className={cn('relative inline-flex shrink-0 items-center justify-center', className)}
+      title={title}
+      aria-label={title}
+    >
+      {/* Soft halo for busy/waiting so the state reads at a glance. */}
+      {(phase === 'busy' || phase === 'waiting') && (
+        <span
+          className={cn(
+            'absolute inset-0 rounded-full opacity-50',
+            dim,
+            phase === 'busy' ? 'bg-sky-400 coding-cli-status-halo' : 'bg-amber-400 coding-cli-status-halo',
+          )}
+        />
+      )}
+      <span
+        className={cn(
+          'relative inline-block rounded-full ring-2 ring-background shadow-sm',
+          dim,
+          codingCliActivityPhaseDotClass(phase),
+        )}
+      />
+    </span>
+  );
+});
+CodingCliStatusDot.displayName = 'CodingCliStatusDot';
 
 export const CodingCliProviderIcon: React.FC<{
   providerId: CodingCliProviderId;
   iconKey?: AgentIconKey;
   activityPhase?: CodingCliActivityPhase;
   className?: string;
-}> = memo(({ providerId, iconKey, activityPhase = 'idle', className }) => {
+  /** Optional accessible/tooltip label for the current phase. */
+  activityLabel?: string;
+  /** Show corner status badge (default true). */
+  showStatusBadge?: boolean;
+}> = memo(({
+  providerId,
+  iconKey,
+  activityPhase = 'idle',
+  className,
+  activityLabel,
+  showStatusBadge = true,
+}) => {
   const InlineIcon = INLINE_PROVIDER_ICONS[providerId];
-  const boxClass = cn('shrink-0 h-4 w-4', className);
-  const toneClass = activityClassName[activityPhase];
+  const boxClass = cn('h-4 w-4', className);
+  const toneClass = iconToneClass[activityPhase];
 
-  if (InlineIcon) {
-    return (
-      <InlineIcon
-        aria-hidden="true"
-        className={cn(boxClass, toneClass)}
-      />
-    );
-  }
-
-  const visual = getAgentIconVisual(iconKey ?? providerId as AgentIconKey);
-  return (
-    <img
-      src={visual.src}
-      alt=""
+  const glyph = InlineIcon ? (
+    <InlineIcon
       aria-hidden="true"
-      className={cn(
-        boxClass,
-        'rounded-sm object-contain',
-        visual.imageClassName,
-        activityPhase === 'busy' && 'coding-cli-icon-busy opacity-100',
-        activityPhase === 'waiting' && 'coding-cli-icon-waiting opacity-100',
-      )}
+      className={cn(boxClass, toneClass)}
     />
+  ) : (
+    (() => {
+      const visual = getAgentIconVisual(iconKey ?? providerId as AgentIconKey);
+      return (
+        <img
+          src={visual.src}
+          alt=""
+          aria-hidden="true"
+          className={cn(
+            boxClass,
+            'rounded-sm object-contain',
+            visual.imageClassName,
+            activityPhase === 'busy' && 'coding-cli-icon-busy opacity-100',
+            activityPhase === 'waiting' && 'coding-cli-icon-waiting opacity-100',
+            activityPhase === 'failed' && 'opacity-100',
+          )}
+        />
+      );
+    })()
+  );
+
+  return (
+    <span
+      className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center"
+      title={activityLabel}
+    >
+      {glyph}
+      {showStatusBadge && (
+        <CodingCliStatusDot
+          phase={activityPhase}
+          size="sm"
+          className="absolute -bottom-0.5 -right-0.5"
+          title={activityLabel}
+        />
+      )}
+    </span>
   );
 });
 

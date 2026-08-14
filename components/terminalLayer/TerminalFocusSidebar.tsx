@@ -3,6 +3,11 @@ import React, { memo, useCallback, useMemo, useState, type DragEvent, type Mouse
 
 import { useStoredNumber } from '../../application/state/useStoredNumber';
 import { terminalReconnectRegistry } from '../../application/state/terminalReconnectRegistry';
+import { resolveSessionCodingCliProvider } from '../../domain/codingCliProviderMatch';
+import {
+  codingCliActivityPhaseI18nKey,
+  resolveCodingCliActivityPhase,
+} from '../../domain/codingCliTitleParse';
 import { resolveWorkspaceFocusSessionOrder } from '../../domain/workspace';
 import { resolveSessionTabTitle } from '../../domain/sessionTabTitle';
 import type { DynamicTabTitleMode } from '../../domain/models';
@@ -10,6 +15,7 @@ import { STORAGE_KEY_WORKSPACE_FOCUS_SIDEBAR_WIDTH } from '../../infrastructure/
 import { cn } from '../../lib/utils';
 import type { Host, TerminalSession, TerminalTheme, Workspace } from '../../types';
 import { DistroAvatar } from '../DistroAvatar';
+import { CodingCliProviderIcon } from '../icons/CodingCliProviderIcon';
 import { SessionInlineRenameInput } from '../terminal/SessionInlineRenameInput';
 import { SessionTabContextMenuContent } from '../top-tabs/SessionTabContextMenuContent';
 import { Button } from '../ui/button';
@@ -112,6 +118,21 @@ const WorkspaceFocusSessionRow = memo<WorkspaceFocusSessionRowProps>(({
       ? 'text-amber-500'
       : 'text-red-500';
 
+  const codingCliProvider = resolveSessionCodingCliProvider(session, host);
+  const codingCliPhase = codingCliProvider
+    ? resolveCodingCliActivityPhase(
+      session.dynamicTitle,
+      codingCliProvider.id,
+      session.codingCliRunPhase,
+    )
+    : null;
+  const codingCliPhaseLabel = codingCliPhase
+    ? t(codingCliActivityPhaseI18nKey(codingCliPhase))
+    : undefined;
+  const codingCliStatusTitle = codingCliProvider && codingCliPhaseLabel
+    ? `${codingCliProvider.label} · ${codingCliPhaseLabel}`
+    : codingCliPhaseLabel;
+
   const restBg = isSelected ? selectedBg : 'transparent';
   const hoverBg = isSelected ? selectedHoverBg : unselectedHoverBg;
   const rowFg = isSelected ? termFg : unselectedFg;
@@ -157,20 +178,37 @@ const WorkspaceFocusSessionRow = memo<WorkspaceFocusSessionRowProps>(({
           }}
         >
           <div className="relative flex h-6 w-6 shrink-0 items-center justify-center self-center">
-            {host ? (
-              <DistroAvatar
-                host={host}
-                fallback={session.hostLabel}
-                size="sm"
-                className="!h-6 !w-6"
+            {codingCliProvider ? (
+              <CodingCliProviderIcon
+                providerId={codingCliProvider.id}
+                iconKey={codingCliProvider.iconKey}
+                activityPhase={codingCliPhase ?? 'idle'}
+                activityLabel={codingCliStatusTitle}
+                className="!h-5 !w-5"
+                showStatusBadge
               />
+            ) : host ? (
+              <>
+                <DistroAvatar
+                  host={host}
+                  fallback={session.hostLabel}
+                  size="sm"
+                  className="!h-6 !w-6"
+                />
+                <Circle
+                  size={5}
+                  className={cn('absolute bottom-0 right-0 fill-current', statusColor)}
+                />
+              </>
             ) : (
-              <Server size={14} style={{ color: mutedFg }} />
+              <>
+                <Server size={14} style={{ color: mutedFg }} />
+                <Circle
+                  size={5}
+                  className={cn('absolute bottom-0 right-0 fill-current', statusColor)}
+                />
+              </>
             )}
-            <Circle
-              size={5}
-              className={cn('absolute bottom-0 right-0 fill-current', statusColor)}
-            />
           </div>
           <div className="flex h-6 flex-1 min-w-0 flex-col justify-center self-center text-left">
             {isRenaming ? (

@@ -323,10 +323,33 @@ export const useSessionState = ({
       return prev.map((candidate) => {
         if (candidate.id !== sessionId) return candidate;
         if (!providerId) {
-          const { codingCliProviderId: _removed, ...rest } = candidate;
+          const {
+            codingCliProviderId: _removed,
+            codingCliRunPhase: _phase,
+            ...rest
+          } = candidate;
           return rest;
         }
         return { ...candidate, codingCliProviderId: providerId };
+      });
+    });
+  }, []);
+
+  const updateSessionCodingCliRunPhase = useCallback((
+    sessionId: string,
+    phase: import('../../domain/codingCliTitleParse').CodingCliActivityPhase | null,
+  ) => {
+    setSessions((prev) => {
+      const session = prev.find((candidate) => candidate.id === sessionId);
+      if (!session) return prev;
+      if ((session.codingCliRunPhase ?? null) === phase) return prev;
+      return prev.map((candidate) => {
+        if (candidate.id !== sessionId) return candidate;
+        if (!phase) {
+          const { codingCliRunPhase: _removed, ...rest } = candidate;
+          return rest;
+        }
+        return { ...candidate, codingCliRunPhase: phase };
       });
     });
   }, []);
@@ -1235,5 +1258,6 @@ export const useSessionState = ({
     updateSessionRestoreCwd,
     updateSessionDynamicTitle,
     updateSessionCodingCliProvider,
+    updateSessionCodingCliRunPhase,
   };
 };

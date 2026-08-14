@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  inferCodingCliActivityPhaseFromOutput,
   inferCodingCliProviderFromTitleSignals,
   normalizeCodingCliDynamicTitleForStorage,
   normalizeCodingCliTitle,
@@ -51,6 +52,64 @@ test('resolveCodingCliActivityPhase detects waiting states', () => {
   assert.equal(
     resolveCodingCliActivityPhase('Claude Code · waiting for approval', 'claude'),
     'waiting',
+  );
+  assert.equal(
+    resolveCodingCliActivityPhase('[ ! ] Action Required · deploy', 'claude'),
+    'waiting',
+  );
+});
+
+test('resolveCodingCliActivityPhase detects completed and failed', () => {
+  assert.equal(
+    resolveCodingCliActivityPhase('refactor auth · done', 'claude'),
+    'completed',
+  );
+  assert.equal(
+    resolveCodingCliActivityPhase('task completed · grok', 'grok'),
+    'completed',
+  );
+  assert.equal(
+    resolveCodingCliActivityPhase('build failed · codex', 'codex'),
+    'failed',
+  );
+  // Failed beats busy/spinner wording when both present.
+  assert.equal(
+    resolveCodingCliActivityPhase('error while working', 'codex'),
+    'failed',
+  );
+});
+
+test('resolveCodingCliActivityPhase honors sticky completed until busy again', () => {
+  assert.equal(
+    resolveCodingCliActivityPhase('my task - grok', 'grok', 'completed'),
+    'completed',
+  );
+  assert.equal(
+    resolveCodingCliActivityPhase('⠋ working · grok', 'grok', 'completed'),
+    'busy',
+  );
+  assert.equal(
+    resolveCodingCliActivityPhase('my task - grok', 'grok', 'busy'),
+    'busy',
+  );
+});
+
+test('inferCodingCliActivityPhaseFromOutput detects Grok Build run signals', () => {
+  assert.equal(
+    inferCodingCliActivityPhaseFromOutput('Thought for 4.7s\nTask started: Build UI', 'grok'),
+    'busy',
+  );
+  assert.equal(
+    inferCodingCliActivityPhaseFromOutput('c 1 command still running · send a message to interrupt', 'grok'),
+    'busy',
+  );
+  assert.equal(
+    inferCodingCliActivityPhaseFromOutput('Task failed in 9m38s: Restart Gateway (exit 1)', 'grok'),
+    'failed',
+  );
+  assert.equal(
+    inferCodingCliActivityPhaseFromOutput('Resume this session with:\n  grok --resume abc', 'grok'),
+    'completed',
   );
 });
 

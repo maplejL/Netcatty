@@ -620,6 +620,10 @@ export interface TerminalLayerProps {
   onUpdateSessionRestoreCwd?: (sessionId: string, cwd: string | null) => void;
   onUpdateSessionDynamicTitle?: (sessionId: string, title: string | null) => void;
   onUpdateSessionCodingCliProvider?: (sessionId: string, providerId: import('../../domain/codingCliProviders').CodingCliProviderId | null) => void;
+  onUpdateSessionCodingCliRunPhase?: (
+    sessionId: string,
+    phase: import('../../domain/codingCliTitleParse').CodingCliActivityPhase | null,
+  ) => void;
   onClearSessionFontSizeOverride?: (sessionId: string) => void;
   onCloseSession: (sessionId: string, e?: React.MouseEvent) => void;
   onUpdateSessionStatus: (sessionId: string, status: TerminalSession['status']) => void;
