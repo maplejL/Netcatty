@@ -5,6 +5,8 @@ const {
   buildCursorAgentOptions,
   buildCursorSendMessage,
   formatCursorErrorForUser,
+  isCursorAgentBusyError,
+  isCursorRunTerminal,
   mapCursorModels,
   runCursorTurn,
   toCursorMcpServers,
@@ -289,6 +291,14 @@ test("formatCursorErrorForUser includes diagnostics when message is empty", () =
   );
 });
 
+test("isCursorRunTerminal and isCursorAgentBusyError detect SDK statuses", () => {
+  assert.equal(isCursorRunTerminal("finished"), true);
+  assert.equal(isCursorRunTerminal("running"), false);
+  assert.equal(isCursorAgentBusyError(new Error("Agent agent-1 already has active run")), true);
+  assert.equal(isCursorAgentBusyError({ name: "AgentBusyError", message: "busy" }), true);
+  assert.equal(isCursorAgentBusyError(new Error("network down")), false);
+});
+
 test("runCursorTurn creates or resumes an agent, streams events, and emits done", async () => {
   const emitter = makeEmitter();
   const captured = {};
@@ -427,6 +437,104 @@ test("runCursorTurn surfaces wait() error status", async () => {
     ["sessionId", "agent-wait-error"],
     ["text", "partial"],
     ["error", "quota exceeded"],
+  ]);
+});
+
+test("runCursorTurn still waits after stream error so the run is terminalized", async () => {
+  const emitter = makeEmitter();
+  let waited = false;
+  const sdkModule = {
+    Agent: {
+      async create() {
+        return {
+          agentId: "agent-stream-error-wait",
+          async send() {
+            return {
+              status: "running",
+              async *stream() {
+                yield { type: "status", status: "ERROR", message: "mid-run fail" };
+              },
+              async wait() {
+                waited = true;
+                return { status: "error", message: "mid-run fail" };
+              },
+            };
+          },
+          close() {},
+        };
+      },
+    },
+  };
+
+  await runCursorTurn({
+    prompt: "hi",
+    agentOptions: { apiKey: "key", model: { id: "composer-2.5" }, local: { cwd: "/repo" } },
+    emitter,
+    sdkModule,
+  });
+
+  assert.equal(waited, true);
+  assert.deepEqual(emitter.calls, [
+    ["sessionId", "agent-stream-error-wait"],
+    ["error", "mid-run fail"],
+  ]);
+});
+
+test("runCursorTurn clears stale active runs then retries send once on AgentBusyError", async () => {
+  const emitter = makeEmitter();
+  let sendAttempts = 0;
+  let cancelledStale = false;
+  const sdkModule = {
+    Agent: {
+      async listRuns() {
+        return {
+          items: [{
+            id: "stale-run",
+            status: "running",
+            async cancel() { cancelledStale = true; },
+            async wait() { return { status: "cancelled" }; },
+          }],
+        };
+      },
+      async create() {
+        return {
+          agentId: "agent-busy",
+          async send() {
+            sendAttempts += 1;
+            if (sendAttempts === 1) {
+              const err = new Error("Agent agent-busy already has active run");
+              err.name = "AgentBusyError";
+              throw err;
+            }
+            return {
+              status: "finished",
+              async *stream() {
+                yield { type: "assistant", message: { content: [{ type: "text", text: "recovered" }] } };
+              },
+              async wait() {
+                return { status: "finished", result: "recovered" };
+              },
+            };
+          },
+          close() {},
+        };
+      },
+    },
+  };
+
+  await runCursorTurn({
+    prompt: "hi",
+    agentOptions: { apiKey: "key", model: { id: "composer-2.5" }, local: { cwd: "/repo" } },
+    emitter,
+    sdkModule,
+  });
+
+  assert.equal(sendAttempts, 2);
+  assert.equal(cancelledStale, true);
+  assert.deepEqual(emitter.calls, [
+    ["sessionId", "agent-busy"],
+    ["text", "recovered"],
+    ["done"],
   ]);
 });
 

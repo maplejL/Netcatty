@@ -336,6 +336,84 @@ function isCursorTurnAbortError(error) {
   return error instanceof CursorTurnAbortError || error?.name === "CursorTurnAbortError";
 }
 
+/** Cursor RunStatus terminal values — non-terminal blocks the next agent.send(). */
+function isCursorRunTerminal(status) {
+  const normalized = String(status || "").toLowerCase();
+  return (
+    normalized === "finished"
+    || normalized === "error"
+    || normalized === "cancelled"
+    || normalized === "failed"
+    || normalized === "canceled"
+  );
+}
+
+function isCursorAgentBusyError(error) {
+  if (!error) return false;
+  if (error.name === "AgentBusyError" || error.code === "agent_busy") return true;
+  return /already has active run/i.test(String(error.message || error));
+}
+
+/**
+ * Cancel a leftover Cursor run and wait until it is terminal so the next
+ * agent.send() is not rejected with "already has active run".
+ */
+async function cancelCursorRunBestEffort(run, Agent, cwd) {
+  if (!run) return;
+  try {
+    if (typeof run.cancel === "function") {
+      await run.cancel();
+    } else if (run.id && typeof Agent?.cancelRun === "function") {
+      await Agent.cancelRun(run.id, { runtime: "local", cwd });
+    }
+  } catch (err) {
+    console.warn("[Cursor SDK] cancel run failed", redactCursorSecret(err?.message || err));
+  }
+  try {
+    if (typeof run.wait === "function") {
+      await run.wait();
+    } else if (run.id && typeof Agent?.getRun === "function") {
+      // Poll once via getRun is not enough; prefer wait when available.
+      const latest = await Agent.getRun(run.id, { runtime: "local", cwd });
+      if (latest && !isCursorRunTerminal(latest.status) && typeof latest.cancel === "function") {
+        await latest.cancel().catch(() => {});
+        if (typeof latest.wait === "function") await latest.wait().catch(() => {});
+      }
+    }
+  } catch {
+    // Best effort — store may already mark cancelled.
+  }
+}
+
+/**
+ * Clear non-terminal runs for an agent before send/resume follow-up.
+ * Cursor persists activeRunId locally; Stop/abort without terminalizing leaves
+ * the next turn failing with AgentBusyError.
+ */
+async function clearActiveCursorRuns(Agent, agentId, cwd) {
+  if (!agentId || typeof Agent?.listRuns !== "function") return false;
+  let cleared = false;
+  try {
+    const listed = await Agent.listRuns(agentId, { runtime: "local", cwd });
+    const items = Array.isArray(listed?.items)
+      ? listed.items
+      : (Array.isArray(listed) ? listed : []);
+    for (const run of items) {
+      if (!run || isCursorRunTerminal(run.status)) continue;
+      console.warn("[Cursor SDK] Clearing non-terminal run before send", {
+        agentId,
+        runId: run.id || null,
+        status: run.status || null,
+      });
+      await cancelCursorRunBestEffort(run, Agent, cwd);
+      cleared = true;
+    }
+  } catch (err) {
+    console.warn("[Cursor SDK] listRuns before send failed", redactCursorSecret(err?.message || err));
+  }
+  return cleared;
+}
+
 async function abortable(promise, signal, onLateResolve) {
   if (!signal) return promise;
   if (signal.aborted) {
@@ -402,24 +480,43 @@ async function runCursorTurn({
     if (sessionId) emitter.sessionId(sessionId);
     if (signal?.aborted) return { sessionId };
 
+    const localCwd = agentOptions?.local?.cwd;
+    // Resume paths often leave a non-terminal run after Stop/stream error.
+    // Clear those before send so Cursor does not throw AgentBusyError.
+    if (sessionId) {
+      await clearActiveCursorRuns(Agent, sessionId, localCwd);
+    }
+
     const sendMessage = buildCursorSendMessage(prompt, attachments);
     const sendOptions = agentOptions?.model
       ? { model: agentOptions.model }
       : undefined;
+    const sendWithModel = () => (
+      sendOptions ? agent.send(sendMessage, sendOptions) : agent.send(sendMessage)
+    );
+    const onLateSendResolve = (lateRun) => {
+      if (lateRun && typeof lateRun.cancel === "function") {
+        void lateRun.cancel().catch(() => {});
+      }
+    };
     const restoreSendEnv = applyTemporaryProcessEnv(runtimeEnv);
     try {
       // Cursor updates the active model from send({ model }), not only create().
       // Fast / effort params must be passed here or mid-chat toggles and resumes
       // keep the previous selection.
-      run = await abortable(
-        sendOptions ? agent.send(sendMessage, sendOptions) : agent.send(sendMessage),
-        signal,
-        (lateRun) => {
-          if (lateRun && typeof lateRun.cancel === "function") {
-            void lateRun.cancel().catch(() => {});
-          }
-        },
-      );
+      try {
+        run = await abortable(sendWithModel(), signal, onLateSendResolve);
+      } catch (sendErr) {
+        if (signal?.aborted || isCursorTurnAbortError(sendErr)) throw sendErr;
+        if (!isCursorAgentBusyError(sendErr)) throw sendErr;
+        // Race: previous run still active after listRuns, or concurrent send.
+        console.warn("[Cursor SDK] Agent busy on send; clearing active runs and retrying once", {
+          agentId: sessionId,
+          message: redactCursorSecret(sendErr?.message || sendErr),
+        });
+        await clearActiveCursorRuns(Agent, sessionId, localCwd);
+        run = await abortable(sendWithModel(), signal, onLateSendResolve);
+      }
     } finally {
       restoreSendEnv();
     }
@@ -448,7 +545,11 @@ async function runCursorTurn({
 
       // SDK docs: stream observes; wait() is the terminal result and catches
       // mid-flight failures that may not appear as stream status events.
-      if (!failed && !signal?.aborted && run && typeof run.wait === "function") {
+      // Always wait (or cancel) so activeRunId is cleared for the next turn —
+      // skipping wait after stream ERROR left agents permanently busy.
+      if (signal?.aborted) {
+        await cancelCursorRunBestEffort(run, Agent, localCwd);
+      } else if (run && typeof run.wait === "function") {
         const waitResult = await abortable(run.wait(), signal);
         const waitStatus = String(waitResult?.status || "").toLowerCase();
         if (waitStatus === "error" || waitStatus === "failed") {
@@ -464,8 +565,11 @@ async function runCursorTurn({
             message: redactCursorSecret(state.errorMessage),
             runId: waitResult?.id || run?.id || null,
           });
-          emitter.emitError(formatCursorErrorForUser(state.errorMessage, cursorErrorDiagnostics(waitResult)));
-        } else if (!hasContent && waitResult?.result) {
+          // Avoid double error toast when stream already reported the failure.
+          if (!state.failed) {
+            emitter.emitError(formatCursorErrorForUser(state.errorMessage, cursorErrorDiagnostics(waitResult)));
+          }
+        } else if (!failed && !hasContent && waitResult?.result) {
           // Some SDK builds deliver final text only via wait().
           const finalText = typeof waitResult.result === "string"
             ? waitResult.result
@@ -475,9 +579,15 @@ async function runCursorTurn({
             hasContent = true;
           }
         }
+      } else if (run && !isCursorRunTerminal(run.status)) {
+        await cancelCursorRunBestEffort(run, Agent, localCwd);
       }
     } finally {
       if (signal) signal.removeEventListener("abort", onAbort);
+      // Last resort: if wait/cancel above did not finish, force terminalize.
+      if (run && !isCursorRunTerminal(run.status)) {
+        await cancelCursorRunBestEffort(run, Agent, localCwd);
+      }
     }
     closeReasoning(state, emitter);
     if (failed) {
@@ -494,6 +604,7 @@ async function runCursorTurn({
     return { sessionId };
   } catch (error) {
     if (isCursorTurnAbortError(error) || signal?.aborted) {
+      if (run) await cancelCursorRunBestEffort(run, Agent, agentOptions?.local?.cwd);
       return { sessionId };
     }
     {
@@ -503,7 +614,16 @@ async function runCursorTurn({
       if (isCursorAuthMessage(message)) {
         await logCursorApiKeyValidation(resolvedModule, agentOptions?.apiKey);
       }
-      emitter.emitError(formatCursorErrorForUser(message, diagnostics));
+      if (isCursorAgentBusyError(error)) {
+        emitter.emitError(
+          "Cursor agent still has an active run from a previous turn. Stopped leftover run — send your message again.",
+        );
+        if (sessionId) {
+          await clearActiveCursorRuns(Agent, sessionId, agentOptions?.local?.cwd);
+        }
+      } else {
+        emitter.emitError(formatCursorErrorForUser(message, diagnostics));
+      }
     }
     return { sessionId };
   } finally {
@@ -679,8 +799,12 @@ module.exports = {
   applyTemporaryProcessEnv,
   buildCursorAgentOptions,
   buildCursorSendMessage,
+  cancelCursorRunBestEffort,
+  clearActiveCursorRuns,
   extractCursorStatusErrorMessage,
   formatCursorErrorForUser,
+  isCursorAgentBusyError,
+  isCursorRunTerminal,
   listCursorModels,
   mapCursorModels,
   parseCursorModelSelection,
