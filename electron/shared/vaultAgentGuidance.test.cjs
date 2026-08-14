@@ -15,6 +15,12 @@ test("VAULT_HOSTS_VS_NOTES_GUIDANCE forbids note fallback for host creation", ()
   assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /do not silently create a Vault note/i);
 });
 
+test("VAULT_HOSTS_VS_NOTES_GUIDANCE routes app notes to built-in Vault Notes", () => {
+  assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /built-in Vault → Notes/i);
+  assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /vault notes create/i);
+  assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /Never substitute by writing NOTES\.md/i);
+});
+
 test("VAULT_HOSTS_VS_NOTES_GUIDANCE routes unknown attached host files through AI extraction", () => {
   assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /attached/i);
   assert.match(VAULT_HOSTS_VS_NOTES_GUIDANCE, /unknown/i);

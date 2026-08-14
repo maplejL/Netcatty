@@ -12,8 +12,11 @@ const VAULT_HOSTS_VS_NOTES_GUIDANCE =
   + "for unknown attached host/server text, read the attachment content, extract hostname, username, password, port, group, tags, and label yourself, "
   + "then call vault_hosts_create with dryRun=true first. Extract hostname, username, password, port, group, tags, and label from the user's text; "
   + "put long admin tables or remarks in the host notes field (host_notes_set / Host Details metadata), "
-  + "not Vault sidebar Notes. Use vault_notes_create or vault_notes_update ONLY when the user explicitly wants "
-  + "markdown documentation in Vault → Notes (保险箱笔记 sidebar). "
+  + "not Vault sidebar Notes. "
+  + "Netcatty has a built-in Vault → Notes feature (保险箱笔记 / 记个笔记 / save a note in the app). "
+  + "When the user wants that, use vault_notes_create / vault_notes_update (MCP) or "
+  + "`vault notes create|list|get|update` (Skills + CLI). "
+  + "Never substitute by writing NOTES.md (or similar) on the remote host or only in a local temp file. "
   + "If vault_hosts_create or vault_hosts_import fails, report the error — do not silently create a Vault note instead.";
 
 const VAULT_SCRIPTS_GUIDANCE =

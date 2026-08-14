@@ -10,11 +10,16 @@ const { TOOL_INPUT_FIELDS } = require("../schemas/toolInputs.cjs");
 /** Maps TOOL_INPUT_FIELDS keys to CLI flag names and opts property names. */
 const CLI_FIELD_BINDINGS = Object.freeze({
   hostId: { flag: "--host-id", optKey: "hostId" },
+  noteId: { flag: "--note-id", optKey: "noteId" },
   snippetId: { flag: "--snippet-id", optKey: "snippetId" },
   scriptId: { flag: "--script-id", optKey: "scriptId" },
   runId: { flag: "--run-id", optKey: "runId" },
   ruleId: { flag: "--rule-id", optKey: "ruleId" },
   notes: { flag: "--notes", optKey: "notes" },
+  title: { flag: "--title", optKey: "title" },
+  group: { flag: "--group", optKey: "group" },
+  linkedHostIds: { flag: "--linked-host-ids", optKey: "linkedHostIds" },
+  tags: { flag: "--tags", optKey: "tags" },
   sessionId: { flag: "--session", optKey: "sessionId" },
   variables: { flag: "--variables", optKey: "variables" },
   wait: { flag: "--wait", optKey: "wait" },

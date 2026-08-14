@@ -23,3 +23,48 @@ test("parseArgs consumes snippet multi-line run mode flag", () => {
   assert.equal(opts.multiLineRunMode, "lineDelay");
   assert.equal(opts.json, true);
 });
+
+test("parseArgs consumes vault notes create flags", () => {
+  const { positionals, opts } = parseArgs([
+    "node",
+    "netcatty-tool-cli",
+    "vault",
+    "notes",
+    "create",
+    "--title",
+    "mihomo notes",
+    "--content",
+    "# heading\nbody",
+    "--group",
+    "ops",
+    "--tags",
+    '["proxy"]',
+    "--linked-host-ids",
+    '["host-1"]',
+    "--json",
+  ]);
+
+  assert.deepEqual(positionals, ["vault", "notes", "create"]);
+  assert.equal(opts.title, "mihomo notes");
+  assert.equal(opts.content, "# heading\nbody");
+  assert.equal(opts.group, "ops");
+  assert.equal(opts.tags, '["proxy"]');
+  assert.equal(opts.linkedHostIds, '["host-1"]');
+  assert.equal(opts.json, true);
+});
+
+test("parseArgs consumes vault notes get note-id", () => {
+  const { positionals, opts } = parseArgs([
+    "node",
+    "netcatty-tool-cli",
+    "vault",
+    "notes",
+    "get",
+    "--note-id",
+    "note-123",
+    "--json",
+  ]);
+
+  assert.deepEqual(positionals, ["vault", "notes", "get"]);
+  assert.equal(opts.noteId, "note-123");
+});

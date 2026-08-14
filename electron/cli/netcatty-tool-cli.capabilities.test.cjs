@@ -17,7 +17,10 @@ test("netcatty-tool-cli capabilities lists implemented commands without app conn
   assert.equal(payload.ok, true);
   assert.ok(payload.capabilities.some((entry) => entry.id === "terminal.execute"));
   assert.ok(payload.capabilities.some((entry) => entry.id === "vault.host.get"));
+  assert.ok(payload.capabilities.some((entry) => entry.id === "vault.note.create"));
   assert.ok(payload.capabilities.some((entry) => entry.id === "portforward.rules.list"));
+  const noteCreate = payload.capabilities.find((entry) => entry.id === "vault.note.create");
+  assert.deepEqual(noteCreate?.command, ["vault", "notes", "create"]);
 });
 
 test("netcatty-tool-cli capabilities runs from unpacked CLI runtime without app services", () => {

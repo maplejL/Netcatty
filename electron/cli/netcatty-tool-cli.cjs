@@ -72,9 +72,14 @@ function parseArgs(argv) {
     mode: null,
     encoding: null,
     hostId: null,
+    noteId: null,
     snippetId: null,
     ruleId: null,
     notes: null,
+    title: null,
+    group: null,
+    linkedHostIds: null,
+    tags: null,
     variables: null,
     multiLineRunMode: null,
     command: [],
@@ -158,6 +163,11 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === "--note-id") {
+      opts.noteId = readFlagValue(args, i + 1);
+      i += 1;
+      continue;
+    }
     if (arg === "--snippet-id") {
       opts.snippetId = readFlagValue(args, i + 1);
       i += 1;
@@ -170,6 +180,26 @@ function parseArgs(argv) {
     }
     if (arg === "--notes") {
       opts.notes = readFlagValue(args, i + 1);
+      i += 1;
+      continue;
+    }
+    if (arg === "--title") {
+      opts.title = readFlagValue(args, i + 1);
+      i += 1;
+      continue;
+    }
+    if (arg === "--group") {
+      opts.group = readFlagValue(args, i + 1);
+      i += 1;
+      continue;
+    }
+    if (arg === "--linked-host-ids") {
+      opts.linkedHostIds = readFlagValue(args, i + 1);
+      i += 1;
+      continue;
+    }
+    if (arg === "--tags") {
+      opts.tags = readFlagValue(args, i + 1);
       i += 1;
       continue;
     }

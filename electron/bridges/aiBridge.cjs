@@ -161,7 +161,8 @@ function buildExternalAgentSystemContext({ mode, chatSessionId, defaultTargetSes
       ? `If you do need discovery because the task is ambiguous or points to another session, start with \`${cliCommandPrefix} env --json${chatSessionId ? ` --chat-session ${chatSessionId}` : ""}\` to discover available sessions and their IDs. `
       : `Start with \`${cliCommandPrefix} env --json${chatSessionId ? ` --chat-session ${chatSessionId}` : ""}\` to discover available sessions and their IDs. `;
 
-    return (
+    const chatSessionFlag = chatSessionId ? ` --chat-session ${chatSessionId}` : "";
+    return appendVaultAgentGuidance(
       `${userSkillsPreamble}` +
       `[Context: You are inside Netcatty, a multi-session terminal manager. ` +
       `${skillHint}` +
@@ -170,7 +171,9 @@ function buildExternalAgentSystemContext({ mode, chatSessionId, defaultTargetSes
       `${defaultTargetHint}` +
       `Use Skills + CLI instead of the "netcatty-remote-hosts" MCP server for Netcatty session access. ` +
       `Use the local shell only to invoke Netcatty CLI commands or inspect local attachments explicitly supplied by the user. Do not use local shell or filesystem tools for unrelated local-machine work. ` +
-      `First classify the task: remote command execution tasks go through \`exec\`, while remote file or directory tasks go through \`sftp\`. If the user explicitly says to avoid shell or \`exec\`, do not use \`exec\`. Treat \`exec\` as the short-command path only: use it only for commands expected to finish within about 60 seconds. For builds, scans, watch mode, tail-following, ping, or anything likely to exceed that budget or stream output for an extended period, do not use plain \`exec\`; use the long-running job commands instead. ` +
+      `First classify the task: remote command execution tasks go through \`exec\`, remote file or directory tasks go through \`sftp\`, and Netcatty built-in Vault → Notes (记个笔记 / 保险箱笔记 / save a note in the app) go through \`vault notes\` CLI — never write remote NOTES.md or only a local temp file as a substitute. ` +
+      `For app notes use \`${cliCommandPrefix} vault notes create --title <title> --content <markdown> --json${chatSessionFlag}\`, list with \`vault notes list\`, read with \`vault notes get --note-id <id>\`, update with \`vault notes update --note-id <id>\`. Host Details remarks use \`vault host-notes set --host-id <id> --notes <text>\` instead. ` +
+      `If the user explicitly says to avoid shell or \`exec\`, do not use \`exec\`. Treat \`exec\` as the short-command path only: use it only for commands expected to finish within about 60 seconds. For builds, scans, watch mode, tail-following, ping, or anything likely to exceed that budget or stream output for an extended period, do not use plain \`exec\`; use the long-running job commands instead. ` +
       `Never run interactive stdin wizards (password prompts, [Y/n], \"Enter the value for…\", installers). Prefer --batch/-y/full CLI args or yes|/printf pipes; if output is waiting for input, stop and hand off to the user — do not type follow-up shell commands into that prompt. ` +
       `${discoveryHint}` +
       `After choosing a target session ID, call \`${cliCommandPrefix} session --session <id> --json${chatSessionId ? ` --chat-session ${chatSessionId}` : ""}\` before executing anything. Do not infer protocol, shell type, device type, or connection readiness from the \`env\` result alone when you are about to run a command. ` +

@@ -125,7 +125,7 @@ const VAULT_CAPABILITIES = [
     id: "vault.note.list",
     domain: "vault",
     status: CAPABILITY_STATUS.IMPLEMENTED,
-    description: "List notes in Vault → Notes (markdown notes visible in the vault sidebar).",
+    description: "List notes in Vault → Notes (Netcatty built-in markdown notes visible in the vault sidebar).",
     policy: {
       write: false,
       sensitiveRead: false,
@@ -136,6 +136,7 @@ const VAULT_CAPABILITIES = [
       bypassesChatCancel: true,
     },
     surfaces: {
+      cli: { command: ["vault", "notes", "list"] },
       global: { rpcMethod: "vault/notes/list" },
       public: { rpcMethod: "public/vault/notes/list", mcpTool: "vault_notes_list" },
     },
@@ -155,6 +156,7 @@ const VAULT_CAPABILITIES = [
       bypassesChatCancel: true,
     },
     surfaces: {
+      cli: { command: ["vault", "notes", "get"] },
       global: { rpcMethod: "vault/notes/get" },
       public: { rpcMethod: "public/vault/notes/get", mcpTool: "vault_notes_get" },
     },
@@ -163,7 +165,7 @@ const VAULT_CAPABILITIES = [
     id: "vault.note.create",
     domain: "vault",
     status: CAPABILITY_STATUS.IMPLEMENTED,
-    description: "Create a note in Vault → Notes sidebar (markdown documentation). NOT for adding SSH hosts — use vault_hosts_create for that.",
+    description: "Create a note in Netcatty Vault → Notes sidebar (markdown documentation). Use for 记个笔记 / save app notes. NOT for adding SSH hosts — use vault_hosts_create for that. NOT for writing remote NOTES.md files.",
     policy: {
       write: true,
       sensitiveRead: false,
@@ -174,6 +176,7 @@ const VAULT_CAPABILITIES = [
       bypassesChatCancel: false,
     },
     surfaces: {
+      cli: { command: ["vault", "notes", "create"] },
       global: { rpcMethod: "vault/notes/create" },
       public: { rpcMethod: "public/vault/notes/create", mcpTool: "vault_notes_create" },
     },
@@ -193,6 +196,7 @@ const VAULT_CAPABILITIES = [
       bypassesChatCancel: false,
     },
     surfaces: {
+      cli: { command: ["vault", "notes", "update"] },
       global: { rpcMethod: "vault/notes/update" },
       public: { rpcMethod: "public/vault/notes/update", mcpTool: "vault_notes_update" },
     },
