@@ -20,6 +20,10 @@ import {
   type TerminalSessionRestoreFocusDetail,
 } from './focusTerminalSession';
 import { resolveHibernatePreferWasmSerialize } from '../../domain/terminalHibernate';
+import {
+  normalizeScrollSensitivity,
+  resolveFastScrollSensitivity,
+} from '../../domain/terminalScroll';
 import { applyUserCursorBlinkPreference } from './runtime/cursorPreference';
 import { getNormalizedTerminalSelection } from './normalizeTerminalSelection';
 import { writeTerminalClipboardText } from './runtime/terminalClipboardAccess';
@@ -713,6 +717,9 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
           : 0;
       termRef.current.options.scrollOnUserInput =
         shouldEnableNativeUserInputAutoScroll(terminalSettings);
+      const scrollSensitivity = normalizeScrollSensitivity(terminalSettings.scrollSensitivity);
+      termRef.current.options.scrollSensitivity = scrollSensitivity;
+      termRef.current.options.fastScrollSensitivity = resolveFastScrollSensitivity(scrollSensitivity);
       const altKeyOpts = terminalAltKeyOptions(terminalSettings.altAsMeta);
       termRef.current.options.macOptionIsMeta = altKeyOpts.macOptionIsMeta;
       termRef.current.options.altClickMovesCursor = altKeyOpts.altClickMovesCursor;

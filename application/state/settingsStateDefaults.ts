@@ -92,6 +92,10 @@ export const DEFAULT_SESSION_LOGS_ENABLED = false;
 export const DEFAULT_SESSION_LOGS_FORMAT: SessionLogFormat = 'txt';
 export const DEFAULT_SESSION_LOGS_TIMESTAMPS_ENABLED = false;
 export const DEFAULT_SSH_DEBUG_LOGS_ENABLED = false;
+export {
+  DEFAULT_APP_LOGS_ENABLED,
+  DEFAULT_APP_LOGS_RETENTION_DAYS,
+} from '../../domain/appLogs';
 export const DEFAULT_SSH_DEEP_LINK_ENABLED = true;
 export const DEFAULT_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED = false;
 

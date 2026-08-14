@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+  MAX_TERMINAL_SCROLL_SENSITIVITY,
+  MIN_TERMINAL_SCROLL_SENSITIVITY,
+  normalizeScrollSensitivity,
+  resolveFastScrollSensitivity,
   shouldScrollOnTerminalInput,
   shouldScrollOnTerminalOutput,
   shouldEnableNativeUserInputAutoScroll,
@@ -47,4 +52,14 @@ test("non-printable key presses still respect scrollOnKeyPress", () => {
 test("output and native input scroll defaults stay unchanged", () => {
   assert.equal(shouldScrollOnTerminalOutput({}), false);
   assert.equal(shouldEnableNativeUserInputAutoScroll({}), true);
+});
+
+test("scroll sensitivity defaults and clamps to a usable wheel range", () => {
+  assert.equal(normalizeScrollSensitivity(undefined), DEFAULT_TERMINAL_SCROLL_SENSITIVITY);
+  assert.equal(normalizeScrollSensitivity(Number.NaN), DEFAULT_TERMINAL_SCROLL_SENSITIVITY);
+  assert.equal(normalizeScrollSensitivity(0), MIN_TERMINAL_SCROLL_SENSITIVITY);
+  assert.equal(normalizeScrollSensitivity(9), MAX_TERMINAL_SCROLL_SENSITIVITY);
+  assert.equal(normalizeScrollSensitivity(0.54), 0.5);
+  assert.equal(resolveFastScrollSensitivity(0.5), 2.5);
+  assert.equal(resolveFastScrollSensitivity(1), 5);
 });

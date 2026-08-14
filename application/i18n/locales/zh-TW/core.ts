@@ -105,6 +105,21 @@ export const zhTWCoreMessages: Messages = {
   'settings.system.credentials.unavailableHint': '在其他使用者或機器上加密的憑證無法在此處解密。請在目前裝置重新輸入並儲存憑證。',
   'settings.system.credentials.portabilityHint': '雲同步可跨裝置，因為使用主金鑰加密；本機 safeStorage 加密僅綁定目前系統使用者/裝置。',
 
+  // Settings > System > Diagnostic Logs
+  'settings.system.appLogs.title': '診斷日誌',
+  'settings.system.appLogs.enable': '啟用診斷日誌',
+  'settings.system.appLogs.enableDesc': '持久化應用與主程序的 trace 級事件。不會寫入密碼或金鑰。',
+  'settings.system.appLogs.retention': '保留天數',
+  'settings.system.appLogs.retentionDesc': '超過該天數的日誌檔案會自動刪除。',
+  'settings.system.appLogs.retentionDays': '{n} 天',
+  'settings.system.appLogs.location': '日誌目錄',
+  'settings.system.appLogs.openFolder': '開啟資料夾',
+  'settings.system.appLogs.size': '大小',
+  'settings.system.appLogs.files': '{count} 個檔案',
+  'settings.system.appLogs.clear': '清除日誌',
+  'settings.system.appLogs.cleared': '已清除 {count} 個日誌檔案。',
+  'settings.system.appLogs.hint': '日誌按天寫入 JSONL，層級為 trace。跟隨目錄、SFTP 或 SSH 工作目錄探測異常時，用這裡排查。',
+
   // Settings > System > Crash Logs
   'settings.system.crashLogs.title': '崩潰日誌',
   'settings.system.crashLogs.description': '檢視主程序錯誤日誌，協助診斷異常行為。',

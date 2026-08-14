@@ -1,5 +1,9 @@
 import React from "react";
 import { DEFAULT_TERMINAL_WORD_SEPARATORS } from "../../../domain/models";
+import {
+  MAX_TERMINAL_SCROLL_SENSITIVITY,
+  MIN_TERMINAL_SCROLL_SENSITIVITY,
+} from "../../../domain/terminalScroll";
 import type { DynamicTabTitleMode, LinkModifier, MiddleClickBehavior, RightClickBehavior, TerminalSettings } from "../../../domain/models";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
@@ -193,6 +197,26 @@ export const TerminalBehaviorSettings: React.FC<TerminalBehaviorSettingsProps> =
           description={t("settings.terminal.behavior.smoothScrolling.desc")}
         >
           <Toggle checked={terminalSettings.smoothScrolling} onChange={(v) => updateTerminalSetting("smoothScrolling", v)} />
+        </SettingRow>
+
+        <SettingRow
+          label={t("settings.terminal.behavior.scrollSensitivity")}
+          description={t("settings.terminal.behavior.scrollSensitivity.desc")}
+        >
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={MIN_TERMINAL_SCROLL_SENSITIVITY}
+              max={MAX_TERMINAL_SCROLL_SENSITIVITY}
+              step={0.1}
+              value={terminalSettings.scrollSensitivity}
+              onChange={(e) => updateTerminalSetting("scrollSensitivity", Number(e.target.value))}
+              className="w-24 accent-primary"
+            />
+            <span className="text-sm text-muted-foreground w-10 text-center">
+              {terminalSettings.scrollSensitivity.toFixed(1)}x
+            </span>
+          </div>
         </SettingRow>
 
         <SettingRow

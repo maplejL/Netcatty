@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 
 import { normalizeTerminalSettings } from "./models";
 
+test("normalizeTerminalSettings defaults wheel scroll sensitivity below xterm's 1x", () => {
+  assert.equal(normalizeTerminalSettings().scrollSensitivity, 0.5);
+  assert.equal(normalizeTerminalSettings({ scrollSensitivity: 0 }).scrollSensitivity, 0.2);
+  assert.equal(normalizeTerminalSettings({ scrollSensitivity: 8 }).scrollSensitivity, 3);
+  assert.equal(normalizeTerminalSettings({ scrollSensitivity: 1.2 }).scrollSensitivity, 1.2);
+});
+
 test("normalizeTerminalSettings disables prompt line breaks by default", () => {
   const settings = normalizeTerminalSettings();
 

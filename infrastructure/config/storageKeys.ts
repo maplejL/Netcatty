@@ -135,6 +135,8 @@ export const STORAGE_KEY_SESSION_LOGS_DIR = 'netcatty_session_logs_dir_v1';
 export const STORAGE_KEY_SESSION_LOGS_FORMAT = 'netcatty_session_logs_format_v1';
 export const STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED = 'netcatty_session_logs_timestamps_enabled_v1';
 export const STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED = 'netcatty_ssh_debug_logs_enabled_v1';
+export const STORAGE_KEY_APP_LOGS_ENABLED = 'netcatty_app_logs_enabled_v1';
+export const STORAGE_KEY_APP_LOGS_RETENTION_DAYS = 'netcatty_app_logs_retention_days_v1';
 export const STORAGE_KEY_SSH_DEEP_LINK_ENABLED = 'netcatty_ssh_deep_link_enabled_v1';
 /** Terminal command latency debug (submit → write → first output → render). Default off. */
 export const STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED = 'netcatty_terminal_command_timing_debug_enabled_v1';

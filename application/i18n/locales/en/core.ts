@@ -107,6 +107,21 @@ export const enCoreMessages: Messages = {
   'settings.system.credentials.unavailableHint': 'Credentials encrypted on another user profile or machine cannot be decrypted here. Re-enter and save credentials on this device.',
   'settings.system.credentials.portabilityHint': 'Cloud Sync is portable because it uses your master key encryption. Local safeStorage encryption is device/user scoped.',
 
+  // Settings > System > Diagnostic Logs
+  'settings.system.appLogs.title': 'Diagnostic Logs',
+  'settings.system.appLogs.enable': 'Enable diagnostic logs',
+  'settings.system.appLogs.enableDesc': 'Persist trace-level events from the app and main process. Passwords and keys are never stored.',
+  'settings.system.appLogs.retention': 'Retention',
+  'settings.system.appLogs.retentionDesc': 'Automatically delete log files older than this many days.',
+  'settings.system.appLogs.retentionDays': '{n} days',
+  'settings.system.appLogs.location': 'Log folder',
+  'settings.system.appLogs.openFolder': 'Open folder',
+  'settings.system.appLogs.size': 'Size',
+  'settings.system.appLogs.files': '{count} files',
+  'settings.system.appLogs.clear': 'Clear logs',
+  'settings.system.appLogs.cleared': 'Cleared {count} log file(s).',
+  'settings.system.appLogs.hint': 'Logs are written as daily JSONL files at trace level. Use this when follow-directory, SFTP, or SSH cwd probes misbehave.',
+
   // Settings > System > Crash Logs
   'settings.system.crashLogs.title': 'Crash Logs',
   'settings.system.crashLogs.description': 'View error logs from the main process to help diagnose unexpected behavior.',
@@ -591,6 +606,9 @@ Highlight the focused split pane:
   'settings.terminal.behavior.smoothScrolling': 'Smooth scrolling',
   'settings.terminal.behavior.smoothScrolling.desc':
     'Animate terminal viewport scrolling instead of jumping instantly',
+  'settings.terminal.behavior.scrollSensitivity': 'Mouse wheel scroll speed',
+  'settings.terminal.behavior.scrollSensitivity.desc':
+    'How far the terminal jumps per wheel tick. Lower is easier to control during a flood. Scroll up to pause follow.',
   'settings.terminal.behavior.linkModifier': 'Link modifier key',
   'settings.terminal.behavior.linkModifier.desc': 'Hold this key to click on links in terminal',
   'settings.terminal.behavior.linkModifier.none': 'None (click directly)',

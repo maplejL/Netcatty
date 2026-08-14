@@ -923,6 +923,20 @@ function createPreloadApi(ctx) {
   openCrashLogsDir: () =>
     ipcRenderer.invoke("netcatty:crashLogs:openDir"),
 
+  // Diagnostic app logs (trace)
+  writeAppLogs: (entries) =>
+    ipcRenderer.invoke("netcatty:appLogs:write", { entries }),
+  setAppLogConfig: (config) =>
+    ipcRenderer.invoke("netcatty:appLogs:setConfig", config),
+  getAppLogInfo: () =>
+    ipcRenderer.invoke("netcatty:appLogs:getInfo"),
+  getAppLogs: () =>
+    ipcRenderer.invoke("netcatty:appLogs:list"),
+  clearAppLogs: () =>
+    ipcRenderer.invoke("netcatty:appLogs:clear"),
+  openAppLogsDir: () =>
+    ipcRenderer.invoke("netcatty:appLogs:openDir"),
+
   // Global Toggle Hotkey (Quake Mode)
   registerGlobalHotkey: (hotkey) =>
     ipcRenderer.invoke("netcatty:globalHotkey:register", { hotkey }),

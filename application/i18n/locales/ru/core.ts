@@ -107,6 +107,21 @@ export const ruCoreMessages: Messages = {
   'settings.system.credentials.unavailableHint': 'Учётные данные, зашифрованные в другом профиле пользователя или на другой машине, здесь расшифровать нельзя. Повторно введите и сохраните их на этом устройстве.',
   'settings.system.credentials.portabilityHint': 'Облачная синхронизация переносима, потому что использует шифрование вашим мастер-ключом. Локальное шифрование safeStorage привязано к устройству и пользователю.',
 
+  // Settings > System > Diagnostic Logs
+  'settings.system.appLogs.title': 'Диагностические журналы',
+  'settings.system.appLogs.enable': 'Включить диагностические журналы',
+  'settings.system.appLogs.enableDesc': 'Сохранять события уровня trace из приложения и основного процесса. Пароли и ключи не записываются.',
+  'settings.system.appLogs.retention': 'Срок хранения',
+  'settings.system.appLogs.retentionDesc': 'Автоматически удалять файлы журналов старше указанного числа дней.',
+  'settings.system.appLogs.retentionDays': '{n} дн.',
+  'settings.system.appLogs.location': 'Папка журналов',
+  'settings.system.appLogs.openFolder': 'Открыть папку',
+  'settings.system.appLogs.size': 'Размер',
+  'settings.system.appLogs.files': 'Файлов: {count}',
+  'settings.system.appLogs.clear': 'Очистить журналы',
+  'settings.system.appLogs.cleared': 'Очищено файлов журналов: {count}.',
+  'settings.system.appLogs.hint': 'Журналы пишутся ежедневными JSONL-файлами на уровне trace. Используйте их, если следование каталогу, SFTP или определение cwd по SSH работают неверно.',
+
   // Settings > System > Crash Logs
   'settings.system.crashLogs.title': 'Журналы сбоев',
   'settings.system.crashLogs.description': 'Просмотр журналов ошибок основного процесса для диагностики неожиданного поведения.',
@@ -568,6 +583,9 @@ export const ruCoreMessages: Messages = {
   'settings.terminal.behavior.smoothScrolling': 'Плавная прокрутка',
   'settings.terminal.behavior.smoothScrolling.desc':
     'Анимировать прокрутку области терминала вместо мгновенного перехода',
+  'settings.terminal.behavior.scrollSensitivity': 'Скорость прокрутки колесом',
+  'settings.terminal.behavior.scrollSensitivity.desc':
+    'Насколько далеко прыгает терминал за один щелчок колеса. Меньше — проще остановиться при потоке вывода. Прокрутите вверх, чтобы приостановить следование.',
   'settings.terminal.behavior.linkModifier': 'Клавиша-модификатор для ссылок',
   'settings.terminal.behavior.linkModifier.desc': 'Удерживайте эту клавишу, чтобы нажимать на ссылки в терминале',
   'settings.terminal.behavior.linkModifier.none': 'Нет (нажимать напрямую)',

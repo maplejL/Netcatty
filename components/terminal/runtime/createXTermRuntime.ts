@@ -20,6 +20,8 @@ import {
   resolveXTermPerformanceConfig,
 } from "../../../infrastructure/config/xtermPerformance";
 import {
+  normalizeScrollSensitivity,
+  resolveFastScrollSensitivity,
   shouldEnableNativeUserInputAutoScroll,
   shouldScrollOnTerminalInput,
   shouldScrollOnTerminalPaste,
@@ -338,6 +340,8 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   const lineHeight = 1 + (settings?.linePadding ?? 0) / 10;
   const minimumContrastRatio = settings?.minimumContrastRatio ?? 1;
   const scrollOnUserInput = shouldEnableNativeUserInputAutoScroll(settings);
+  const scrollSensitivity = normalizeScrollSensitivity(settings?.scrollSensitivity);
+  const fastScrollSensitivity = resolveFastScrollSensitivity(scrollSensitivity);
   const smoothScrollDuration = settings?.smoothScrolling
     ? performanceConfig.options.smoothScrollDuration
     : 0;
@@ -396,6 +400,8 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
     drawBoldTextInBrightColors,
     minimumContrastRatio,
     smoothScrollDuration,
+    scrollSensitivity,
+    fastScrollSensitivity,
     scrollOnUserInput,
     macOptionClickForcesSelection: true,
     ...terminalAltKeyOptions(altIsMeta),

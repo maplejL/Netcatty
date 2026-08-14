@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
 import { Toggle, Select, SettingRow, SectionHeader, SettingCard, SettingsTabContent } from "../settings-ui";
 import { TerminalCommandTimingPanel } from "../TerminalCommandTimingPanel";
 import { cn } from "../../../lib/utils";
+import { APP_LOG_RETENTION_DAY_OPTIONS, normalizeAppLogRetentionDays } from "../../../domain/appLogs";
 
 interface CrashLogFile {
   fileName: string;
@@ -87,6 +88,10 @@ interface SettingsSystemTabProps {
   setSessionLogsTimestampsEnabled: (enabled: boolean) => void;
   sshDebugLogsEnabled: boolean;
   setSshDebugLogsEnabled: (enabled: boolean) => void;
+  appLogsEnabled: boolean;
+  setAppLogsEnabled: (enabled: boolean) => void;
+  appLogsRetentionDays: number;
+  setAppLogsRetentionDays: (days: number) => void;
   terminalCommandTimingDebugEnabled: boolean;
   setTerminalCommandTimingDebugEnabled: (enabled: boolean) => void;
   sshDeepLinkEnabled: boolean;
@@ -123,6 +128,10 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
   setSessionLogsTimestampsEnabled,
   sshDebugLogsEnabled,
   setSshDebugLogsEnabled,
+  appLogsEnabled,
+  setAppLogsEnabled,
+  appLogsRetentionDays,
+  setAppLogsRetentionDays,
   terminalCommandTimingDebugEnabled,
   setTerminalCommandTimingDebugEnabled,
   sshDeepLinkEnabled,
@@ -165,6 +174,14 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
   const [crashLogClearResult, setCrashLogClearResult] = useState<{ deletedCount: number } | null>(null);
   const [sshDebugLogInfo, setSshDebugLogInfo] = useState<SshDebugLogInfo | null>(null);
   const [isLoadingSshDebugLogInfo, setIsLoadingSshDebugLogInfo] = useState(false);
+  const [appLogInfo, setAppLogInfo] = useState<{
+    path: string;
+    fileCount: number;
+    totalSize: number;
+  } | null>(null);
+  const [isLoadingAppLogInfo, setIsLoadingAppLogInfo] = useState(false);
+  const [isClearingAppLogs, setIsClearingAppLogs] = useState(false);
+  const [appLogClearResult, setAppLogClearResult] = useState<{ deletedCount: number } | null>(null);
 
   const [appVersion, setAppVersion] = useState('');
 
@@ -246,6 +263,53 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
   useEffect(() => {
     void loadSshDebugLogInfo();
   }, [loadSshDebugLogInfo, sshDebugLogsEnabled]);
+
+  const loadAppLogInfo = useCallback(async () => {
+    const bridge = netcattyBridge.get();
+    if (!bridge?.getAppLogInfo) return;
+    setIsLoadingAppLogInfo(true);
+    try {
+      const info = await bridge.getAppLogInfo();
+      setAppLogInfo({
+        path: info?.path || "",
+        fileCount: info?.fileCount ?? 0,
+        totalSize: info?.totalSize ?? 0,
+      });
+    } catch (err) {
+      console.error("[SettingsSystemTab] Failed to load app log info:", err);
+    } finally {
+      setIsLoadingAppLogInfo(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAppLogInfo();
+  }, [loadAppLogInfo, appLogsEnabled, appLogsRetentionDays]);
+
+  const handleOpenAppLogsDir = useCallback(async () => {
+    const bridge = netcattyBridge.get();
+    if (!bridge?.openAppLogsDir) return;
+    try {
+      await bridge.openAppLogsDir();
+    } catch (err) {
+      console.error("[SettingsSystemTab] Failed to open app logs dir:", err);
+    }
+  }, []);
+
+  const handleClearAppLogs = useCallback(async () => {
+    const bridge = netcattyBridge.get();
+    if (!bridge?.clearAppLogs) return;
+    setIsClearingAppLogs(true);
+    try {
+      const result = await bridge.clearAppLogs();
+      setAppLogClearResult(result);
+      await loadAppLogInfo();
+    } catch (err) {
+      console.error("[SettingsSystemTab] Failed to clear app logs:", err);
+    } finally {
+      setIsClearingAppLogs(false);
+    }
+  }, [loadAppLogInfo]);
 
   const expandRequestRef = React.useRef(0);
   const handleExpandCrashLog = useCallback(async (fileName: string) => {
@@ -589,6 +653,103 @@ const SettingsSystemTab: React.FC<SettingsSystemTabProps> = ({
                 {t("settings.system.credentials.portabilityHint")}
               </p>
             </SettingCard>
+
+          <SectionHeader title={t("settings.system.appLogs.title")} />
+            <SettingCard className="min-w-0 max-w-full overflow-hidden space-y-4 py-4">
+              <SettingRow
+                label={t("settings.system.appLogs.enable")}
+                description={t("settings.system.appLogs.enableDesc")}
+              >
+                <Toggle
+                  checked={appLogsEnabled}
+                  onChange={setAppLogsEnabled}
+                  ariaLabel={t("settings.system.appLogs.enable")}
+                />
+              </SettingRow>
+
+              <SettingRow
+                label={t("settings.system.appLogs.retention")}
+                description={t("settings.system.appLogs.retentionDesc")}
+              >
+                <Select
+                  value={String(appLogsRetentionDays)}
+                  options={APP_LOG_RETENTION_DAY_OPTIONS.map((days) => ({
+                    value: String(days),
+                    label: t("settings.system.appLogs.retentionDays").replace("{n}", String(days)),
+                  }))}
+                  onChange={(val) => setAppLogsRetentionDays(normalizeAppLogRetentionDays(val))}
+                  className="w-32"
+                  disabled={!appLogsEnabled}
+                />
+              </SettingRow>
+
+              <div className="space-y-2">
+                <span className="text-sm font-medium">{t("settings.system.appLogs.location")}</span>
+                <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+                  <div className="min-w-0 overflow-hidden">
+                    <div
+                      className="w-full min-w-0 overflow-hidden truncate rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+                      title={isLoadingAppLogInfo ? "..." : (appLogInfo?.path || "-")}
+                    >
+                      {isLoadingAppLogInfo ? "..." : (appLogInfo?.path || "-")}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadAppLogInfo}
+                    disabled={isLoadingAppLogInfo}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <RefreshCw size={14} className={isLoadingAppLogInfo ? "animate-spin" : ""} />
+                    {t("settings.system.refresh")}
+                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleOpenAppLogsDir}
+                        className="shrink-0"
+                      >
+                        <FolderOpen size={16} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("settings.system.appLogs.openFolder")}</TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span>
+                    {t("settings.system.appLogs.size")}: {formatBytes(appLogInfo?.totalSize ?? 0)}
+                  </span>
+                  <span>
+                    {t("settings.system.appLogs.files").replace("{count}", String(appLogInfo?.fileCount ?? 0))}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearAppLogs}
+                  disabled={isClearingAppLogs || (appLogInfo?.fileCount ?? 0) === 0}
+                  className="gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  {t("settings.system.appLogs.clear")}
+                </Button>
+                {appLogClearResult && (
+                  <span className="text-xs text-muted-foreground">
+                    {t("settings.system.appLogs.cleared").replace("{count}", String(appLogClearResult.deletedCount))}
+                  </span>
+                )}
+              </div>
+            </SettingCard>
+
+            <p className="text-xs text-muted-foreground">
+              {t("settings.system.appLogs.hint")}
+            </p>
 
           <SectionHeader title={t("settings.system.crashLogs.title")} />
             <SettingCard className="space-y-3 py-4">

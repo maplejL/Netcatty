@@ -5,6 +5,7 @@ import {
   normalizeHibernateKeepRendererCount,
   normalizeHibernateReplayChunkBytes,
 } from '../terminalHibernate';
+import { DEFAULT_TERMINAL_SCROLL_SENSITIVITY, normalizeScrollSensitivity } from '../terminalScroll';
 
 // Terminal appearance settings
 export type CursorShape = 'block' | 'bar' | 'underline';
@@ -62,6 +63,7 @@ export interface TerminalSettings {
   scrollOnPaste: boolean; // Scroll terminal to bottom on paste
 
   smoothScrolling: boolean; // Animate viewport scrolling instead of jumping instantly
+  scrollSensitivity: number; // xterm mouse-wheel scroll speed multiplier
 
   // Mouse
   rightClickBehavior: RightClickBehavior;
@@ -320,6 +322,7 @@ export const normalizeTerminalSettings = (
     keywordHighlightRules: normalizeKeywordHighlightRules(
       mergedSettings.keywordHighlightRules,
     ),
+    scrollSensitivity: normalizeScrollSensitivity(mergedSettings.scrollSensitivity),
   };
 };
 
@@ -346,6 +349,7 @@ const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   scrollOnKeyPress: false,
   scrollOnPaste: true,
   smoothScrolling: false,
+  scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
   rightClickBehavior: 'context-menu',
   middleClickBehavior: 'paste',
   copyOnSelect: false,
@@ -472,6 +476,11 @@ export interface TerminalSession {
   dynamicTitle?: string;
   /** Sticky coding CLI provider detected from launch command or window title */
   codingCliProviderId?: CodingCliProviderId;
+  /**
+   * Sticky run-phase override (e.g. completed after resume banner).
+   * Title-derived busy/waiting/failed still wins while the agent is active.
+   */
+  codingCliRunPhase?: import('../codingCliTitleParse').CodingCliActivityPhase | null;
   /**
    * When this local session was opened via Agent history jump, keep writing
    * updates back to that history row instead of creating a duplicate.

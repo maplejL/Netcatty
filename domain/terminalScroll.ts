@@ -1,5 +1,25 @@
 import type { TerminalSettings } from "./models";
 
+/** xterm `scrollSensitivity` default is 1; slightly slower is easier to control on Windows wheels. */
+export const DEFAULT_TERMINAL_SCROLL_SENSITIVITY = 0.5;
+export const MIN_TERMINAL_SCROLL_SENSITIVITY = 0.2;
+export const MAX_TERMINAL_SCROLL_SENSITIVITY = 3;
+const FAST_SCROLL_SENSITIVITY_MULTIPLIER = 5;
+
+export const normalizeScrollSensitivity = (value: unknown): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_TERMINAL_SCROLL_SENSITIVITY;
+  }
+  const clamped = Math.min(
+    MAX_TERMINAL_SCROLL_SENSITIVITY,
+    Math.max(MIN_TERMINAL_SCROLL_SENSITIVITY, value),
+  );
+  return Math.round(clamped * 10) / 10;
+};
+
+export const resolveFastScrollSensitivity = (scrollSensitivity: number): number =>
+  Math.max(1, normalizeScrollSensitivity(scrollSensitivity) * FAST_SCROLL_SENSITIVITY_MULTIPLIER);
+
 const hasPrintableTerminalInput = (data: string): boolean => {
   if (data.includes("\x1b")) {
     return false;

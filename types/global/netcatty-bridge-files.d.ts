@@ -58,6 +58,39 @@ declare global {
     clearCrashLogs?(): Promise<{ deletedCount: number }>;
     openCrashLogsDir?(): Promise<{ success: boolean }>;
 
+    writeAppLogs?(entries: Array<{
+      level: "trace" | "debug" | "info" | "warn" | "error";
+      source: string;
+      message: string;
+      extra?: unknown;
+      ts?: string;
+    }>): Promise<{ written: number }>;
+    setAppLogConfig?(config: {
+      enabled?: boolean;
+      retentionDays?: number;
+      minLevel?: "trace" | "debug" | "info" | "warn" | "error";
+    }): Promise<{
+      enabled: boolean;
+      retentionDays: number;
+      minLevel: string;
+      path: string;
+      exists: boolean;
+      fileCount: number;
+      totalSize: number;
+    }>;
+    getAppLogInfo?(): Promise<{
+      enabled: boolean;
+      retentionDays: number;
+      minLevel: string;
+      path: string;
+      exists: boolean;
+      fileCount: number;
+      totalSize: number;
+    }>;
+    getAppLogs?(): Promise<Array<{ fileName: string; date: string; size: number }>>;
+    clearAppLogs?(): Promise<{ deletedCount: number }>;
+    openAppLogsDir?(): Promise<{ success: boolean }>;
+
     // Temp directory management
     getTempDirInfo?(): Promise<{ path: string; fileCount: number; totalSize: number }>;
     clearTempDir?(): Promise<{ deletedCount: number; failedCount: number; error?: string }>;

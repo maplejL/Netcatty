@@ -16,6 +16,8 @@ import {
   STORAGE_KEY_SESSION_LOGS_FORMAT,
   STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED,
   STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_RETENTION_DAYS,
   STORAGE_KEY_SSH_DEEP_LINK_ENABLED,
   STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   STORAGE_KEY_RESTORE_PREVIOUS_SESSION,
@@ -65,6 +67,7 @@ import {
 } from './settingsStateDefaults';
 import { isTerminalSidePanelAutoOpenTab, type TerminalSidePanelAutoOpenTab } from '../../domain/terminalSidePanelAutoOpen';
 import { isWorkTabsLocation, type WorkTabsLocation } from '../../domain/workTabsLocation';
+import { normalizeAppLogRetentionDays } from '../../domain/appLogs';
 
 interface UseSettingsStorageSyncParams {
   enabled?: boolean;
@@ -106,6 +109,8 @@ interface UseSettingsStorageSyncParams {
   sessionLogsFormat: SessionLogFormat;
   sessionLogsTimestampsEnabled: boolean;
   sshDebugLogsEnabled: boolean;
+  appLogsEnabled: boolean;
+  appLogsRetentionDays: number;
   terminalCommandTimingDebugEnabled: boolean;
   sshDeepLinkEnabled: boolean;
   globalHotkeyEnabled: boolean;
@@ -152,6 +157,8 @@ interface UseSettingsStorageSyncParams {
   setSessionLogsFormat: Dispatch<SetStateAction<SessionLogFormat>>;
   setSessionLogsTimestampsEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDebugLogsEnabled: Dispatch<SetStateAction<boolean>>;
+  setAppLogsEnabled: Dispatch<SetStateAction<boolean>>;
+  setAppLogsRetentionDays: Dispatch<SetStateAction<number>>;
   setTerminalCommandTimingDebugEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDeepLinkEnabledState: (enabled: boolean) => void;
   setGlobalHotkeyEnabled: Dispatch<SetStateAction<boolean>>;
@@ -172,7 +179,7 @@ export function useSettingsStorageSync({
   sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
   sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
   showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
-  editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
+  editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, appLogsEnabled, appLogsRetentionDays, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
   globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
   setTheme, setLightUiThemeId, setDarkUiThemeId, setAccentMode, setCustomAccent,
   setCustomCSS, setUiFontFamilyId, setHotkeyScheme, setUiLanguage,
@@ -181,7 +188,7 @@ export function useSettingsStorageSync({
   setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
   setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpAutoRefreshOnTerminal, setSftpDefaultViewMode,
   setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setWorkTabsLocationState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
-  setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState,
+  setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setAppLogsEnabled, setAppLogsRetentionDays, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState,
   setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
   setSftpTransferConcurrencyState, applyIncomingCustomKeyBindings, mergeIncomingTerminalSettings,
 }: UseSettingsStorageSyncParams) {
@@ -195,7 +202,7 @@ export function useSettingsStorageSync({
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
     sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
-    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
+    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, appLogsEnabled, appLogsRetentionDays, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
   });
   settingsSnapshotRef.current = {
@@ -205,7 +212,7 @@ export function useSettingsStorageSync({
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
     sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
-    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
+    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, appLogsEnabled, appLogsRetentionDays, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
   };
 
@@ -367,6 +374,18 @@ export function useSettingsStorageSync({
         const newValue = e.newValue === 'true';
         if (newValue !== s.sshDebugLogsEnabled) {
           setSshDebugLogsEnabled(newValue);
+        }
+      }
+      if (e.key === STORAGE_KEY_APP_LOGS_ENABLED && e.newValue !== null) {
+        const newValue = e.newValue === 'true';
+        if (newValue !== s.appLogsEnabled) {
+          setAppLogsEnabled(newValue);
+        }
+      }
+      if (e.key === STORAGE_KEY_APP_LOGS_RETENTION_DAYS && e.newValue !== null) {
+        const newValue = normalizeAppLogRetentionDays(e.newValue);
+        if (newValue !== s.appLogsRetentionDays) {
+          setAppLogsRetentionDays(newValue);
         }
       }
       if (e.key === STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED && e.newValue !== null) {
@@ -542,6 +561,8 @@ export function useSettingsStorageSync({
     setSessionLogsTimestampsEnabled,
     setSshDeepLinkEnabledState,
     setSshDebugLogsEnabled,
+    setAppLogsEnabled,
+    setAppLogsRetentionDays,
     setTerminalCommandTimingDebugEnabled,
     setSftpAutoOpenSidebar,
     setSftpFollowTerminalCwd,

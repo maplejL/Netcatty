@@ -20,6 +20,8 @@ import {
   STORAGE_KEY_SESSION_LOGS_FORMAT,
   STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED,
   STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_RETENTION_DAYS,
   STORAGE_KEY_SSH_DEEP_LINK_ENABLED,
   STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   STORAGE_KEY_SFTP_AUTO_OPEN_SIDEBAR,
@@ -55,6 +57,7 @@ import {
 } from './settingsStateDefaults';
 import { isTerminalSidePanelAutoOpenTab, type TerminalSidePanelAutoOpenTab } from '../../domain/terminalSidePanelAutoOpen';
 import { isWorkTabsLocation, type WorkTabsLocation } from '../../domain/workTabsLocation';
+import { normalizeAppLogRetentionDays } from '../../domain/appLogs';
 
 interface UseSettingsIpcSyncParams {
   enabled?: boolean;
@@ -75,6 +78,8 @@ interface UseSettingsIpcSyncParams {
   setSessionLogsFormat: Dispatch<SetStateAction<SessionLogFormat>>;
   setSessionLogsTimestampsEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDebugLogsEnabled: Dispatch<SetStateAction<boolean>>;
+  setAppLogsEnabled: Dispatch<SetStateAction<boolean>>;
+  setAppLogsRetentionDays: Dispatch<SetStateAction<number>>;
   setTerminalCommandTimingDebugEnabled: Dispatch<SetStateAction<boolean>>;
   setSshDeepLinkEnabledState: (enabled: boolean) => void;
   setHotkeyScheme: Dispatch<SetStateAction<HotkeyScheme>>;
@@ -117,6 +122,8 @@ export function useSettingsIpcSync({
   setSessionLogsFormat,
   setSessionLogsTimestampsEnabled,
   setSshDebugLogsEnabled,
+  setAppLogsEnabled,
+  setAppLogsRetentionDays,
   setTerminalCommandTimingDebugEnabled,
   setSshDeepLinkEnabledState,
   setHotkeyScheme,
@@ -222,6 +229,13 @@ export function useSettingsIpcSync({
       if (key === STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED && typeof value === 'boolean') {
         setSshDebugLogsEnabled((prev) => (prev === value ? prev : value));
       }
+      if (key === STORAGE_KEY_APP_LOGS_ENABLED && typeof value === 'boolean') {
+        setAppLogsEnabled((prev) => (prev === value ? prev : value));
+      }
+      if (key === STORAGE_KEY_APP_LOGS_RETENTION_DAYS && (typeof value === 'number' || typeof value === 'string')) {
+        const next = normalizeAppLogRetentionDays(value);
+        setAppLogsRetentionDays((prev) => (prev === next ? prev : next));
+      }
       if (key === STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED && typeof value === 'boolean') {
         setTerminalCommandTimingDebugEnabled((prev) => (prev === value ? prev : value));
       }
@@ -318,6 +332,8 @@ export function useSettingsIpcSync({
     setSessionLogsTimestampsEnabled,
     setSshDeepLinkEnabledState,
     setSshDebugLogsEnabled,
+    setAppLogsEnabled,
+    setAppLogsRetentionDays,
     setTerminalCommandTimingDebugEnabled,
     setSftpAutoOpenSidebar,
     setSftpFollowTerminalCwd,

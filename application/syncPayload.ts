@@ -202,7 +202,7 @@ const SYNCABLE_TERMINAL_KEYS = [
   'fontLigatures', 'fontSmoothing', 'fontWeight', 'fontWeightBold', 'fallbackFont',
   'linePadding', 'cursorShape', 'cursorBlink', 'minimumContrastRatio',
   'altAsMeta', 'optionArrowWordJump', 'scrollOnInput', 'scrollOnOutput', 'scrollOnKeyPress', 'scrollOnPaste',
-  'smoothScrolling',
+  'smoothScrolling', 'scrollSensitivity',
   'rightClickBehavior', 'middleClickBehavior', 'copyOnSelect', 'middleClickPaste', 'wordSeparators',
   'linkModifier', 'keywordHighlightEnabled', 'keywordHighlightRules',
   'keepaliveInterval', 'keepaliveCountMax', 'disableBracketedPaste', 'clearWipesScrollback',

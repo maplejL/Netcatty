@@ -171,6 +171,8 @@ function createBridgeRegistrar(context) {
     globalShortcutBridge.init(deps);
     aiBridge.init(deps);
     crashLogBridge.init(deps);
+    const appLogBridge = require("../bridges/appLogBridge.cjs");
+    appLogBridge.init(deps);
   
     // Initialize compress upload bridge with transferBridge dependency
     compressUploadBridge.init({
@@ -222,6 +224,7 @@ function createBridgeRegistrar(context) {
     autoUpdateBridge.registerHandlers(ipcMain);
     aiBridge.registerHandlers(ipcMain);
     crashLogBridge.registerHandlers(ipcMain);
+    appLogBridge.registerHandlers(ipcMain);
     vaultBackupBridge.registerHandlers(ipcMain, electronModule);
     require("../bridges/finalshellCryptoBridge.cjs").registerHandlers(ipcMain);
   

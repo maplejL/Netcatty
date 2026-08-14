@@ -105,6 +105,21 @@ export const zhCNCoreMessages: Messages = {
   'settings.system.credentials.unavailableHint': '在其他用户或机器上加密的凭据无法在此处解密。请在当前设备重新输入并保存凭据。',
   'settings.system.credentials.portabilityHint': '云同步可跨设备，因为使用主密钥加密；本地 safeStorage 加密仅绑定当前系统用户/设备。',
 
+  // Settings > System > Diagnostic Logs
+  'settings.system.appLogs.title': '诊断日志',
+  'settings.system.appLogs.enable': '启用诊断日志',
+  'settings.system.appLogs.enableDesc': '持久化应用与主进程的 trace 级事件。不会写入密码或密钥。',
+  'settings.system.appLogs.retention': '保留天数',
+  'settings.system.appLogs.retentionDesc': '超过该天数的日志文件会自动删除。',
+  'settings.system.appLogs.retentionDays': '{n} 天',
+  'settings.system.appLogs.location': '日志目录',
+  'settings.system.appLogs.openFolder': '打开文件夹',
+  'settings.system.appLogs.size': '大小',
+  'settings.system.appLogs.files': '{count} 个文件',
+  'settings.system.appLogs.clear': '清除日志',
+  'settings.system.appLogs.cleared': '已清除 {count} 个日志文件。',
+  'settings.system.appLogs.hint': '日志按天写入 JSONL，级别为 trace。跟随目录、SFTP 或 SSH 工作目录探测异常时，用这里排查。',
+
   // Settings > System > Crash Logs
   'settings.system.crashLogs.title': '崩溃日志',
   'settings.system.crashLogs.description': '查看主进程错误日志，帮助诊断异常行为。',

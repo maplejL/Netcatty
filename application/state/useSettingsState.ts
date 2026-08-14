@@ -39,6 +39,8 @@ import {
   STORAGE_KEY_SESSION_LOGS_FORMAT,
   STORAGE_KEY_SESSION_LOGS_TIMESTAMPS_ENABLED,
   STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_ENABLED,
+  STORAGE_KEY_APP_LOGS_RETENTION_DAYS,
   STORAGE_KEY_SSH_DEEP_LINK_ENABLED,
   STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   STORAGE_KEY_TOGGLE_WINDOW_HOTKEY,
@@ -76,6 +78,7 @@ import { uiFontStore, useUIFontsLoaded } from './uiFontStore';
 import { localStorageAdapter } from '../../infrastructure/persistence/localStorageAdapter';
 import { netcattyBridge } from '../../infrastructure/services/netcattyBridge';
 import { resolveSftpTransferConcurrency } from './sftp/transferConcurrency';
+import { normalizeAppLogRetentionDays } from '../../domain/appLogs';
 import {
   DEFAULT_ACCENT_MODE,
   DEFAULT_CUSTOM_ACCENT,
@@ -101,6 +104,8 @@ import {
   DEFAULT_SHELL_ONLY_TAB_NUMBER_SHORTCUTS,
   DEFAULT_DISABLE_TERMINAL_FONT_ZOOM,
   DEFAULT_SSH_DEBUG_LOGS_ENABLED,
+  DEFAULT_APP_LOGS_ENABLED,
+  DEFAULT_APP_LOGS_RETENTION_DAYS,
   DEFAULT_SSH_DEEP_LINK_ENABLED,
   DEFAULT_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
   DEFAULT_TERMINAL_THEME,
@@ -336,6 +341,13 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
   const [sshDebugLogsEnabled, setSshDebugLogsEnabled] = useState<boolean>(() => {
     const stored = readStoredString(STORAGE_KEY_SSH_DEBUG_LOGS_ENABLED);
     return stored === 'true' ? true : DEFAULT_SSH_DEBUG_LOGS_ENABLED;
+  });
+  const [appLogsEnabled, setAppLogsEnabled] = useState<boolean>(() => {
+    const stored = readStoredString(STORAGE_KEY_APP_LOGS_ENABLED);
+    return stored === 'false' ? false : DEFAULT_APP_LOGS_ENABLED;
+  });
+  const [appLogsRetentionDays, setAppLogsRetentionDays] = useState<number>(() => {
+    return normalizeAppLogRetentionDays(readStoredString(STORAGE_KEY_APP_LOGS_RETENTION_DAYS));
   });
   const [terminalCommandTimingDebugEnabled, setTerminalCommandTimingDebugEnabled] = useState<boolean>(() => {
     const stored = readStoredString(STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED);
@@ -619,6 +631,11 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     if (storedSshDebugLogsEnabled === 'true' || storedSshDebugLogsEnabled === 'false') {
       setSshDebugLogsEnabled(storedSshDebugLogsEnabled === 'true');
     }
+    const storedAppLogsEnabled = readStoredString(STORAGE_KEY_APP_LOGS_ENABLED);
+    if (storedAppLogsEnabled === 'true' || storedAppLogsEnabled === 'false') {
+      setAppLogsEnabled(storedAppLogsEnabled === 'true');
+    }
+    setAppLogsRetentionDays(normalizeAppLogRetentionDays(readStoredString(STORAGE_KEY_APP_LOGS_RETENTION_DAYS)));
     const storedTerminalCommandTimingDebugEnabled = readStoredString(STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED);
     if (storedTerminalCommandTimingDebugEnabled === 'true' || storedTerminalCommandTimingDebugEnabled === 'false') {
       setTerminalCommandTimingDebugEnabled(storedTerminalCommandTimingDebugEnabled === 'true');
@@ -755,6 +772,8 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSessionLogsFormat,
     setSessionLogsTimestampsEnabled,
     setSshDebugLogsEnabled,
+    setAppLogsEnabled,
+    setAppLogsRetentionDays,
     setTerminalCommandTimingDebugEnabled,
     setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setHotkeyScheme,
@@ -804,7 +823,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     sftpDoubleClickBehavior, sftpAutoSync, sftpShowHiddenFiles,
     sftpUseCompressedUpload, sftpAutoOpenSidebar, sftpFollowTerminalCwd, sftpAutoRefreshOnTerminal, sftpDefaultViewMode,
     showRecentHosts, showOnlyUngroupedHostsInRoot, showSftpTab, showHostTreeSidebar, workTabsLocation, terminalSidePanelAutoOpen, terminalSidePanelAutoOpenTab, shellOnlyTabNumberShortcuts, disableTerminalFontZoom, restorePreviousSession, restoreTerminalCwd,
-    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
+    editorWordWrap, sessionLogsEnabled, sessionLogsDir, sessionLogsFormat, sessionLogsTimestampsEnabled, sshDebugLogsEnabled, appLogsEnabled, appLogsRetentionDays, terminalCommandTimingDebugEnabled, sshDeepLinkEnabled,
     globalHotkeyEnabled, autoUpdateEnabled, windowOpacity, appIconVariant,
     setTheme, setLightUiThemeId, setDarkUiThemeId, setAccentMode, setCustomAccent,
     setCustomCSS, setUiFontFamilyId, setHotkeyScheme, setUiLanguage,
@@ -813,7 +832,7 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSftpDoubleClickBehavior, setSftpAutoSync, setSftpShowHiddenFiles,
     setSftpUseCompressedUpload, setSftpAutoOpenSidebar, setSftpFollowTerminalCwd, setSftpAutoRefreshOnTerminal, setSftpDefaultViewMode,
     setShowRecentHostsState, setShowOnlyUngroupedHostsInRootState, setShowSftpTabState, setShowHostTreeSidebarState, setWorkTabsLocationState, setTerminalSidePanelAutoOpenState, setTerminalSidePanelAutoOpenTabState, setShellOnlyTabNumberShortcutsState, setDisableTerminalFontZoomState, setRestorePreviousSessionState, setRestoreTerminalCwdState,
-    setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
+    setEditorWordWrapState, setSessionLogsEnabled, setSessionLogsDir, setSessionLogsFormat, setSessionLogsTimestampsEnabled, setSshDebugLogsEnabled, setAppLogsEnabled, setAppLogsRetentionDays, setTerminalCommandTimingDebugEnabled, setSshDeepLinkEnabledState: applyIncomingSshDeepLinkEnabled,
     setGlobalHotkeyEnabled, setWindowOpacity, setAppIconVariant, setAutoUpdateEnabled, setWorkspaceFocusStyleState,
     setSftpTransferConcurrencyState, applyIncomingCustomKeyBindings, mergeIncomingTerminalSettings,
   });
@@ -1080,6 +1099,19 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
   }, [sshDebugLogsEnabled, notifySettingsChanged]);
 
   useEffect(() => {
+    localStorageAdapter.writeString(STORAGE_KEY_APP_LOGS_ENABLED, appLogsEnabled ? 'true' : 'false');
+    localStorageAdapter.writeString(STORAGE_KEY_APP_LOGS_RETENTION_DAYS, String(appLogsRetentionDays));
+    void netcattyBridge.get()?.setAppLogConfig?.({
+      enabled: appLogsEnabled,
+      retentionDays: appLogsRetentionDays,
+      minLevel: 'trace',
+    });
+    if (!persistMountedRef.current) return;
+    notifySettingsChanged(STORAGE_KEY_APP_LOGS_ENABLED, appLogsEnabled);
+    notifySettingsChanged(STORAGE_KEY_APP_LOGS_RETENTION_DAYS, appLogsRetentionDays);
+  }, [appLogsEnabled, appLogsRetentionDays, notifySettingsChanged]);
+
+  useEffect(() => {
     localStorageAdapter.writeString(
       STORAGE_KEY_TERMINAL_COMMAND_TIMING_DEBUG_ENABLED,
       terminalCommandTimingDebugEnabled ? 'true' : 'false',
@@ -1344,6 +1376,10 @@ export const useSettingsState = (options: { enableSettingsSync?: boolean; enable
     setSessionLogsTimestampsEnabled,
     sshDebugLogsEnabled,
     setSshDebugLogsEnabled,
+    appLogsEnabled,
+    setAppLogsEnabled,
+    appLogsRetentionDays,
+    setAppLogsRetentionDays,
     terminalCommandTimingDebugEnabled,
     setTerminalCommandTimingDebugEnabled,
     sshDeepLinkEnabled,
