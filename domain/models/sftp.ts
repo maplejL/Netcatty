@@ -26,6 +26,8 @@ export interface SftpConnection {
   homeDir?: string;
   /** True when this SFTP connection reuses an existing terminal SSH session */
   reusedConnection?: boolean;
+  /** True when this connection was opened with host SFTP Sudo / sudo sftp-server */
+  sudo?: boolean;
 }
 
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'failed' | 'cancelled';

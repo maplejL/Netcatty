@@ -168,7 +168,7 @@ declare global {
     getSessionPwd?(
       sessionId: string,
       options?: { allowHomeFallback?: boolean },
-    ): Promise<{ success: boolean; cwd?: string; error?: string }>;
+    ): Promise<{ success: boolean; cwd?: string; error?: string; needSudoPid?: string }>;
     /**
      * Get metadata about an already-connected SSH session — currently the
      * SSH server identification string (the `software` part of the

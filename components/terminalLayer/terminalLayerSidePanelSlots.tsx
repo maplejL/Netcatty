@@ -204,6 +204,8 @@ function SidePanelSftpSlotInner({
         onGetTerminalCwd={getTerminalCwd}
         activeTerminalCwd={isVisible ? live.activeTerminalCwd : null}
         sftpSoftRefreshRevision={isVisible ? live.sftpSoftRefreshRevision : 0}
+        sftpFollowSudoRevision={live.sftpFollowSudoRevision}
+        sftpFollowSudoSessionId={live.sftpFollowSudoSessionId}
         sftpFollowTerminalCwd={sftpFollowTerminalCwd}
         onSftpFollowTerminalCwdChange={handleFollowTerminalCwdChange}
         onInsertPathToTerminal={insertPathIntoTerminal ? handleInsertPathToTerminal : undefined}

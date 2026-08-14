@@ -1,4 +1,59 @@
 /* eslint-disable no-undef */
+const { isDecimalPid, parseSessionPwdStdout } = require("./sessionPwdParse.cjs");
+const { readlinkCwdViaSudoSftp } = require("./readlinkCwdViaSudoSftp.cjs");
+const appLogBridge = require("../appLogBridge.cjs");
+
+function loadSftpClients() {
+  try {
+    return require("../sftpBridge.cjs").getSftpClients();
+  } catch {
+    return null;
+  }
+}
+
+function readlinkCwdWithSudo(conn, pid, password) {
+  return new Promise((resolve) => {
+    if (!conn || !isDecimalPid(pid)) {
+      resolve(null);
+      return;
+    }
+    let settled = false;
+    let activeStream = null;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      try { activeStream?.close?.(); } catch { /* ignore */ }
+      settle(null);
+    }, 4000);
+    const cmd = `sudo -S -p '' readlink /proc/${pid}/cwd`;
+    try {
+      conn.exec(cmd, (err, stream) => {
+        if (err) {
+          settle(null);
+          return;
+        }
+        activeStream = stream;
+        let out = "";
+        stream.on("data", (chunk) => { out += chunk.toString("utf8"); });
+        stream.stderr?.on("data", () => { /* swallow sudo prompt/noise */ });
+        if (typeof password === "string" && password.length > 0) {
+          try { stream.write(`${password}\n`); } catch { /* ignore */ }
+        }
+        stream.on("close", () => {
+          const parsed = parseSessionPwdStdout(out);
+          settle(parsed.cwd || null);
+        });
+      });
+    } catch {
+      settle(null);
+    }
+  });
+}
+
 function createSessionOpsApi(ctx) {
   with (ctx) {
     function getTcpLatencyTarget(session) {
@@ -232,6 +287,7 @@ function createSessionOpsApi(ctx) {
       const session = sessions.get(sessionId);
     
       if (!session || !session.conn) {
+        appLogBridge.writeLog("trace", "ssh.getSessionPwd", "session missing", { sessionId });
         return { success: false, error: 'Session not found or not connected' };
       }
     
@@ -240,9 +296,17 @@ function createSessionOpsApi(ctx) {
       // shell are both children of the same per-connection sshd process,
       // so we find the shell as a sibling via $PPID.
       return new Promise((resolve) => {
+        let settled = false;
+        const settle = (result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(result);
+        };
         const timer = setTimeout(() => {
-          resolve({ success: false, error: 'Timeout getting pwd' });
-        }, 5000);
+          appLogBridge.writeLog("warn", "ssh.getSessionPwd", "timeout", { sessionId, allowHomeFallback });
+          settle({ success: false, error: 'Timeout getting pwd' });
+        }, 8000);
     
         // POSIX sh script that:
         //   1. Finds the user's interactive shell on the same SSH connection
@@ -343,14 +407,22 @@ function createSessionOpsApi(ctx) {
       pid=$(find_active_shell "$login")
       [ -n "$pid" ] || pid="$login"
       cwd=$(readlink /proc/$pid/cwd 2>/dev/null)
-      # /proc/<pid>/cwd is only readable for same-uid processes (ptrace perms), so
-      # this unprivileged exec channel cannot read a su'd / sudo'd shell owned by
-      # another user. Fall back to the same-uid login shell's cwd before giving up
-      # to the home directory (#1065 review).
-      if [ -z "$cwd" ] && [ "$pid" != "$login" ] && [ "$ALLOW_FALLBACK" = "1" ]; then
-        cwd=$(readlink /proc/$login/cwd 2>/dev/null)
+      # /proc/<pid>/cwd is only readable for same-uid processes. After sudo/su
+      # the unprivileged exec cannot read the new shell; try passwordless sudo
+      # before asking the caller to retry with a password on stdin.
+      if [ -z "$cwd" ] && [ "$pid" != "$login" ]; then
+        cwd=$(sudo -n readlink /proc/$pid/cwd 2>/dev/null)
       fi
-      [ -n "$cwd" ] && printf '%s\\n' "$cwd" && exit 0
+      if [ -n "$cwd" ]; then
+        printf '%s\\n' "$cwd"
+        exit 0
+      fi
+      # Do not fall back to the login shell cwd — that is how follow-cwd
+      # jumped to /home/<user> while the sudo'd shell was in another tree.
+      if [ "$pid" != "$login" ]; then
+        printf 'NEED_SUDO_CWD %s\\n' "$pid"
+        exit 2
+      fi
     fi
     [ "$ALLOW_FALLBACK" = "1" ] || exit 1
     emit_home() {
@@ -375,9 +447,12 @@ function createSessionOpsApi(ctx) {
     
         session.conn.exec(cmd, (err, stream) => {
           if (err) {
-            clearTimeout(timer);
             log('[getSessionPwd] exec error:', err.message);
-            resolve({ success: false, error: err.message });
+            appLogBridge.writeLog("warn", "ssh.getSessionPwd", "exec error", {
+              sessionId,
+              error: err.message,
+            });
+            settle({ success: false, error: err.message });
             return;
           }
           let out = '';
@@ -385,14 +460,67 @@ function createSessionOpsApi(ctx) {
           stream.on('data', (d) => { out += d.toString(); });
           stream.stderr?.on('data', (d) => { errOut += d.toString(); });
           stream.on('close', (code) => {
-            clearTimeout(timer);
-            const path = out.trim();
-            log('[getSessionPwd]', { stdout: path, stderr: errOut.trim(), exitCode: code });
-            if (path && path.startsWith('/')) {
-              resolve({ success: true, cwd: path });
-            } else {
-              resolve({ success: false, error: 'Could not determine cwd' });
+            const parsed = parseSessionPwdStdout(out);
+            log('[getSessionPwd]', {
+              cwd: parsed.cwd || '',
+              needSudoPid: parsed.needSudoPid || '',
+              stderr: errOut.trim(),
+              exitCode: code,
+            });
+            appLogBridge.writeLog("trace", "ssh.getSessionPwd", "probe closed", {
+              sessionId,
+              cwd: parsed.cwd || null,
+              needSudoPid: parsed.needSudoPid || null,
+              exitCode: code,
+              allowHomeFallback,
+              stderr: errOut.trim().slice(0, 300),
+            });
+            if (parsed.cwd) {
+              settle({ success: true, cwd: parsed.cwd });
+              return;
             }
+            const sudoPassword =
+              (typeof session.systemManagerSudoPassword === 'string' && session.systemManagerSudoPassword)
+              || (typeof session.sudoProbePassword === 'string' && session.sudoProbePassword)
+              || '';
+            const finishNeedSudo = (cwd, via) => {
+              appLogBridge.writeLog("trace", "ssh.getSessionPwd", "elevated cwd result", {
+                sessionId,
+                cwd: cwd || null,
+                via,
+                needSudoPid: parsed.needSudoPid,
+              });
+              if (cwd) settle({ success: true, cwd });
+              else settle({
+                success: false,
+                error: 'Could not determine cwd',
+                needSudoPid: parsed.needSudoPid,
+              });
+            };
+            const trySudoSftpReadlink = () => readlinkCwdViaSudoSftp(
+              loadSftpClients(),
+              sessionId,
+              parsed.needSudoPid,
+            );
+            if (parsed.needSudoPid && sudoPassword) {
+              appLogBridge.writeLog("trace", "ssh.getSessionPwd", "retry readlink with sudo", {
+                sessionId,
+                needSudoPid: parsed.needSudoPid,
+              });
+              readlinkCwdWithSudo(session.conn, parsed.needSudoPid, sudoPassword).then((cwd) => {
+                if (cwd) {
+                  finishNeedSudo(cwd, "sudo-exec");
+                  return;
+                }
+                trySudoSftpReadlink().then((viaSftp) => finishNeedSudo(viaSftp, "sudo-sftp"));
+              });
+              return;
+            }
+            if (parsed.needSudoPid) {
+              trySudoSftpReadlink().then((viaSftp) => finishNeedSudo(viaSftp, "sudo-sftp"));
+              return;
+            }
+            settle({ success: false, error: 'Could not determine cwd' });
           });
         });
       });

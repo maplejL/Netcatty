@@ -374,7 +374,7 @@ test("remote SSH folder drop uses SFTP to preserve directory structure", async (
   assert.equal(openedEntries, folderEntries);
 });
 
-test("fresh cwd resolution falls back to the renderer cwd when backend probe has no real cwd", async () => {
+test("fresh cwd resolution does not fall back to a stale renderer cwd when backend probe has no real cwd", async () => {
   const cwd = await resolvePreferredTerminalCwd({
     rendererCwd: "/srv/app/current",
     sessionId: "session-1",
@@ -385,5 +385,5 @@ test("fresh cwd resolution falls back to the renderer cwd when backend probe has
     },
   });
 
-  assert.equal(cwd, "/srv/app/current");
+  assert.equal(cwd, null);
 });

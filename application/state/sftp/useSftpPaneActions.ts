@@ -14,6 +14,7 @@ import {
   joinPath,
   normalizeSftpPathForCompare,
   shouldClearSftpFilterForPathChange,
+  shouldUseBackgroundSftpSoftRefresh,
 } from "./utils";
 import { buildCacheKey, setSharedRemoteHostCache } from "./sharedRemoteHostCache";
 
@@ -45,9 +46,27 @@ interface UseSftpPaneActionsParams {
 
 export type SftpNavigateResult = "reached" | "failed" | "aborted";
 
+export type SftpNavigateOptions = {
+  force?: boolean;
+  tabId?: string;
+  preserveSelection?: boolean;
+  /**
+   * Terminal-driven soft refresh: re-list without locking the pane when files
+   * are already visible, and fail silently so a hung list cannot leave the
+   * spinner up forever after `tail > a.txt` style commands.
+   */
+  soft?: boolean;
+};
+
+export type SftpRefreshOptions = {
+  tabId?: string;
+  preserveSelection?: boolean;
+  soft?: boolean;
+};
+
 interface UseSftpPaneActionsResult {
-  navigateTo: (side: "left" | "right", path: string, options?: { force?: boolean; tabId?: string; preserveSelection?: boolean }) => Promise<SftpNavigateResult>;
-  refresh: (side: "left" | "right", options?: { tabId?: string; preserveSelection?: boolean }) => Promise<void>;
+  navigateTo: (side: "left" | "right", path: string, options?: SftpNavigateOptions) => Promise<SftpNavigateResult>;
+  refresh: (side: "left" | "right", options?: SftpRefreshOptions) => Promise<void>;
   navigateUp: (side: "left" | "right") => Promise<void>;
   openEntry: (side: "left" | "right", entry: SftpFileEntry) => Promise<void>;
   toggleSelection: (side: "left" | "right", fileName: string, multiSelect: boolean) => void;
@@ -161,7 +180,7 @@ export const useSftpPaneActions = ({
     async (
       side: "left" | "right",
       path: string,
-      options?: { force?: boolean; tabId?: string; preserveSelection?: boolean },
+      options?: SftpNavigateOptions,
     ): Promise<SftpNavigateResult> => {
       const sideTabs = side === "left" ? leftTabsRef.current : rightTabsRef.current;
       // When tabId is specified, target that specific tab instead of the active one.
@@ -173,16 +192,40 @@ export const useSftpPaneActions = ({
         : getActivePane(side);
 
       if (!pane?.connection || !targetTabId) {
+        logger.trace("[SftpNavigate] aborted: no pane", { side, path });
         return "aborted";
       }
 
       const connectionId = pane.connection.id;
       const requestId = ++navSeqRef.current[side];
+      logger.trace("[SftpNavigate] start", {
+        side,
+        path,
+        requestId,
+        soft: !!options?.soft,
+        currentPath: pane.connection.currentPath,
+        connectionId,
+        tabId: targetTabId,
+      });
       const cacheKey = makeCacheKey(connectionId, path, pane.filenameEncoding);
       const clearFilterForPathChange = shouldClearSftpFilterForPathChange(pane.connection.currentPath, path);
       const nextConfirmedFilter = getSftpFilterAfterPathChange(pane.connection.currentPath, path, pane.filter);
       const preserveSelection = Boolean(options?.preserveSelection)
         && pane.connection.currentPath === path;
+      const backgroundSoft = shouldUseBackgroundSftpSoftRefresh({
+        soft: options?.soft,
+        currentPath: pane.connection.currentPath,
+        targetPath: path,
+        existingFileCount: pane.files.length,
+      });
+      const releaseLoadingIfStillOwner = () => {
+        if (backgroundSoft) return;
+        if (tabNavSeqRef.current.get(targetTabId) !== requestId) return;
+        updateTab(side, targetTabId, (prev) => {
+          if (prev.connection?.id !== connectionId || !prev.loading) return prev;
+          return { ...prev, loading: false };
+        });
+      };
       const cached = options?.force
         ? undefined
         : dirCacheRef.current.get(cacheKey);
@@ -229,6 +272,7 @@ export const useSftpPaneActions = ({
             filenameEncoding: pane.filenameEncoding,
           });
         }
+        logger.trace("[SftpNavigate] reached from cache", { side, path, requestId, connectionId });
         return "reached";
       }
 
@@ -253,8 +297,9 @@ export const useSftpPaneActions = ({
       const previousFilter = confirmed.filter;
       tabNavSeqRef.current.set(targetTabId, requestId);
       // Keep existing files visible during loading — the loading overlay
-      // (pointer-events-none) prevents interaction. This avoids blanking a tab
-      // that gets superseded by another tab navigating on the same side.
+      // (pointer-events-none) prevents interaction. Soft same-path refreshes
+      // do not force loading=true so terminal redirects stay interactive; if a
+      // hard navigation already set loading, leave it for that owner.
       updateTab(side, targetTabId, (prev) => ({
         ...prev,
         connection: prev.connection
@@ -262,8 +307,8 @@ export const useSftpPaneActions = ({
           : null,
         selectedFiles: preserveSelection ? previousSelection : EMPTY_SET,
         filter: clearFilterForPathChange ? "" : prev.filter,
-        loading: true,
-        error: null,
+        loading: backgroundSoft ? prev.loading : true,
+        error: backgroundSoft ? prev.error : null,
       }));
 
       try {
@@ -280,12 +325,19 @@ export const useSftpPaneActions = ({
             if (options?.tabId) {
               updateTab(side, targetTabId, (prev) => ({
                 ...prev,
-                error: "sftp.error.sessionLost",
+                error: backgroundSoft ? prev.error : "sftp.error.sessionLost",
                 loading: false,
               }));
+            } else if (backgroundSoft) {
+              updateTab(side, targetTabId, (prev) => (
+                prev.connection?.id === connectionId
+                  ? { ...prev, loading: false }
+                  : prev
+              ));
             } else {
               handleSessionError(side, new Error("SFTP session lost"));
             }
+            logger.trace("[SftpNavigate] aborted: session lost", { side, path, requestId, connectionId });
             return "aborted";
           }
 
@@ -298,9 +350,15 @@ export const useSftpPaneActions = ({
               if (options?.tabId) {
                 updateTab(side, targetTabId, (prev) => ({
                   ...prev,
-                  error: "sftp.error.sessionLost",
+                  error: backgroundSoft ? prev.error : "sftp.error.sessionLost",
                   loading: false,
                 }));
+              } else if (backgroundSoft) {
+                updateTab(side, targetTabId, (prev) => (
+                  prev.connection?.id === connectionId
+                    ? { ...prev, loading: false }
+                    : prev
+                ));
               } else {
                 handleSessionError(side, err as Error);
               }
@@ -315,6 +373,8 @@ export const useSftpPaneActions = ({
           // a connect/disconnect. Check if THIS tab's request is still current.
           if (tabNavSeqRef.current.get(targetTabId) !== requestId) {
             // This tab also has a newer navigation — drop completely.
+            releaseLoadingIfStillOwner();
+            logger.trace("[SftpNavigate] aborted: superseded", { side, path, requestId, connectionId });
             return "aborted";
           }
           // Side was superseded by another tab, but this tab's request is
@@ -359,14 +419,16 @@ export const useSftpPaneActions = ({
             filenameEncoding: pane.filenameEncoding,
           });
         }
+        logger.trace("[SftpNavigate] reached", { side, path, requestId, connectionId, fileCount: files.length });
         return "reached";
       } catch (err) {
         if (navSeqRef.current[side] !== requestId) {
           if (tabNavSeqRef.current.get(targetTabId) !== requestId) {
+            releaseLoadingIfStillOwner();
             return "aborted";
           }
           // Side superseded by another tab, but this tab's request is
-          // current — fall through to show the error on this tab.
+          // current — fall through to restore/error handling for this tab.
         }
         let navigationFailed = false;
         updateTab(side, targetTabId, (prev) => {
@@ -374,6 +436,18 @@ export const useSftpPaneActions = ({
             return prev;
           }
           navigationFailed = true;
+          // Soft refresh: keep the visible list and never surface a full-pane
+          // error for background terminal-driven re-lists.
+          if (backgroundSoft || options?.soft) {
+            return {
+              ...prev,
+              connection: { ...prev.connection, currentPath: previousPath },
+              files: previousFiles,
+              selectedFiles: previousSelection,
+              filter: getSftpFilterAfterPathChangeError(clearFilterForPathChange, previousFilter, prev.filter),
+              loading: false,
+            };
+          }
           return {
             ...prev,
             connection: { ...prev.connection, currentPath: previousPath },
@@ -384,6 +458,15 @@ export const useSftpPaneActions = ({
               err instanceof Error ? err.message : "Failed to list directory",
             loading: false,
           };
+        });
+        logger.trace("[SftpNavigate] failed", {
+          side,
+          path,
+          requestId,
+          connectionId,
+          navigationFailed,
+          error: err instanceof Error ? err.message : String(err),
+          soft: !!options?.soft,
         });
         return navigationFailed ? "failed" : "aborted";
       }
@@ -408,7 +491,7 @@ export const useSftpPaneActions = ({
   );
 
   const refresh = useCallback(
-    async (side: "left" | "right", options?: { tabId?: string; preserveSelection?: boolean }) => {
+    async (side: "left" | "right", options?: SftpRefreshOptions) => {
       const sideTabs = side === "left" ? leftTabsRef.current : rightTabsRef.current;
       const pane = options?.tabId
         ? sideTabs.tabs.find((t) => t.id === options.tabId) ?? null
@@ -417,6 +500,14 @@ export const useSftpPaneActions = ({
         const hasRemoteSession = pane.connection.isLocal || sftpSessionsRef.current.has(pane.connection.id);
         if (!hasRemoteSession) {
           if (options?.tabId) return;
+          // Soft terminal refresh must not flip a healthy-looking pane into a
+          // reconnecting overlay when the session map is briefly empty.
+          if (options?.soft) {
+            updateActiveTab(side, (prev) => (
+              prev.loading ? { ...prev, loading: false } : prev
+            ));
+            return;
+          }
           const lastHost = lastConnectedHostRef.current[side];
           if (lastHost && !reconnectingRef.current[side]) {
             reconnectingRef.current[side] = true;
@@ -436,7 +527,8 @@ export const useSftpPaneActions = ({
         await navigateTo(side, pane.connection.currentPath, {
           force: true,
           tabId: options?.tabId,
-          preserveSelection: options?.preserveSelection,
+          preserveSelection: options?.preserveSelection ?? options?.soft,
+          soft: options?.soft,
         });
       } else if (!pane?.connection && pane?.error) {
         // For background tabs, don't trigger reconnection (it operates on

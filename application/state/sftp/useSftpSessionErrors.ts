@@ -48,6 +48,9 @@ export const useSftpSessionErrors = ({
         reconnectingRef.current[side] = true;
         updateActiveTab(side, (prev) => ({
           ...prev,
+          // Clear directory-list loading so soft-refresh hangs do not stack under
+          // the reconnect overlay (loading + reconnecting both true is confusing).
+          loading: false,
           reconnecting: true,
           error: "sftp.error.connectionLostReconnecting",
         }));

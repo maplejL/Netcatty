@@ -69,6 +69,11 @@ function createStartSessionApi(ctx) {
         systemManagerSudoPassword: typeof options.sudoAutofillPassword === 'string' && options.sudoAutofillPassword.length > 0
           ? options.sudoAutofillPassword
           : undefined,
+        sudoProbePassword:
+          (typeof options.sudoAutofillPassword === 'string' && options.sudoAutofillPassword.length > 0
+            ? options.sudoAutofillPassword
+            : undefined)
+          || (typeof options.password === 'string' && options.password.length > 0 ? options.password : undefined),
         lastIdlePrompt: '',
         lastIdlePromptAt: 0,
         _promptTrackTail: '',

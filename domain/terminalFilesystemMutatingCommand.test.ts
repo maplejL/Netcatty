@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   classifyFilesystemMutatingCommand,
   isFilesystemMutatingCommand,
+  isInteractivePrivilegeEscalationCommand,
   resolveSftpSoftRefreshDelayMs,
   SFTP_SOFT_REFRESH_DELAY_MS,
   SFTP_SOFT_REFRESH_LONG_DELAY_MS,
@@ -62,4 +63,30 @@ test("classifies long-running mutators for longer soft-refresh delay", () => {
   assert.equal(resolveSftpSoftRefreshDelayMs("touch x"), SFTP_SOFT_REFRESH_DELAY_MS);
   assert.equal(resolveSftpSoftRefreshDelayMs("git clone https://x/y"), SFTP_SOFT_REFRESH_LONG_DELAY_MS);
   assert.equal(resolveSftpSoftRefreshDelayMs("ls"), 0);
+});
+
+test("detects interactive privilege escalation but ignores one-shot sudo", () => {
+  for (const line of [
+    "sudo -i",
+    "sudo -s",
+    "sudo --login",
+    "sudo -iu root",
+    "sudo su",
+    "sudo su -",
+    "sudo bash",
+    "su",
+    "su -",
+    "doas -s",
+  ]) {
+    assert.equal(isInteractivePrivilegeEscalationCommand(line), true, line);
+  }
+  for (const line of [
+    "sudo ls",
+    "sudo systemctl restart nginx",
+    "sudo -n true",
+    "sudo",
+    "ls",
+  ]) {
+    assert.equal(isInteractivePrivilegeEscalationCommand(line), false, line);
+  }
 });

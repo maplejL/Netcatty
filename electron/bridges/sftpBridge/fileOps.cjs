@@ -1,6 +1,58 @@
 /* eslint-disable no-undef */
+
+const {
+  isSftpTimeoutError,
+  invalidateSftpChannel,
+} = require("./sftpChannelRecovery.cjs");
+
+// Bound hanging SFTP list ops so the UI spinner can recover.
+// readdir / symlink stat have no native timeout in ssh2; a stalled server
+// otherwise leaves loading=true forever while cached files stay visible.
+const DEFAULT_SFTP_READDIR_TIMEOUT_MS = 15_000;
+const DEFAULT_SFTP_SYMLINK_STAT_TIMEOUT_MS = 2_500;
+const DEFAULT_SFTP_REALPATH_TIMEOUT_MS = 8_000;
+
 function createFileOpsApi(ctx) {
   with (ctx) {
+    function withTimeout(promise, ms, message) {
+      if (!Number.isFinite(ms) || ms <= 0) return promise;
+      let timer = null;
+      return new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          timer = null;
+          reject(new Error(message));
+        }, ms);
+        Promise.resolve(promise).then(
+          (value) => {
+            if (timer) clearTimeout(timer);
+            timer = null;
+            resolve(value);
+          },
+          (err) => {
+            if (timer) clearTimeout(timer);
+            timer = null;
+            reject(err);
+          },
+        );
+      });
+    }
+
+    function readdirWithTimeout(sftp, targetPath, timeoutMs) {
+      const ms = Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? timeoutMs
+        : DEFAULT_SFTP_READDIR_TIMEOUT_MS;
+      return withTimeout(
+        new Promise((resolve, reject) => {
+          sftp.readdir(targetPath, (err, items) => {
+            if (err) return reject(err);
+            resolve(items || []);
+          });
+        }),
+        ms,
+        `SFTP readdir timed out after ${ms}ms`,
+      );
+    }
+
     async function listSftp(event, payload) {
       const client = sftpClients.get(payload.sftpId);
       if (!client) throw new Error("SFTP session not found");
@@ -9,30 +61,39 @@ function createFileOpsApi(ctx) {
       const basePath = payload.path || ".";
       const pathEncoding = resolveEncodingForRequest(payload.sftpId, requestedEncoding);
       const encodedPath = encodePath(basePath, pathEncoding);
+      const readdirTimeoutMs = Number.isFinite(payload?.timeoutMs) && payload.timeoutMs > 0
+        ? payload.timeoutMs
+        : DEFAULT_SFTP_READDIR_TIMEOUT_MS;
     
-      const sftp = await requireSftpChannel(client);
+      const sftp = await requireSftpChannel(client, {
+        signal: payload?.abortSignal,
+        timeoutMs: readdirTimeoutMs,
+      });
     
       let list;
       try {
-        list = await new Promise((resolve, reject) => {
-          sftp.readdir(encodedPath, (err, items) => {
-            if (err) return reject(err);
-            resolve(items || []);
-          });
-        });
+        list = await readdirWithTimeout(sftp, encodedPath, readdirTimeoutMs);
       } catch (err) {
+        if (isSftpTimeoutError(err)) {
+          // Timeout rejects the Promise but ssh2 readdir keeps running; drop
+          // the wedged channel so the next list opens a fresh one.
+          invalidateSftpChannel(client, sftp);
+          throw err;
+        }
         // Retry with string path when ASCII-only and a Buffer path caused issues
         if (Buffer.isBuffer(encodedPath) && isAsciiString(basePath)) {
           console.warn("[SFTP] Retrying readdir with string path after Buffer failure", {
             basePath,
             error: err?.message || String(err),
           });
-          list = await new Promise((resolve, reject) => {
-            sftp.readdir(basePath, (retryErr, items) => {
-              if (retryErr) return reject(retryErr);
-              resolve(items || []);
-            });
-          });
+          try {
+            list = await readdirWithTimeout(sftp, basePath, readdirTimeoutMs);
+          } catch (retryErr) {
+            if (isSftpTimeoutError(retryErr)) {
+              invalidateSftpChannel(client, sftp);
+            }
+            throw retryErr;
+          }
         } else {
           throw err;
         }
@@ -56,7 +117,8 @@ function createFileOpsApi(ctx) {
       }
       const resolvedEncoding = updateResolvedEncoding(payload.sftpId, requestedEncoding, detectedEncoding);
     
-      // Process items and resolve symlinks
+      // Process items and resolve symlinks (each stat is bounded so one
+      // hung NFS/autofs link cannot freeze the whole directory listing).
       const results = await Promise.all(list.map(async (item) => {
         const filenameRaw = item.filenameRaw || (item.filename ? Buffer.from(item.filename, "utf8") : null);
         const longnameRaw = item.longnameRaw || (item.longname ? Buffer.from(item.longname, "utf8") : null);
@@ -75,7 +137,11 @@ function createFileOpsApi(ctx) {
             // Use path.posix.join to properly construct the path and avoid double slashes
             const fullPath = path.posix.join(basePath === "." ? "/" : basePath, name);
             const encodedFullPath = encodePath(fullPath, resolvedEncoding);
-            const stat = await client.stat(encodedFullPath);
+            const stat = await withTimeout(
+              client.stat(encodedFullPath),
+              DEFAULT_SFTP_SYMLINK_STAT_TIMEOUT_MS,
+              `SFTP symlink stat timed out after ${DEFAULT_SFTP_SYMLINK_STAT_TIMEOUT_MS}ms`,
+            );
             // stat follows symlinks, so we get the target's type
             if (stat.isDirectory) {
               linkTarget = "directory";
@@ -83,8 +149,8 @@ function createFileOpsApi(ctx) {
               linkTarget = "file";
             }
           } catch (err) {
-            // If we can't stat the symlink target (broken link), keep it as symlink
-            console.warn(`Could not resolve symlink target for ${item.name}:`, err.message);
+            // Broken link, permission, or timeout — keep as unresolved symlink
+            console.warn(`Could not resolve symlink target for ${name}:`, err?.message || err);
           }
         } else {
           type = "file";
@@ -552,11 +618,21 @@ function createFileOpsApi(ctx) {
     async function statSftp(event, payload) {
       const client = sftpClients.get(payload.sftpId);
       if (!client) throw new Error("SFTP session not found");
-    
-      await requireSftpChannel(client);
+
+      const timeoutMs = Number.isFinite(payload?.timeoutMs) && payload.timeoutMs > 0
+        ? payload.timeoutMs
+        : DEFAULT_SFTP_READDIR_TIMEOUT_MS;
+      await requireSftpChannel(client, {
+        signal: payload?.abortSignal,
+        timeoutMs,
+      });
       const encoding = resolveEncodingForRequest(payload.sftpId, payload.encoding);
       const encodedPath = encodePath(payload.path, encoding);
-      const stat = await client.stat(encodedPath);
+      const stat = await withTimeout(
+        client.stat(encodedPath),
+        timeoutMs,
+        `SFTP stat timed out after ${timeoutMs}ms`,
+      );
       return {
         name: path.basename(payload.path),
         type: stat.isDirectory ? "directory" : stat.isSymbolicLink ? "symlink" : "file",
@@ -673,12 +749,19 @@ function createFileOpsApi(ctx) {
       // Method 2: SFTP realpath('.') — skip if result is '/' for non-root users
       // because some SFTP servers start in '/' rather than the user's home
       try {
+        const realpathTimeoutMs = Number.isFinite(payload?.timeoutMs) && payload.timeoutMs > 0
+          ? payload.timeoutMs
+          : DEFAULT_SFTP_REALPATH_TIMEOUT_MS;
         const sftp = await requireSftpChannel(client, {
           signal,
-          timeoutMs: payload?.timeoutMs,
+          timeoutMs: realpathTimeoutMs,
         });
         throwIfAborted(signal);
-        const absPath = await realpathAsync(sftp, ".");
+        const absPath = await withTimeout(
+          realpathAsync(sftp, "."),
+          realpathTimeoutMs,
+          `SFTP realpath timed out after ${realpathTimeoutMs}ms`,
+        );
         throwIfAborted(signal);
         if (absPath && absPath !== "/") {
           return { success: true, homeDir: absPath };

@@ -1,4 +1,6 @@
 /* eslint-disable no-undef */
+const { resolveSftpSudoPassword } = require("./sftpSudoPassword.cjs");
+
 function createOpenConnectionApi(ctx) {
   with (ctx) {
     const hasUsableProxy = (proxy) => {
@@ -527,7 +529,7 @@ function createOpenConnectionApi(ctx) {
     async function openSftp(event, options) {
       const connId = options.sessionId || randomUUID();
 
-      if (options.sourceSessionId && !options.sudo) {
+      if (options.sourceSessionId) {
         const sourceSession = findReusableSession?.(sessions, options.sourceSessionId, {
           hostname: options.hostname,
           port: options.port || 22,
@@ -548,11 +550,20 @@ function createOpenConnectionApi(ctx) {
           );
           try {
             sendSftpProgress(event.sender, connId, options.hostname, 'connecting', 'reusing terminal connection');
-            await requireSftpChannel(reusedClient);
-            reusedClient.__netcattySudoMode = false;
+            if (options.sudo) {
+              const sftpWrapper = await connectSudoSftp(
+                sourceSession.conn,
+                resolveSftpSudoPassword(options, sessions),
+              );
+              reusedClient.sftp = sftpWrapper;
+              reusedClient.__netcattySudoMode = true;
+            } else {
+              await requireSftpChannel(reusedClient);
+              reusedClient.__netcattySudoMode = false;
+            }
             sftpClients.set(connId, reusedClient);
             sendSftpProgress(event.sender, connId, options.hostname, 'connected', 'reused terminal connection');
-            console.log(`[SFTP] Reused terminal SSH connection ${options.sourceSessionId} for ${connId}`);
+            console.log(`[SFTP] Reused terminal SSH connection ${options.sourceSessionId} for ${connId}${options.sudo ? " (sudo)" : ""}`);
             return { sftpId: connId };
           } catch (reuseErr) {
             console.warn(
@@ -863,7 +874,7 @@ function createOpenConnectionApi(ctx) {
               console.log(`[SFTP] Using sudo mode for connection: ${connId}`);
               (async () => {
                 try {
-                  const sudoPass = options.password || "";
+                  const sudoPass = resolveSftpSudoPassword(options, sessions);
                   const sftpWrapper = await connectSudoSftp(sshClient, sudoPass);
                   client.sftp = sftpWrapper;
                   client.sftp.on('close', () => client.end());
@@ -925,6 +936,9 @@ function createOpenConnectionApi(ctx) {
     
         // Used by transferBridge to decide whether isolated fast-transfer channels are safe.
         client.__netcattySudoMode = !!options.sudo;
+        if (options.sourceSessionId) {
+          client.__netcattySourceSessionId = options.sourceSessionId;
+        }
         sftpClients.set(connId, client);
     
         // Store jump connections for cleanup when SFTP is closed

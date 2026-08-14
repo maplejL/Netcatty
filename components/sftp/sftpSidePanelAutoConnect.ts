@@ -15,7 +15,11 @@ export function isRemoteSftpTabHealthy(
   return true;
 }
 
-/** Skip auto-connect only when the active tab is already bound to this endpoint and healthy. */
+/**
+ * Skip auto-connect when the active tab is already bound to this endpoint.
+ * Listing (`loading`) is a navigation in progress — do not treat it as a
+ * hung tab and reconnect, or follow-cwd / go-to-cwd get aborted mid-list.
+ */
 export function shouldSkipSftpSidePanelAutoConnect(
   connectionKey: string,
   connectedKey: string | null,
@@ -24,7 +28,13 @@ export function shouldSkipSftpSidePanelAutoConnect(
 ): boolean {
   if (connectedKey !== connectionKey) return false;
   if (!activeTab) return false;
-  return isRemoteSftpTabHealthy(activeTab, hasBackendSession);
+  const conn = activeTab.connection;
+  if (!conn) return false;
+  if (conn.isLocal) return true;
+  if (conn.status !== "connected") return false;
+  if (activeTab.reconnecting) return false;
+  if (!hasBackendSession) return false;
+  return true;
 }
 
 export function findReusableSftpSidePanelTab(

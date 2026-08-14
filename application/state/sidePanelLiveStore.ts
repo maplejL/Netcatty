@@ -6,6 +6,9 @@ export type SidePanelLiveSnapshot = {
   activeTerminalCwd: string | null;
   /** Bumps when terminal likely mutated files; open SFTP panels soft-refresh. */
   sftpSoftRefreshRevision: number;
+  /** Bumps when the focused terminal ran interactive sudo/su. */
+  sftpFollowSudoRevision: number;
+  sftpFollowSudoSessionId: string | null;
   activeWorkspace: Workspace | undefined;
   activeTerminalSessionForSystem: TerminalSession | null;
   activeSystemSessionHost: Host | null;
@@ -28,6 +31,8 @@ const EMPTY_SNAPSHOT: SidePanelLiveSnapshot = {
   activeTerminalSessionIdForSftp: null,
   activeTerminalCwd: null,
   sftpSoftRefreshRevision: 0,
+  sftpFollowSudoRevision: 0,
+  sftpFollowSudoSessionId: null,
   activeWorkspace: undefined,
   activeTerminalSessionForSystem: null,
   activeSystemSessionHost: null,
@@ -54,6 +59,8 @@ function liveSnapshotEqual(a: SidePanelLiveSnapshot, b: SidePanelLiveSnapshot): 
     && a.activeTerminalSessionIdForSftp === b.activeTerminalSessionIdForSftp
     && a.activeTerminalCwd === b.activeTerminalCwd
     && a.sftpSoftRefreshRevision === b.sftpSoftRefreshRevision
+    && a.sftpFollowSudoRevision === b.sftpFollowSudoRevision
+    && a.sftpFollowSudoSessionId === b.sftpFollowSudoSessionId
     && a.activeWorkspace === b.activeWorkspace
     && a.activeTerminalSessionForSystem === b.activeTerminalSessionForSystem
     && a.activeSystemSessionHost === b.activeSystemSessionHost

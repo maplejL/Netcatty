@@ -99,6 +99,45 @@ export const isSameSftpPath = (a: string, b: string): boolean => {
   return normalizeSftpPathForCompare(a) === normalizeSftpPathForCompare(b);
 };
 
+export const isSftpPermissionDeniedError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /permission denied/i.test(message) || /\beacces\b/i.test(message);
+};
+
+/**
+ * Terminal soft-refresh should re-list the open directory without blocking the
+ * pane. When files are already visible for the same path, keep the UI interactive
+ * and update the list when the request finishes (or silently keep the old list).
+ */
+export const shouldUseBackgroundSftpSoftRefresh = (options: {
+  soft?: boolean;
+  currentPath: string;
+  targetPath: string;
+  existingFileCount: number;
+}): boolean => {
+  if (!options.soft) return false;
+  if (options.existingFileCount <= 0) return false;
+  return isSameSftpPath(options.currentPath, options.targetPath);
+};
+
+/**
+ * Gate the SFTP sidebar's terminal-driven refresh effect.
+ * Refreshing updates `connection` object identity; if the effect depends on
+ * that object (or on `loading`), it retriggers forever and React throws #185.
+ */
+export const shouldApplySftpSoftRefreshRevision = (options: {
+  isVisible: boolean;
+  revision: number;
+  lastHandledRevision: number;
+  hasConnection: boolean;
+  hasActiveWork: boolean;
+}): boolean => {
+  if (!options.isVisible || options.hasActiveWork) return false;
+  if (!options.hasConnection) return false;
+  if (options.revision <= 0) return false;
+  return options.revision !== options.lastHandledRevision;
+};
+
 export const shouldClearSftpFilterForPathChange = (
   currentPath: string,
   nextPath: string,

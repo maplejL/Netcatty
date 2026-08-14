@@ -45,8 +45,14 @@ export interface SftpConnectOptions {
   sourceSessionId?: string;
 }
 
+export type SftpConnectResult = {
+  connectionId: string;
+  ok: boolean;
+  sudo: boolean;
+};
+
 interface UseSftpConnectionsResult {
-  connect: (side: "left" | "right", host: Host | "local", options?: SftpConnectOptions) => Promise<void>;
+  connect: (side: "left" | "right", host: Host | "local", options?: SftpConnectOptions) => Promise<SftpConnectResult>;
   disconnect: (side: "left" | "right") => Promise<void>;
   listLocalFiles: (path: string) => Promise<SftpFileEntry[]>;
   listRemoteFiles: (sftpId: string, path: string, encoding?: SftpFilenameEncoding) => Promise<SftpFileEntry[]>;
@@ -203,7 +209,7 @@ export const useSftpConnections = ({
         activeTabId = sideTabs.activeTabId;
       }
 
-      if (!activeTabId) return;
+      if (!activeTabId) return { connectionId: "", ok: false, sudo: false };
 
       const isReconnectAttempt = reconnectingRef.current[side];
 
@@ -313,7 +319,7 @@ export const useSftpConnections = ({
 
         try {
           const files = await listLocalFiles(startPath);
-          if (!isTargetConnectionAtPath(startPath)) return;
+          if (!isTargetConnectionAtPath(startPath)) return { connectionId, ok: false, sudo: false };
           dirCacheRef.current.set(makeCacheKey(connectionId, startPath, filenameEncoding), {
             files,
             timestamp: Date.now(),
@@ -325,8 +331,9 @@ export const useSftpConnections = ({
             loading: false,
             reconnecting: false,
           }));
+          return { connectionId, ok: true, sudo: false };
         } catch (err) {
-          if (!isTargetConnectionAtPath(startPath)) return;
+          if (!isTargetConnectionAtPath(startPath)) return { connectionId, ok: false, sudo: false };
           reconnectingRef.current[side] = false;
           updateTab(side, activeTabId, (prev) => ({
             ...prev,
@@ -334,6 +341,7 @@ export const useSftpConnections = ({
             loading: false,
             reconnecting: false,
           }));
+          return { connectionId, ok: false, sudo: false };
         }
       } else {
         const hostCacheKey = buildCacheKey(host.id, host.hostname, host.port, host.protocol, host.sftpSudo, host.username);
@@ -359,6 +367,7 @@ export const useSftpConnections = ({
           // non-interactive (loading=true) with stale cached files visible —
           // no worse than the previous UX of always showing a spinner.
           reusedConnection: !!options?.sourceSessionId,
+          sudo: !!host.sftpSudo,
         };
 
         updateTab(side, activeTabId, (prev) => ({
@@ -481,7 +490,13 @@ export const useSftpConnections = ({
           sftpSessionsRef.current.set(connectionId, sftpId);
           if (!isTargetConnectionCurrent()) {
             await closeSftpSessionForConnection();
-            return;
+            // If this tab still owns our connection row, never leave loading stuck.
+            updateTab(side, activeTabId, (prev) => (
+              prev.connection?.id === connectionId
+                ? { ...prev, loading: false, reconnecting: false }
+                : prev
+            ));
+            return { connectionId, ok: false, sudo: !!host.sftpSudo };
           }
 
           let startPath = sharedHostCache?.path ?? "/";
@@ -596,7 +611,12 @@ export const useSftpConnections = ({
           }
           if (!isTargetConnectionCurrent()) {
             await closeSftpSessionForConnection();
-            return;
+            updateTab(side, activeTabId, (prev) => (
+              prev.connection?.id === connectionId
+                ? { ...prev, loading: false, reconnecting: false }
+                : prev
+            ));
+            return { connectionId, ok: false, sudo: !!host.sftpSudo };
           }
           dirCacheRef.current.set(makeCacheKey(connectionId, startPath, filenameEncoding), {
             files,
@@ -620,6 +640,7 @@ export const useSftpConnections = ({
                   currentPath: startPath,
                   homeDir,
                   reusedConnection: undefined,
+                  sudo: !!host.sftpSudo,
                 }
               : null,
             files,
@@ -627,10 +648,16 @@ export const useSftpConnections = ({
             reconnecting: false,
             connectionLogs: [], // Clear after successful connect to avoid replay during navigation
           }));
+          return { connectionId, ok: true, sudo: !!host.sftpSudo };
         } catch (err) {
           if (!isTargetConnectionCurrent()) {
             await closeSftpSessionForConnection();
-            return;
+            updateTab(side, activeTabId, (prev) => (
+              prev.connection?.id === connectionId
+                ? { ...prev, loading: false, reconnecting: false }
+                : prev
+            ));
+            return { connectionId, ok: false, sudo: !!host.sftpSudo };
           }
           reconnectingRef.current[side] = false;
           updateTab(side, activeTabId, (prev) => ({
@@ -650,6 +677,7 @@ export const useSftpConnections = ({
             loading: false,
             reconnecting: false,
           }));
+          return { connectionId, ok: false, sudo: !!host.sftpSudo };
         } finally {
           activeHostKeySessionsRef.current.delete(sftpSessionId);
           if (hostKeyVerificationRef.current?.sessionId === sftpSessionId) {
@@ -658,6 +686,7 @@ export const useSftpConnections = ({
           unsubSftpProgress?.();
         }
       }
+      return { connectionId, ok: false, sudo: false };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [

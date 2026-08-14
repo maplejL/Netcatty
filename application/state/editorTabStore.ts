@@ -154,6 +154,19 @@ export class EditorTabStore {
     return removed;
   };
 
+  /** Point editor tabs at a replacement SFTP connection (e.g. sudo reconnect). */
+  rebindSession = (oldSessionId: string, newSessionId: string): number => {
+    if (!oldSessionId || !newSessionId || oldSessionId === newSessionId) return 0;
+    let changed = 0;
+    this.tabs = this.tabs.map((tab) => {
+      if (tab.sessionId !== oldSessionId) return tab;
+      changed += 1;
+      return { ...tab, sessionId: newSessionId };
+    });
+    if (changed > 0) this.notify();
+    return changed;
+  };
+
   promoteFromModal = (snapshot: {
     sessionId: string;
     hostId: string;

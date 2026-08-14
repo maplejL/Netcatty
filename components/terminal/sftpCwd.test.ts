@@ -41,7 +41,7 @@ test("resolvePreferredTerminalCwd returns the renderer cwd without probing the b
   assert.equal(backendCalls, 0);
 });
 
-test("resolvePreferredTerminalCwd falls back to renderer cwd when fresh backend pwd fails", async () => {
+test("resolvePreferredTerminalCwd does not use a stale renderer cwd when fresh backend pwd fails", async () => {
   const cwd = await resolvePreferredTerminalCwd({
     rendererCwd: "/srv/app/current",
     sessionId: "session-1",
@@ -52,7 +52,7 @@ test("resolvePreferredTerminalCwd falls back to renderer cwd when fresh backend 
     },
   });
 
-  assert.equal(cwd, "/srv/app/current");
+  assert.equal(cwd, null);
 });
 
 test("resolvePreferredTerminalCwd falls back to backend pwd when no renderer cwd is known", async () => {

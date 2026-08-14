@@ -217,3 +217,12 @@ test("confirmCloseBySession reports every closed editor tab to cleanup callback"
   assert.deepEqual(closed, ["edt_clean", "edt_dirty"]);
   assert.equal(store.getTabs().length, 0);
 });
+
+test("rebindSession retargets editor tabs after an SFTP sudo reconnect", () => {
+  const store = new EditorTabStore();
+  store._debugInsert(makeTab({ id: "edt_1", sessionId: "left-old" }));
+  store._debugInsert(makeTab({ id: "edt_2", sessionId: "other" }));
+  assert.equal(store.rebindSession("left-old", "left-sudo"), 1);
+  assert.equal(store.getTab("edt_1")!.sessionId, "left-sudo");
+  assert.equal(store.getTab("edt_2")!.sessionId, "other");
+});

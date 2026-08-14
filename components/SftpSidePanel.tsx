@@ -20,7 +20,7 @@ import { editorTabStore } from "../application/state/editorTabStore";
 import { releaseEditorTabSaveCoordinator } from "../application/state/editorTabSave";
 import { useSftpBackend } from "../application/state/useSftpBackend";
 import { useSftpFileAssociations } from "../application/state/useSftpFileAssociations";
-import { getParentPath, isConcreteTransferTargetPath } from "../application/state/sftp/utils";
+import { getParentPath, isConcreteTransferTargetPath, isSftpPermissionDeniedError, shouldApplySftpSoftRefreshRevision } from "../application/state/sftp/utils";
 import { buildCacheKey } from "../application/state/sftp/sharedRemoteHostCache";
 import { logger } from "../lib/logger";
 import type { DropEntry } from "../lib/sftpFileUtils";
@@ -47,6 +47,12 @@ import {
   shouldFollowTerminalCwdNavigate,
   type SftpFollowTerminalCwdBlock,
 } from "./sftp/sftpFollowTerminalCwd";
+import {
+  isAlreadyElevatedSftpConnection,
+  probeTerminalCwdWithRetries,
+  resolveSftpEscalateConnectionId,
+  type SftpEscalateConnectResult,
+} from "./sftp/sftpSudoEscalate";
 import {
   findReusableSftpSidePanelTab,
   resolveSftpPathForLinkedSession,
@@ -97,6 +103,9 @@ interface SftpSidePanelProps {
   activeTerminalCwd?: string | null;
   /** Bumps when terminal likely mutated files; soft-refresh current SFTP dir. */
   sftpSoftRefreshRevision?: number;
+  /** Bumps when the linked terminal ran sudo/su; reconnect SFTP in sudo mode. */
+  sftpFollowSudoRevision?: number;
+  sftpFollowSudoSessionId?: string | null;
   /** Last SFTP browse path for the currently linked terminal session (per-session memory). */
   rememberedPathForSession?: string | null;
   sftpFollowTerminalCwd?: boolean;
@@ -136,6 +145,8 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   onGetTerminalCwd,
   activeTerminalCwd = null,
   sftpSoftRefreshRevision = 0,
+  sftpFollowSudoRevision = 0,
+  sftpFollowSudoSessionId = null,
   rememberedPathForSession = null,
   sftpFollowTerminalCwd = false,
   onSftpFollowTerminalCwdChange,
@@ -183,6 +194,16 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
 
   const sftpRef = useRef(sftp);
   sftpRef.current = sftp;
+  const activeHostRef = useRef(activeHost);
+  activeHostRef.current = activeHost;
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
+  const tRef = useRef(t);
+  tRef.current = t;
+  const sftpSudoOverrideRef = useRef(false);
+  const lastHandledSudoRevisionRef = useRef(0);
+  const sftpSudoEscalateLockRef = useRef<Promise<string | null> | null>(null);
+  const escalateSftpToSudoRef = useRef<(opts?: { announce?: boolean }) => Promise<string | null>>(async () => null);
 
   // Register this instance's writeTextFileByConnection with the editor bridge
   // so editor tabs promoted from SFTP files opened in a terminal side panel
@@ -190,11 +211,20 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   //
   // Intentionally no deps — go through sftpRef so SFTP state churn (transfers,
   // tab switches, listings) doesn't make this unregister+reregister on every
-  // re-render.
+  // re-render. Permission-denied saves escalate to sudo SFTP once.
   useEffect(() => {
-    return registerEditorSftpWriterScoped((connectionId, expectedHostId, filePath, content, encoding) =>
-      sftpRef.current.writeTextFileByConnection(connectionId, expectedHostId, filePath, content, encoding),
-    );
+    return registerEditorSftpWriterScoped(async (connectionId, expectedHostId, filePath, content, encoding) => {
+      try {
+        await sftpRef.current.writeTextFileByConnection(connectionId, expectedHostId, filePath, content, encoding);
+      } catch (err) {
+        if (!isSftpPermissionDeniedError(err)) throw err;
+        const newId = await escalateSftpToSudoRef.current({ announce: true });
+        if (!newId) {
+          throw new Error(tRef.current("sftp.editor.permissionDeniedHint"));
+        }
+        await sftpRef.current.writeTextFileByConnection(newId, expectedHostId, filePath, content, encoding);
+      }
+    });
   }, []);
 
   // When this side panel unmounts (its hosting terminal tab was closed) we
@@ -234,6 +264,8 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   const connectedKeyRef = useRef<string | null>(null);
   const connectedHostObjRef = useRef<Host | null>(null);
   const lastSourceSessionIdRef = useRef<string | null>(null);
+  const activeTerminalCwdRef = useRef(activeTerminalCwd);
+  activeTerminalCwdRef.current = activeTerminalCwd;
   const lastAppliedInitialLocationKeyRef = useRef<string | null>(null);
   const handledPendingUploadIdRef = useRef<string | null>(null);
   const tabConnectionKeyMapRef = useRef<Map<string, string>>(new Map());
@@ -279,13 +311,17 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
       return;
     }
 
+    const useSudo = Boolean(activeHost.sftpSudo || sftpSudoOverrideRef.current);
+    const connectHost = useSudo && !activeHost.sftpSudo
+      ? { ...activeHost, sftpSudo: true }
+      : activeHost;
     const connectionKey = buildCacheKey(
-      activeHost.id,
-      activeHost.hostname,
-      activeHost.port,
-      activeHost.protocol,
-      activeHost.sftpSudo,
-      activeHost.username,
+      connectHost.id,
+      connectHost.hostname,
+      connectHost.port,
+      connectHost.protocol,
+      connectHost.sftpSudo,
+      connectHost.username,
     );
     const sessionChanged = shouldResetSftpSidePanelSourceSession(
       lastSourceSessionIdRef.current,
@@ -300,7 +336,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
 
     const sessionTargetPath = resolveSftpPathForLinkedSession({
       rememberedPath: rememberedPathForSession,
-      terminalCwd: activeTerminalCwd,
+      terminalCwd: activeTerminalCwdRef.current,
     });
 
     const hasBackendSession = (connectionId: string) => !!s.getSftpIdForConnection(connectionId);
@@ -322,7 +358,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
       })
     ) {
       connectedKeyRef.current = connectionKey;
-      connectedHostObjRef.current = activeHost;
+      connectedHostObjRef.current = connectHost;
       void s.navigateTo("left", sessionTargetPath!);
       return;
     }
@@ -336,15 +372,26 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
         activeConnectionId ? hasBackendSession(activeConnectionId) : false,
       )
     ) {
+      logger.trace("[SftpSidePanel] Auto-connect skipped; already bound", {
+        hostId: connectHost.id,
+        connectionKey,
+        loading: !!activeTab?.loading,
+        path: activeConn?.currentPath ?? null,
+        terminalCwd: activeTerminalCwdRef.current ?? null,
+      });
       return;
     }
     if (hasActiveWork) return;
 
     logger.info("[SftpSidePanel] Auto-connect triggered", {
-      hostId: activeHost.id,
-      hostLabel: activeHost.label,
-      protocol: activeHost.protocol,
-      hostname: activeHost.hostname,
+      hostId: connectHost.id,
+      hostLabel: connectHost.label,
+      protocol: connectHost.protocol,
+      hostname: connectHost.hostname,
+      sudo: !!connectHost.sftpSudo,
+      sessionChanged,
+      terminalCwd: activeTerminalCwdRef.current ?? null,
+      sessionTargetPath,
     });
 
     const tabs = s.leftTabs.tabs;
@@ -360,7 +407,7 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
     if (existingTab) {
       s.selectTab("left", existingTab.id);
       connectedKeyRef.current = connectionKey;
-      connectedHostObjRef.current = activeHost;
+      connectedHostObjRef.current = connectHost;
       if (
         sessionChanged
         && shouldNavigateSftpOnSessionSwitch({
@@ -381,8 +428,8 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
     const needsNewTab = !!(currentConn && currentConn.status === "connected");
 
     connectedKeyRef.current = connectionKey;
-    connectedHostObjRef.current = activeHost;
-    s.connect("left", activeHost, {
+    connectedHostObjRef.current = connectHost;
+    s.connect("left", connectHost, {
       sourceSessionId: activeSessionId ?? undefined,
       initialPath: sessionTargetPath ?? undefined,
       ...(needsNewTab ? { forceNewTab: true } : undefined),
@@ -393,9 +440,115 @@ const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
   }, [
     activeHost,
     activeSessionId,
-    activeTerminalCwd,
     interactiveWorkActive,
     rememberedPathForSession,
+  ]);
+
+  const escalateSftpToSudo = useCallback(async (opts?: { announce?: boolean }): Promise<string | null> => {
+    if (sftpSudoEscalateLockRef.current) {
+      return sftpSudoEscalateLockRef.current;
+    }
+    const run = (async () => {
+      const host = activeHostRef.current;
+      if (!host || host.protocol === "local" || host.protocol === "serial") return null;
+      const s = sftpRef.current;
+      const current = s.leftPane.connection;
+      if (isAlreadyElevatedSftpConnection(current)) {
+        return current.id;
+      }
+      const oldId = current?.id ?? null;
+      const currentPath = current?.currentPath;
+      sftpSudoOverrideRef.current = true;
+      const sudoHost = { ...host, sftpSudo: true };
+      const connectionKey = buildCacheKey(
+        sudoHost.id,
+        sudoHost.hostname,
+        sudoHost.port,
+        sudoHost.protocol,
+        true,
+        sudoHost.username,
+      );
+      connectedKeyRef.current = connectionKey;
+      connectedHostObjRef.current = sudoHost;
+      let connectResult: SftpEscalateConnectResult | null = null;
+      try {
+        connectResult = await s.connect("left", sudoHost, {
+          ignoreSharedCache: true,
+          initialPath: currentPath,
+          sourceSessionId: activeSessionIdRef.current ?? undefined,
+          onTabCreated: (tabId) => {
+            tabConnectionKeyMapRef.current.set(tabId, connectionKey);
+          },
+        });
+      } catch (err) {
+        sftpSudoOverrideRef.current = false;
+        logger.warn("[SFTP] Failed to reconnect with sudo", err);
+        return null;
+      }
+      const next = sftpRef.current.leftPane.connection;
+      const newId = resolveSftpEscalateConnectionId(connectResult, next);
+      if (!newId) {
+        sftpSudoOverrideRef.current = false;
+        logger.warn("[SFTP] Sudo reconnect did not produce an elevated session", {
+          connectResult,
+          status: next?.status ?? null,
+          sudo: next?.sudo ?? false,
+        });
+        return null;
+      }
+      if (oldId && newId !== oldId) {
+        editorTabStore.rebindSession(oldId, newId);
+      }
+      if (opts?.announce) {
+        toast.info(tRef.current("sftp.sudo.followedTerminal"), "SFTP");
+      }
+      return newId;
+    })();
+    sftpSudoEscalateLockRef.current = run;
+    try {
+      return await run;
+    } finally {
+      sftpSudoEscalateLockRef.current = null;
+    }
+  }, []);
+  escalateSftpToSudoRef.current = escalateSftpToSudo;
+
+  useEffect(() => {
+    sftpSudoOverrideRef.current = false;
+    lastHandledSudoRevisionRef.current = 0;
+  }, [activeHost?.id, activeSessionId]);
+
+  useEffect(() => {
+    if (!isVisible || !activeHost) return;
+    if (sftpFollowSudoRevision <= 0) return;
+    if (sftpFollowSudoRevision <= lastHandledSudoRevisionRef.current) return;
+    if (sftpFollowSudoSessionId && sftpFollowSudoSessionId !== activeSessionId) return;
+    lastHandledSudoRevisionRef.current = sftpFollowSudoRevision;
+    sftpSudoOverrideRef.current = true;
+    void (async () => {
+      const newId = await escalateSftpToSudo({ announce: true });
+      if (!newId) {
+        toast.warning(t("sftp.sudo.followFailed"), "SFTP");
+        return;
+      }
+      const cwd = await probeTerminalCwdWithRetries(() => onGetTerminalCwd?.({
+        preferFreshBackend: true,
+        sessionId: activeSessionId,
+      }));
+      logger.trace("[SftpFollow] post-sudo probe", { cwd, sessionId: activeSessionId });
+      if (cwd) {
+        await sftpRef.current.navigateTo("left", cwd, { soft: true });
+      }
+    })();
+  }, [
+    activeHost,
+    activeSessionId,
+    escalateSftpToSudo,
+    isVisible,
+    onGetTerminalCwd,
+    sftpFollowSudoRevision,
+    sftpFollowSudoSessionId,
+    t,
   ]);
 
   useEffect(() => {
@@ -906,7 +1059,9 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
       preferFreshBackend,
       ...sessionOpts,
     });
-    return (probed || "").trim() || known;
+    const normalized = (probed || "").trim() || null;
+    if (preferFreshBackend) return normalized;
+    return normalized || known;
   }, [activeSessionId, activeTerminalCwd, onGetTerminalCwd]);
 
   const handleGoToTerminalCwd = useCallback(async () => {
@@ -918,7 +1073,7 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
       // the button as a silent no-op. Known renderer cwd is the fallback.
       const cwd = await resolveLinkedTerminalCwd(true);
       if (!cwd) return;
-      const navigateResult = await sftpRef.current.navigateTo("left", cwd);
+    const navigateResult = await sftpRef.current.navigateTo("left", cwd, { soft: true });
       if (navigateResult === "reached") {
         blockedFollowRef.current = null;
       }
@@ -930,29 +1085,42 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
 
   const syncFollowToTerminalCwd = useCallback(async () => {
     if (!onGetTerminalCwd || !effectiveFollowTerminalCwd || !canFollowTerminalCwd) {
+      logger.trace("[SftpFollow] skip: follow unavailable", {
+        hasGetter: !!onGetTerminalCwd,
+        followEnabled: effectiveFollowTerminalCwd,
+        canFollow: canFollowTerminalCwd,
+      });
       return;
     }
 
     const syncGeneration = followSyncGenerationRef.current;
 
-    // Prefer OSC 7 / renderer-tracked cwd when present (instant, interactive
-    // shell). Probe backend when cache is empty so enabling follow still jumps
-    // even before the first OSC 7 / post-command probe.
-    let terminalCwd = (activeTerminalCwd || "").trim() || null;
+    // After sudo the renderer cache may still hold the pre-escalation path
+    // (login shell at /opt). Always probe when SFTP is already elevated.
+    const sudoFollow = Boolean(
+      sftpRef.current.leftPane.connection?.sudo,
+    );
+    let terminalCwd = sudoFollow ? null : ((activeTerminalCwd || "").trim() || null);
+    let cwdSource: "renderer" | "probe" = terminalCwd ? "renderer" : "probe";
     if (!terminalCwd) {
+      cwdSource = "probe";
       terminalCwd = await resolveLinkedTerminalCwd(true);
     }
-    if (!terminalCwd) return;
+    if (!terminalCwd) {
+      logger.trace("[SftpFollow] skip: no terminal cwd", { cwdSource, sessionId: activeSessionId });
+      return;
+    }
     if (
       syncGeneration !== followSyncGenerationRef.current
       || !effectiveFollowTerminalCwdRef.current
       || !canFollowTerminalCwdRef.current
     ) {
+      logger.trace("[SftpFollow] skip: generation superseded before navigate", { terminalCwd, cwdSource });
       return;
     }
 
     const connection = sftpRef.current.leftPane.connection;
-    if (!shouldFollowTerminalCwdNavigate({
+    const followContext = {
       followEnabled: effectiveFollowTerminalCwdRef.current,
       isVisible,
       terminalCwd,
@@ -961,30 +1129,53 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
       hasActiveWork,
       isConnected: Boolean(connection && !connection.isLocal && connection.status === "connected"),
       blockedFollow: blockedFollowRef.current,
-    })) {
+    };
+    if (!shouldFollowTerminalCwdNavigate(followContext)) {
+      logger.trace("[SftpFollow] skip: shouldFollow=false", {
+        ...followContext,
+        cwdSource,
+        status: connection?.status ?? null,
+      });
       return;
     }
 
-    const navigateResult = await sftpRef.current.navigateTo("left", terminalCwd);
+    logger.trace("[SftpFollow] navigate", {
+      terminalCwd,
+      cwdSource,
+      currentPath: connection?.currentPath ?? null,
+      connectionId: connection?.id ?? null,
+    });
+    const navigateResult = await sftpRef.current.navigateTo("left", terminalCwd, { soft: true });
     if (
       syncGeneration !== followSyncGenerationRef.current
       || !effectiveFollowTerminalCwdRef.current
       || !canFollowTerminalCwdRef.current
     ) {
+      logger.trace("[SftpFollow] result ignored: generation superseded", { terminalCwd, navigateResult });
       return;
     }
 
     const currentConnection = sftpRef.current.leftPane.connection;
     if (!currentConnection || currentConnection.id !== connection?.id) {
+      logger.trace("[SftpFollow] result ignored: connection changed", {
+        navigateResult,
+        from: connection?.id ?? null,
+        to: currentConnection?.id ?? null,
+      });
       return;
     }
 
     if (navigateResult === "failed" && currentConnection.id) {
       blockedFollowRef.current = { connectionId: currentConnection.id, terminalCwd };
+      logger.warn("[SftpFollow] blocked after failed navigate", { terminalCwd, connectionId: currentConnection.id });
     } else if (navigateResult === "reached") {
       blockedFollowRef.current = null;
+      logger.trace("[SftpFollow] reached", { terminalCwd, connectionId: currentConnection.id });
+    } else {
+      logger.trace("[SftpFollow] aborted", { terminalCwd, connectionId: currentConnection.id });
     }
   }, [
+    activeSessionId,
     activeTerminalCwd,
     canFollowTerminalCwd,
     effectiveFollowTerminalCwd,
@@ -1018,18 +1209,31 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     sftp.leftPane.connection?.currentPath,
     sftp.leftPane.connection?.status,
     sftp.leftPane.connection?.isLocal,
+    sftp.leftPane.connection?.sudo,
     syncFollowToTerminalCwd,
   ]);
 
+  const lastHandledSoftRefreshRevisionRef = useRef(0);
+
   useEffect(() => {
-    if (!isVisible || sftpSoftRefreshRevision <= 0 || hasActiveWork) return;
-    if (!sftp.leftPane.connection || sftp.leftPane.loading) return;
-    void sftpRef.current.refresh("left", { preserveSelection: true });
+    // Depend on connection id, not the connection object: refresh() rewrites
+    // that object every time, which previously retriggered this effect until
+    // React #185 took down the whole Terminal surface (`tail -f a > .log`).
+    if (!shouldApplySftpSoftRefreshRevision({
+      isVisible,
+      revision: sftpSoftRefreshRevision,
+      lastHandledRevision: lastHandledSoftRefreshRevisionRef.current,
+      hasConnection: Boolean(connectionId),
+      hasActiveWork,
+    })) {
+      return;
+    }
+    lastHandledSoftRefreshRevisionRef.current = sftpSoftRefreshRevision;
+    void sftpRef.current.refresh("left", { preserveSelection: true, soft: true });
   }, [
+    connectionId,
     hasActiveWork,
     isVisible,
-    sftp.leftPane.connection,
-    sftp.leftPane.loading,
     sftpRef,
     sftpSoftRefreshRevision,
   ]);
@@ -1285,6 +1489,8 @@ const sidePanelAreEqual = (prev: SftpSidePanelProps, next: SftpSidePanelProps): 
   prev.onGetTerminalCwd === next.onGetTerminalCwd &&
   prev.activeTerminalCwd === next.activeTerminalCwd &&
   prev.sftpSoftRefreshRevision === next.sftpSoftRefreshRevision &&
+  prev.sftpFollowSudoRevision === next.sftpFollowSudoRevision &&
+  prev.sftpFollowSudoSessionId === next.sftpFollowSudoSessionId &&
   prev.rememberedPathForSession === next.rememberedPathForSession &&
   prev.sftpFollowTerminalCwd === next.sftpFollowTerminalCwd &&
   prev.onSftpFollowTerminalCwdChange === next.onSftpFollowTerminalCwdChange &&

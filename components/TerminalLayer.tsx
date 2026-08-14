@@ -18,12 +18,19 @@ import {
   extractCodingCliResumeCommand,
   extractLocalShellCwdFromOutput,
 } from '../domain/codingCliTerminalHistory';
-import { inferCodingCliProviderFromTitleSignals, shouldClearCodingCliProviderForTitle } from '../domain/codingCliTitleParse';
+import {
+  inferCodingCliActivityPhaseFromOutput,
+  inferCodingCliProviderFromTitleSignals,
+  resolveCodingCliActivityPhase,
+  shouldClearCodingCliProviderForTitle,
+  type CodingCliActivityPhase,
+} from '../domain/codingCliTitleParse';
 import { sessionCapabilitiesStore } from '../application/state/sessionCapabilitiesStore';
 import { useTerminalBackend } from '../application/state/useTerminalBackend';
 import { collectSessionIds } from '../domain/workspace';
 import { quoteShellPath } from '../domain/shellPathQuote';
 
+import { logger } from '../lib/logger';
 import { cn, normalizeLineEndings } from '../lib/utils';
 import { detectLocalOs } from '../lib/localShell';
 import { useStoredString } from '../application/state/useStoredString';
@@ -92,7 +99,7 @@ import {
 } from '../domain/terminalSidePanelAutoOpen';
 import { shouldProbeCommandCwd } from './terminalLayer/commandCwdProbe';
 import { resolvePreferredTerminalCwd, scheduleBackendCwdProbeAfterCommand } from './terminal/sftpCwd';
-import { resolveSftpSoftRefreshDelayMs } from '../domain/terminalFilesystemMutatingCommand';
+import { resolveSftpSoftRefreshDelayMs, isInteractivePrivilegeEscalationCommand } from '../domain/terminalFilesystemMutatingCommand';
 import { classifyDistroId, shouldProbeSessionCwd } from '../domain/host';
 
 import {
@@ -185,6 +192,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   onUpdateSessionRestoreCwd,
   onUpdateSessionDynamicTitle,
   onUpdateSessionCodingCliProvider,
+  onUpdateSessionCodingCliRunPhase,
   onClearSessionFontSizeOverride,
   onCloseSession,
   onUpdateSessionStatus,
@@ -255,6 +263,9 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const [terminalCwdRevision, setTerminalCwdRevision] = useState(0);
   const sftpSoftRefreshRevisionRef = useRef(0);
   const [sftpSoftRefreshRevision, setSftpSoftRefreshRevision] = useState(0);
+  const sftpFollowSudoRevisionRef = useRef(0);
+  const [sftpFollowSudoRevision, setSftpFollowSudoRevision] = useState(0);
+  const [sftpFollowSudoSessionId, setSftpFollowSudoSessionId] = useState<string | null>(null);
   const sftpSoftRefreshCancelersRef = useRef<Map<string, () => void>>(new Map());
   const sftpSoftRefreshGenerationRef = useRef<Map<string, number>>(new Map());
   const sftpAutoRefreshOnTerminalRef = useRef(sftpAutoRefreshOnTerminal);
@@ -318,6 +329,12 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     const currentCwd = terminalRendererCwdBySessionRef.current.get(sessionId) ?? null;
     const nextCwd = cwd && cwd.trim().length > 0 ? cwd : null;
     if (currentCwd === nextCwd) return;
+    logger.trace("[TerminalCwd] change", {
+      sessionId,
+      from: currentCwd,
+      to: nextCwd,
+      source: meta?.source ?? "probe",
+    });
 
     if (nextCwd) {
       terminalRendererCwdBySessionRef.current.set(sessionId, nextCwd);
@@ -399,6 +416,11 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
         codingCliOutputScanDisabledRef.current.delete(sessionId);
         applySessionCodingCliProvider(sessionId, providerId);
       }
+      // Live title phases beat sticky "completed" after a new turn starts.
+      const livePhase = resolveCodingCliActivityPhase(trimmedTitle, providerId);
+      if (livePhase === 'busy' || livePhase === 'waiting' || livePhase === 'failed') {
+        onUpdateSessionCodingCliRunPhase?.(sessionId, null);
+      }
       return;
     }
 
@@ -410,7 +432,13 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       codingCliOutputScanDisabledRef.current.delete(sessionId);
       onUpdateSessionCodingCliProvider?.(sessionId, null);
     }
-  }, [applySessionCodingCliProvider, onUpdateSessionCodingCliProvider, onUpdateSessionDynamicTitle, terminalSettings?.dynamicTabTitleMode]);
+  }, [
+    applySessionCodingCliProvider,
+    onUpdateSessionCodingCliProvider,
+    onUpdateSessionCodingCliRunPhase,
+    onUpdateSessionDynamicTitle,
+    terminalSettings?.dynamicTabTitleMode,
+  ]);
 
   const emitCodingCliResumeHint = useCallback((
     sessionId: string,
@@ -423,7 +451,22 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     window.dispatchEvent(new CustomEvent('netcatty:coding-cli-resume-hint', {
       detail: { sessionId, providerId, resumeCommand },
     }));
-  }, []);
+    onUpdateSessionCodingCliRunPhase?.(sessionId, 'completed');
+  }, [onUpdateSessionCodingCliRunPhase]);
+
+  const applyCodingCliRunPhaseFromOutput = useCallback((
+    sessionId: string,
+    providerId: CodingCliProviderId,
+    text: string,
+  ) => {
+    const inferred = inferCodingCliActivityPhaseFromOutput(text, providerId);
+    if (!inferred) return;
+    const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
+    const current = (session?.codingCliRunPhase ?? null) as CodingCliActivityPhase | null;
+    if (inferred === current) return;
+    // New busy signals after a finished turn start a fresh run.
+    onUpdateSessionCodingCliRunPhase?.(sessionId, inferred);
+  }, [onUpdateSessionCodingCliRunPhase]);
 
   const handleTerminalOutput = useCallback((sessionId: string, chunk: string) => {
     if (!chunk) return;
@@ -452,6 +495,8 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       const previousTail = codingCliResumeTailBySessionRef.current.get(sessionId) ?? '';
       const tail = `${previousTail}${chunk}`.slice(-4096);
       codingCliResumeTailBySessionRef.current.set(sessionId, tail);
+      // Output-driven phase (Grok titles stay static while working).
+      applyCodingCliRunPhaseFromOutput(sessionId, stickyProvider, tail);
       // Only parse resume lines that match this session's sticky CLI — never
       // attach another terminal's `grok --resume` to a Cursor/Claude row.
       const resumeCommand = extractCodingCliResumeCommand(tail, stickyProvider);
@@ -492,7 +537,12 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       codingCliOutputScanDisabledRef.current.delete(sessionId);
       codingCliOutputScanDisabledRef.current.add(sessionId);
     }
-  }, [applySessionCodingCliProvider, emitCodingCliResumeHint, handleTerminalCwdChange]);
+  }, [
+    applyCodingCliRunPhaseFromOutput,
+    applySessionCodingCliProvider,
+    emitCodingCliResumeHint,
+    handleTerminalCwdChange,
+  ]);
 
   const handleTerminalBell = useCallback((sessionId: string) => {
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
@@ -978,6 +1028,17 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
       if (delayMs > 0) {
         scheduleSftpSoftRefresh(sessionId, delayMs);
       }
+    }
+
+    if (isInteractivePrivilegeEscalationCommand(command)) {
+      handleTerminalCwdChange(sessionId, null);
+      sftpFollowSudoRevisionRef.current += 1;
+      setSftpFollowSudoSessionId(sessionId);
+      setSftpFollowSudoRevision(sftpFollowSudoRevisionRef.current);
+      // Do not probe immediately: the login shell is still at the old cwd
+      // while sudo -i starts. A successful probe would write that stale path
+      // back and pin SFTP follow to it (e.g. stay on /opt after cd /data).
+      return;
     }
 
     if (!shouldProbeCommandCwd({
@@ -1914,6 +1975,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     onUpdateSessionRestoreCwd,
     onUpdateSessionDynamicTitle,
     onUpdateSessionCodingCliProvider,
+    onUpdateSessionCodingCliRunPhase,
     onClearSessionFontSizeOverride,
     onUpdateTerminalThemeId,
     pendingTerminalSelectionForAI,
@@ -1981,6 +2043,8 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
     TerminalPanesHost,
     terminalCwdRevision,
     sftpSoftRefreshRevision,
+    sftpFollowSudoRevision,
+    sftpFollowSudoSessionId,
     terminalFontFamilyId,
     terminalRendererCwdBySessionRef,
     terminalSettings,

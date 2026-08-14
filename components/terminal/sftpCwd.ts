@@ -1,3 +1,5 @@
+import { logger } from "../../lib/logger";
+
 type SessionPwdResult = {
   success: boolean;
   cwd?: string | null;
@@ -49,17 +51,33 @@ export const resolvePreferredTerminalCwd = async ({
 }: ResolvePreferredTerminalCwdOptions): Promise<string | null> => {
   const knownCwd = normalizeCwd(rendererCwd);
   if (!preferFreshBackend && knownCwd) return knownCwd;
-  if (!sessionId) return null;
+  if (!sessionId) {
+    logger.trace("[sftpCwd] resolve skipped: no session", { preferFreshBackend, knownCwd });
+    return null;
+  }
 
   try {
+    logger.trace("[sftpCwd] probe backend cwd", { sessionId, preferFreshBackend, knownCwd });
     const result = await getSessionPwd(
       sessionId,
       preferFreshBackend ? { allowHomeFallback: false } : undefined,
     );
     const backendCwd = result.success ? normalizeCwd(result.cwd) : null;
+    logger.trace("[sftpCwd] probe result", {
+      sessionId,
+      preferFreshBackend,
+      success: result.success,
+      backendCwd,
+    });
+    if (preferFreshBackend) return backendCwd;
     return backendCwd ?? knownCwd;
-  } catch {
-    return knownCwd;
+  } catch (error) {
+    logger.trace("[sftpCwd] probe threw", {
+      sessionId,
+      preferFreshBackend,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return preferFreshBackend ? null : knownCwd;
   }
 };
 
@@ -81,9 +99,15 @@ export const probeBackendSessionCwdAfterCommand = async ({
   getSessionPwd,
   canProbe = () => true,
 }: ProbeBackendSessionCwdAfterCommandOptions): Promise<string | null> => {
-  if (getOsc7Signal() !== osc7SignalAtCommand) return null;
+  if (getOsc7Signal() !== osc7SignalAtCommand) {
+    logger.trace("[sftpCwd] post-command probe skipped: OSC 7 already updated", { sessionId });
+    return null;
+  }
   const allowed = await canProbe();
-  if (!allowed || getOsc7Signal() !== osc7SignalAtCommand) return null;
+  if (!allowed || getOsc7Signal() !== osc7SignalAtCommand) {
+    logger.trace("[sftpCwd] post-command probe skipped", { sessionId, allowed });
+    return null;
+  }
 
   try {
     // Never accept home-directory fallback here: after `cd` / sudo the probe
@@ -91,8 +115,14 @@ export const probeBackendSessionCwdAfterCommand = async ({
     // renderer cache makes SFTP follow jump to /root (or $HOME) and stick.
     const result = await getSessionPwd(sessionId, { allowHomeFallback: false });
     if (getOsc7Signal() !== osc7SignalAtCommand) return null;
-    return result.success ? normalizeCwd(result.cwd) : null;
-  } catch {
+    const cwd = result.success ? normalizeCwd(result.cwd) : null;
+    logger.trace("[sftpCwd] post-command probe result", { sessionId, success: result.success, cwd });
+    return cwd;
+  } catch (error) {
+    logger.trace("[sftpCwd] post-command probe threw", {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 };

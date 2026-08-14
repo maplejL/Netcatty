@@ -145,6 +145,53 @@ export function isFilesystemMutatingCommand(commandLine: string): boolean {
   return classifyFilesystemMutatingCommand(commandLine).mutates;
 }
 
+/**
+ * True for interactive user switches (`sudo -i`, `su -`, `sudo su`) that
+ * change the shell identity. Used to reconnect sidebar SFTP in sudo mode.
+ * One-shot `sudo ls` / `sudo systemctl` are ignored.
+ */
+export function isInteractivePrivilegeEscalationCommand(commandLine: string): boolean {
+  const segment = firstCommandSegment(commandLine);
+  if (!segment) return false;
+  const rest = segment.replace(STRIP_ENV_ASSIGN, "");
+  const tokens = tokenize(rest).map(unquote);
+  if (tokens.length === 0) return false;
+  const cmd = basenameCommand(tokens[0]);
+  if (cmd === "su") return true;
+  if (cmd !== "sudo" && cmd !== "doas") return false;
+
+  const args = tokens.slice(1);
+  let index = 0;
+  let loginShell = false;
+  while (index < args.length) {
+    const arg = args[index];
+    if (arg === "--") {
+      index += 1;
+      break;
+    }
+    if (arg === "-i" || arg === "--login" || arg === "-s" || arg === "--shell") {
+      loginShell = true;
+      index += 1;
+      continue;
+    }
+    if (arg === "-u" || arg === "--user" || arg === "-g" || arg === "--group") {
+      index += 2;
+      continue;
+    }
+    if (arg.startsWith("-") && arg !== "-" && !arg.startsWith("--")) {
+      if (/[is]/.test(arg.slice(1))) loginShell = true;
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  if (loginShell) return true;
+  const next = args[index] ? basenameCommand(args[index]) : "";
+  if (!next) return false;
+  return next === "su" || next === "bash" || next === "sh" || next === "zsh"
+    || next === "fish" || next === "ksh" || next === "dash";
+}
+
 export const SFTP_SOFT_REFRESH_DELAY_MS = 450;
 export const SFTP_SOFT_REFRESH_LONG_DELAY_MS = 1600;
 

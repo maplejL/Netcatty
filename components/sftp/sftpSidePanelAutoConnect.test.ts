@@ -53,8 +53,24 @@ test("isRemoteSftpTabHealthy rejects connecting tabs", () => {
   assert.equal(isRemoteSftpTabHealthy(tab, true), false);
 });
 
-test("shouldSkipSftpSidePanelAutoConnect returns false for stale connected keys", () => {
+test("shouldSkipSftpSidePanelAutoConnect still skips while a connected tab is listing", () => {
   const tab = remoteConnectedTab({ loading: true });
+  assert.equal(
+    shouldSkipSftpSidePanelAutoConnect("host-key", "host-key", tab, true),
+    true,
+  );
+});
+
+test("shouldSkipSftpSidePanelAutoConnect returns false for mismatched keys", () => {
+  const tab = remoteConnectedTab({ loading: true });
+  assert.equal(
+    shouldSkipSftpSidePanelAutoConnect("host-key", "other-key", tab, true),
+    false,
+  );
+});
+
+test("shouldSkipSftpSidePanelAutoConnect returns false while reconnecting", () => {
+  const tab = remoteConnectedTab({ reconnecting: true });
   assert.equal(
     shouldSkipSftpSidePanelAutoConnect("host-key", "host-key", tab, true),
     false,
