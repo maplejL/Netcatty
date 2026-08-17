@@ -1,5 +1,75 @@
 # Changelog
 
+## [0.1.6] - 2026-08-17
+
+本 fork 第七版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。
+
+本版从上游 **干净 cherry-pick 至 v1.1.79**（约 291 条无冲突提交），并补齐若干半成品 pick，使安装包能启动、终端能挂载。冲突栈未强行合并。
+
+### 同步上游（至 v1.1.79）
+
+#### 系统面板
+- System 面板增加 GPU / NPU 占用监控
+- 昇腾 910B：解析 CANN 24.x `npu-smi` 表
+- PVE CT：磁盘概览显示 ZFS / bind 挂载
+
+#### SSH
+- 支持系统 SSH Agent 认证
+- SSH 连接超时可配置
+- MFA / EDR 二次密码弹出确认框；Duo Password+OTP 多提示预填
+
+#### SFTP
+- Connected 选择器展示当前终端主机，并可复用已有 SSH 会话（不含 sudo 会话）
+- 可隐藏文件列；列设置跨视图保持一致
+- 传输冲突对话框；递归目录删除更可靠
+- 超大 `fastPut` 分块不再写坏上传
+- EDR 二次认证可重试
+
+#### AI
+- 设置里一键测试 Provider 连通
+- Anthropic Base URL 仅在「裸地址」时补 `/v1`，避免重复拼接
+- External MCP：Codex / Claude / Cursor / Grok（侧栏未打开时也可审批写操作）
+
+#### 终端
+- 复制标签 / 分屏继承当前 CWD（探测 lastCwd → SSH cwd → 本地 startDir）
+- 会话恢复后执行主机启动命令
+- 全屏应用（vim / htop 等）按设置禁用终端右键菜单
+- 搜索高亮重置后清掉残留选区
+- 备用屏幕（vim 等）不弹出补全
+- Zmodem 拖放覆盖目标保留
+
+#### Mosh
+- 集成 MoshCatty 纯 Rust 客户端（不再依赖 Cygwin），含握手 / ConPTY 修复
+
+#### Vault / 片段 / 设置
+- 片段编辑器查找替换；快捷添加改为居中弹窗；支持批量删除
+- 终端脚本侧栏体验改进
+- 字体选择器可搜索；支持本机 CJK 字体
+- FreeBSD 主机图标
+- 笔记 MDX 链接预览工具条与图片编辑对话框样式
+
+### 本 fork 修复（让本版能用）
+
+- 补齐半成品 pick：继承 CWD 消费路径、SFTP 全局传输调度器
+- 去掉未落地的 `setShowTabNumberBadgesState`，避免设置同步一挂载就白屏
+- SFTP 挂载改回使用完整主机列表（`terminalHosts` 未落地）
+- 恢复 `shouldMarkConnectAutomationConsumed`，避免「Terminal could not load」
+
+### 未纳入（冲突跳过，本版没有）
+
+- #2962 注入前清屏、Ports+Services、Vault 复制主机名
+- 设置全局搜索、一键清空会话日志
+- 脚本侧栏展开 / 删除所选
+- CSV 同 IP 不同分组、解密失败 poison guard
+
+### 构建
+- 快速正式包（仅 NSIS）：`npm run pack:win-x64:release`
+- 完整包（NSIS + portable + zip）：`npm run pack:win-x64:release:full`
+- 打完并上传更新资产：`npm run release:win-x64`
+- 本地热更 asar：`npm run pack:asar`
+
+---
+
 ## [0.1.5] - 2026-08-14
 
 本 fork 第六版。开发主线仍为 `feature/ops_ai_enhancements`（**不合并到 `main`**）。

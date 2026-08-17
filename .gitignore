@@ -29,6 +29,7 @@
 !README.ja-JP.md
 !README.md
 !README.zh-CN.md
+!RELEASE_NOTES_*.draft.md
 !electron-builder.config.cjs
 !eslint.config.js
 !flake.lock

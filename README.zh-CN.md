@@ -35,13 +35,15 @@
 | **本仓库** | 当前 GitHub 页面（顶部 **Code** 可复制克隆地址） |
 | **上游项目** | [github.com/binaricat/Netcatty](https://github.com/binaricat/Netcatty) · [netcatty.app](https://netcatty.app) |
 | **协议** | GPL-3.0（继承上游，修改部分同样开源） |
-| **发行方式** | 本仓库**不跟随上游自动发版**；Windows x64 安装包见 [Releases](https://github.com/maplejL/Netcatty/releases)（当前 `v0.1.5`） |
+| **发行方式** | 本仓库**不跟随上游自动发版**；Windows x64 安装包见 [Releases](https://github.com/maplejL/Netcatty/releases)（当前 `v0.1.6`） |
 
 上游 Netcatty 是功能完整的 SSH 工作台（官网 [netcatty.app](https://netcatty.app)）。**本仓库不删减上游能力**，仅在下方「本 fork 增强」一节叠加运维向功能。
 
 | | 上游 Netcatty | 本 fork |
 |---|---------------|---------|
 | SSH / SFTP / 分屏 / Catty AI | ✅ 完整继承 | ✅ |
+| 系统面板 GPU/NPU、系统 SSH Agent、External MCP、MoshCatty | ✅ 本版同步至上游 v1.1.79 | ✅ |
+| 复制/分屏继承 CWD | ✅ 上游能力 | ✅ 补齐消费路径 |
 | FinalShell 导入、IPv4 树分组 | — | ✅ |
 | 运维首页、多选工作区 / 批量命令 | — | ✅ |
 | 主机备注列表摘要、会话/布局恢复 | 部分上游能力 | ✅ 列表可见 + 恢复完善 |
@@ -55,15 +57,19 @@
 
 ---
 
-## 本版更新（v0.1.5）
+## 本版更新（v0.1.6）
 
-完整列表见 [CHANGELOG.md](./CHANGELOG.md) 与 [GitHub Release](https://github.com/maplejL/Netcatty/releases/tag/v0.1.5)。下一版发版时**整节替换**为本版要点。
+完整列表见 [CHANGELOG.md](./CHANGELOG.md) 与 [GitHub Release](https://github.com/maplejL/Netcatty/releases/tag/v0.1.6)。下一版发版时**整节替换**为本版要点。
 
-- **SFTP 提权跟随**：交互式 `sudo -i` / `su` 后，侧栏 SFTP 自动提权并跟随 elevated cwd；卡住的列表 / 通道会超时重建
-- **Coding CLI**：记住本机 Claude / Codex / Grok 等工作目录（resume / continue / 新开），扫描应用内与外部进程；标签页显示 idle / running / waiting / completed / failed
-- **Vault Notes CLI**：tool CLI 可 `list` / `get` / `create` / `update` 笔记，不要写远端 `NOTES.md`
-- **Cursor**：下一轮前清掉残留 run，避免 `AgentBusyError`
-- **设置**：系统页可开诊断 TRACE 日志（写入 userData，可设保留天数）；终端滚轮默认 0.5x
+本版干净同步上游至 **v1.1.79**，并补齐半成品 pick，避免白屏 / 终端无法加载。
+
+- **系统**：System 面板 GPU/NPU（含昇腾 910B、PVE CT ZFS/bind 磁盘）
+- **SSH**：系统 SSH Agent、可配置超时、MFA/EDR/Duo 提示
+- **SFTP**：Connected 选择器展示当前终端主机并可复用会话；隐藏列、冲突框、递归删除
+- **AI**：一键测试 Provider；External MCP（Codex / Claude / Cursor / Grok）
+- **终端**：复制/分屏继承 CWD；恢复后跑启动命令；全屏应用右键菜单与备用屏幕补全
+- **Mosh**：MoshCatty 纯二进制（无 Cygwin）
+- **片段 / 设置**：查找替换、居中弹窗、批量删除；可搜索字体与本机 CJK 字体
 
 ---
 
@@ -84,14 +90,19 @@
 - 多标签 + **Workspace**：分屏终端（水平 / 垂直拆分）、Focus 模式侧栏
 - **广播（Broadcast）**：同一工作区内，键盘输入可同步到其余窗格
 - 底部 Compose 栏：向焦点窗或广播范围内的会话发送命令
-- 支持 SSH、本地 Shell、Telnet、Mosh、串口等（视环境与配置而定）
+- 支持 SSH、本地 Shell、Telnet、Mosh（**MoshCatty** 纯 Rust 客户端）、串口等（视环境与配置而定）
+- 系统 SSH Agent、可配置连接超时、MFA / EDR / Duo 交互提示
+- 复制标签 / 分屏可继承当前 CWD；会话恢复后可执行主机启动命令
 - 跳板链（`hostChain`）、受管 `ssh_config`、连接复用
 - 端口转发（本地 / 远程 / 动态）、连接日志与脚本录制
 - 输出流控与写合并（高吞吐时限流），关键词高亮、会话日志可选
+- 系统面板可看 GPU / NPU 占用（含昇腾 910B）、PVE CT 磁盘挂载
 
 ### SFTP 与编辑器
 
 - 双窗格 SFTP 浏览、拖拽传输、传输队列
+- Connected 选择器展示当前终端主机，并可复用已有 SSH 会话
+- 可隐藏列、传输冲突确认、递归删除
 - 内置 Monaco 编辑器，可在外部编辑远程文件
 - 可追随终端当前目录、一键定位到终端 CWD（本 fork 强化，见下文）
 
@@ -100,11 +111,14 @@
 - 侧边栏对话式 **Catty**，理解当前终端会话与主机上下文
 - **Capability 工具目录**：终端、SFTP、Vault、端口转发等可通过工具调用
 - 外部 Agent（SDK / CLI）集成面：MCP stdio、CLI / RPC（见 `AGENTS.md`）
+- **External MCP**：Codex / Claude / Cursor / Grok；写操作可在侧栏未打开时审批
+- 设置里可一键测试 Provider 连通
 - 写操作（SFTP 写入、端口转发启动等）支持确认模式审批
 
 ### 体验与其它
 
-- 主题 / 终端配色 / 字体 / 高亮规则自定义
+- 主题 / 终端配色 / 字体 / 高亮规则自定义（字体选择器可搜索，支持本机 CJK 字体）
+- 片段查找替换、居中添加/编辑、批量删除
 - 可配置全局快捷键（含终端相关动作）
 - 可选 GitHub Gist 同步配置
 - 系统托盘：关闭到托盘、快捷恢复主窗口
@@ -170,6 +184,7 @@
 | **运行阶段** | 标签页与 Focus 侧栏显示 idle / running / waiting / completed / failed |
 | **Cursor 连续对话** | 下一轮前清掉残留 run，避免 `AgentBusyError` |
 | **Vault Notes CLI** | tool CLI 可 `list` / `get` / `create` / `update` 应用内笔记；不要写远端 `NOTES.md` |
+| **External MCP** | Codex / Claude / Cursor / Grok；本版随上游同步，写操作审批不依赖先打开 Catty 侧栏 |
 
 设置中可配置多个外部 Agent（Claude Code、Codex、Copilot、Cursor、CodeBuddy、WorkBuddy、OpenCode 等，以当前版本托管列表为准）。
 
@@ -185,6 +200,7 @@
 
 | 能力 | 说明 |
 |------|------|
+| **复制/分屏继承 CWD** | 复制标签或分屏时带上当前目录（本版补齐消费路径，避免半成品 pick 导致终端无法加载） |
 | **追随终端目录** | 打开追随后，随终端 `cd` / OSC 7 同步 SFTP 路径；路径比较做规范化，减少误跳 `/root` 或「目录变了但面板不动」 |
 | **sudo 后提权跟随** | 交互式 `sudo -i` / `su` 后侧栏 SFTP 自动提权并跟随 elevated cwd（`/proc/<pid>/cwd`）；卡住的 `readdir` / 打开通道会超时重建 |
 | **定位到当前目录** | 工具栏一键跳转；优先新鲜后端探测，过程中显示 loading |
