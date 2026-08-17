@@ -362,7 +362,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
         </VaultViewContainer>
 
         <SftpViewMount
-          hosts={terminalHosts}
+          hosts={hosts}
           writableHosts={hosts}
           sessions={sessions}
           keys={keys}
@@ -370,7 +370,7 @@ export function AppView({ ctx }: { ctx: AppViewContext }) {
           knownHosts={effectiveKnownHosts}
           proxyProfiles={proxyProfiles}
           groupConfigs={groupConfigs}
-          updateHosts={updateTerminalHosts}
+          updateHosts={updateHosts}
           onAddKnownHost={handleAddKnownHost}
           sftpDefaultViewMode={sftpDefaultViewMode}
           sftpDoubleClickBehavior={sftpDoubleClickBehavior}
